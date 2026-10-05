@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/calendar_service.dart';
 import '../services/store.dart';
@@ -58,7 +59,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     if (_title.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a title.')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('enter_title'))));
       return;
     }
     final t =
@@ -83,13 +84,13 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final cats = store.enabledCategories;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.task == null ? 'New Task' : 'Edit Task'),
+        title: Text(widget.task == null ? context.tr('new_task') : context.tr('edit_task')),
         actions: [
           TextButton(
             onPressed: _save,
-            child: const Text(
-              'Save',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            child: Text(
+              context.tr('save'),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -98,22 +99,22 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const _Label('Title'),
+            _Label(context.tr('title')),
             TextField(
               controller: _title,
               style: const TextStyle(fontSize: 14),
-              decoration: const InputDecoration(hintText: 'e.g. Pay rent'),
+              decoration: const InputDecoration(hintText: context.tr('title_hint')),
             ),
             const SizedBox(height: 16),
-            const _Label('Note'),
+            _Label(context.tr('note')),
             TextField(
               controller: _note,
               style: const TextStyle(fontSize: 13.5),
               maxLines: 3,
-              decoration: const InputDecoration(hintText: 'Details (optional)'),
+              decoration: const InputDecoration(hintText: context.tr('note_hint')),
             ),
             const SizedBox(height: 16),
-            const _Label('Category / Tab'),
+            _Label(context.tr('category_tab')),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -145,24 +146,28 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               }).toList(),
             ),
             const SizedBox(height: 16),
-            const _Label('Recurrence'),
+            _Label(context.tr('recurrence')),
             SegmentedButton<String>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: 'none',
-                  label: Text('None', style: TextStyle(fontSize: 11.5)),
+                  label: Text(context.tr('rec_none'),
+                      style: const TextStyle(fontSize: 11.5)),
                 ),
                 ButtonSegment(
                   value: 'daily',
-                  label: Text('Daily', style: TextStyle(fontSize: 11.5)),
+                  label: Text(context.tr('rec_daily'),
+                      style: const TextStyle(fontSize: 11.5)),
                 ),
                 ButtonSegment(
                   value: 'weekly',
-                  label: Text('Weekly', style: TextStyle(fontSize: 11.5)),
+                  label: Text(context.tr('rec_weekly'),
+                      style: const TextStyle(fontSize: 11.5)),
                 ),
                 ButtonSegment(
                   value: 'monthly',
-                  label: Text('Monthly', style: TextStyle(fontSize: 11.5)),
+                  label: Text(context.tr('rec_monthly'),
+                      style: const TextStyle(fontSize: 11.5)),
                 ),
               ],
               selected: {_recurrence},
@@ -171,40 +176,40 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             ),
             if (_recurrence == 'monthly') ...[
               const SizedBox(height: 12),
-              const _Label('Day of month'),
+              _Label(context.tr('day_of_month')),
               TextField(
                 controller: _day,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(fontSize: 13.5),
-                decoration: const InputDecoration(hintText: 'e.g. 12'),
+                decoration: const InputDecoration(hintText: context.tr('day_of_month_hint')),
               ),
             ],
             const SizedBox(height: 16),
-            const _Label('Amount (₩, optional)'),
+            _Label(context.tr('amount')),
             TextField(
               controller: _amount,
               keyboardType: TextInputType.number,
               style: const TextStyle(fontSize: 13.5),
-              decoration: const InputDecoration(hintText: 'e.g. 2500000'),
+              decoration: const InputDecoration(hintText: context.tr('amount_hint')),
             ),
             const SizedBox(height: 16),
-            const _Label('Related to (person / payee, optional)'),
+            _Label(context.tr('related_to')),
             TextField(
               controller: _related,
               style: const TextStyle(fontSize: 13.5),
-              decoration: const InputDecoration(hintText: 'e.g. Landlord'),
+              decoration: const InputDecoration(hintText: context.tr('related_hint')),
             ),
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Pin to top', style: TextStyle(fontSize: 13.5)),
+              title: Text(context.tr('pin_top'), style: const TextStyle(fontSize: 13.5)),
               value: _pinned,
               activeThumbColor: AppColors.indigo,
               onChanged: (v) => setState(() => _pinned = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Long-term', style: TextStyle(fontSize: 13.5)),
+              title: Text(context.tr('long_term'), style: const TextStyle(fontSize: 13.5)),
               value: _longTerm,
               activeThumbColor: AppColors.indigo,
               onChanged: (v) => setState(() => _longTerm = v),
@@ -233,16 +238,16 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 if (!context.mounted) return;
                 if (!ok) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Could not open Google Calendar.'),
+                    SnackBar(
+                      content: Text(context.tr('cannot_open_calendar')),
                     ),
                   );
                 }
               },
               icon: const Icon(Icons.event_available_outlined, size: 18),
-              label: const Text(
-                'Add to Google Calendar',
-                style: TextStyle(fontSize: 12.5),
+              label: Text(
+                context.tr('add_to_calendar'),
+                style: const TextStyle(fontSize: 12.5),
               ),
             ),
           ],

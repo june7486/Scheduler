@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/l10n.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -26,11 +27,11 @@ class SettingsScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
             if (store.isMaster) ...[
-              _Group('Master administration'),
+              _Group(context.tr('master_admin')),
               _Tile(
                 icon: Icons.admin_panel_settings_outlined,
-                title: 'Master console',
-                subtitle: 'Manage IDs, passwords, and view all users\' data',
+                title: context.tr('master_console'),
+                subtitle: context.tr('master_console_hint'),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AdminScreen()),
@@ -38,7 +39,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               _Tile(
                 icon: Icons.summarize_outlined,
-                title: 'User reports & output',
+                title: context.tr('user_reports'),
                 subtitle:
                     'ID status · per-ID schedules · by-date, with preview',
                 onTap: () => Navigator.push(
@@ -47,30 +48,30 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ],
-            _Group('Account'),
+            _Group(context.tr('account')),
             _Tile(
               icon: Icons.lock_outline,
-              title: 'Change password',
-              subtitle: 'Currently set for user "${store.username}"',
+              title: context.tr('change_password'),
+              subtitle: context.tr('current_user_is', args: {'id': store.username}),
               onTap: () => _changePassword(context, store),
             ),
             _Tile(
               icon: Icons.timer_outlined,
-              title: 'Session timeout',
-              subtitle: 'Kept signed in for 1 hour, then re-login required',
+              title: context.tr('session_timeout'),
+              subtitle: context.tr('session_1h'),
               onTap: () async {
                 final m = await SessionService().remainingMinutes();
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Session remaining: ~$m min')),
+                  SnackBar(content: Text(context.tr('session_remaining', args: {'m': '$m'}))),
                 );
               },
             ),
-            _Group('Items & Tabs'),
+            _Group(context.tr('items_tabs')),
             _Tile(
               icon: Icons.tab_outlined,
-              title: 'Manage tabs / categories',
-              subtitle: '${store.enabledCategories.length} active tabs',
+              title: context.tr('manage_tabs'),
+              subtitle: context.tr('active_tabs', args: {'n': '${store.enabledCategories.length}'}),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ManageTabsScreen()),
@@ -78,17 +79,17 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Tile(
               icon: Icons.sort_outlined,
-              title: 'Reorder items',
-              subtitle: 'Drag to change the order of tabs',
+              title: context.tr('reorder_items'),
+              subtitle: context.tr('reorder_hint'),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ManageTabsScreen()),
               ),
             ),
-            _Group('Output'),
+            _Group(context.tr('output')),
             _Tile(
               icon: Icons.print_outlined,
-              title: 'Output items & design',
+              title: context.tr('output_items'),
               subtitle:
                   'Design mode: ${store.printDesignMode} · font ${store.baseFontSize.toStringAsFixed(0)}pt',
               onTap: () => Navigator.push(
@@ -96,23 +97,23 @@ class SettingsScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const OutputSettingsScreen()),
               ),
             ),
-            _Group('Data'),
+            _Group(context.tr('data_grp')),
             _Tile(
               icon: Icons.backup_outlined,
-              title: 'Backup all data',
-              subtitle: 'Export tasks, tabs, settings & voice notes as JSON',
+              title: context.tr('backup_all'),
+              subtitle: context.tr('backup_hint'),
               onTap: () => _backup(context, store),
             ),
             _Tile(
               icon: Icons.restore_outlined,
-              title: 'Restore from backup',
-              subtitle: 'Paste a backup JSON to restore',
+              title: context.tr('restore'),
+              subtitle: context.tr('restore_hint'),
               onTap: () => _restore(context, store),
             ),
             _Tile(
               icon: Icons.cleaning_services_outlined,
-              title: 'Clear cache',
-              subtitle: 'Clears logs and cached version info',
+              title: context.tr('clear_cache'),
+              subtitle: context.tr('clear_cache_hint'),
               onTap: () async {
                 await store.clearCache();
                 await SessionService().clearCache();
@@ -124,38 +125,38 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Tile(
               icon: Icons.delete_forever_outlined,
-              title: 'Reset all content',
-              subtitle: 'Delete every task and restore default tabs',
+              title: context.tr('reset_all'),
+              subtitle: context.tr('reset_hint'),
               danger: true,
               onTap: () => _wipe(context, store),
             ),
-            _Group('Activity log'),
+            _Group(context.tr('activity_log')),
             _Tile(
               icon: Icons.history,
-              title: 'Activity log',
-              subtitle: '${store.logs.length} entries',
+              title: context.tr('activity_log'),
+              subtitle: context.tr('entries', args: {'n': '${store.logs.length}'}),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const LogScreen()),
               ),
             ),
-            _Group('App'),
+            _Group(context.tr('app_grp')),
             _Tile(
               icon: Icons.info_outline,
-              title: 'App version',
+              title: context.tr('app_version'),
               subtitle:
                   'v${store.appVersion} (defined by stored build date & time)',
               onTap: () => _showVersion(context, store),
             ),
             _Tile(
               icon: Icons.link,
-              title: 'Forwarding address',
+              title: context.tr('forward_address'),
               subtitle: store.forwardUrl,
               onTap: () => _editForwardUrl(context, store),
             ),
             _Tile(
               icon: Icons.open_in_new,
-              title: 'Open forwarding site',
+              title: context.tr('open_forward'),
               subtitle: store.forwardUrl,
               onTap: () async {
                 final uri = Uri.parse(store.forwardUrl);
@@ -166,8 +167,8 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Tile(
               icon: Icons.logout_rounded,
-              title: 'Sign out',
-              subtitle: 'End the current session now',
+              title: context.tr('sign_out'),
+              subtitle: context.tr('session_end'),
               onTap: () async {
                 await SessionService().logout();
                 if (!context.mounted) return;
@@ -197,27 +198,27 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Change password'),
+        title: Text(context.tr('change_password')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: oldCtrl,
               obscureText: true,
-              decoration: const InputDecoration(hintText: 'Current password'),
+              decoration: InputDecoration(hintText: context.tr('current_password')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: newCtrl,
               obscureText: true,
-              decoration: const InputDecoration(hintText: 'New password'),
+              decoration: InputDecoration(hintText: context.tr('new_password')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
@@ -225,17 +226,17 @@ class SettingsScreen extends StatelessWidget {
                 store.setPassword(newCtrl.text);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password updated.')),
+                  SnackBar(content: Text(context.tr('password_updated'))),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Check current password / min 4 chars.'),
+                  SnackBar(
+                    content: Text(context.tr('check_pw')),
                   ),
                 );
               }
             },
-            child: const Text('Save'),
+            child: Text(context.tr('save')),
           ),
         ],
       ),
@@ -246,17 +247,14 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('App version'),
+        title: Text(context.tr('app_version')),
         content: Text(
-          'Version: v${store.appVersion}\n\n'
-          'The version string is derived from the stored year, date and time. '
-          'On a new visit, if the stored version is older, the app clears the '
-          'cache and downloads the latest data again.',
+          'v${store.appVersion}\n\n${context.tr('app_version_hint')}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(context.tr('ok')),
           ),
         ],
       ),
@@ -268,7 +266,7 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Forwarding address'),
+        title: Text(context.tr('forward_address')),
         content: TextField(
           controller: ctrl,
           decoration: const InputDecoration(hintText: 'https://example.com'),
@@ -276,14 +274,14 @@ class SettingsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
               store.setForwardUrl(ctrl.text.trim());
               Navigator.pop(context);
             },
-            child: const Text('Save'),
+            child: Text(context.tr('save')),
           ),
         ],
       ),
@@ -310,21 +308,21 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Restore from backup'),
+        title: Text(context.tr('restore_backup')),
         content: SizedBox(
           width: 320,
           child: TextField(
             controller: ctrl,
             maxLines: 6,
-            decoration: const InputDecoration(
-              hintText: 'Paste backup JSON here',
+            decoration: InputDecoration(
+              hintText: context.tr('paste_backup'),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -334,15 +332,15 @@ class SettingsScreen extends StatelessWidget {
                 if (!context.mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Backup restored.')),
+                  SnackBar(content: Text(context.tr('restore_done'))),
                 );
               } catch (e) {
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(SnackBar(content: Text('Invalid backup: $e')));
+                ).showSnackBar(SnackBar(content: Text(context.tr('invalid_backup', args: {'err': '$e'}))));
               }
             },
-            child: const Text('Restore'),
+            child: Text(context.tr('restore')),
           ),
         ],
       ),
@@ -353,14 +351,12 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Reset all content?'),
-        content: const Text(
-          'This deletes all tasks and restores default tabs.',
-        ),
+        title: Text(context.tr('reset_content_q')),
+        content: Text(context.tr('reset_content_msg')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -368,9 +364,9 @@ class SettingsScreen extends StatelessWidget {
               if (!context.mounted) return;
               Navigator.pop(context);
             },
-            child: const Text(
-              'Reset',
-              style: TextStyle(color: AppColors.danger),
+            child: Text(
+              context.tr('reset'),
+              style: const TextStyle(color: AppColors.danger),
             ),
           ),
         ],

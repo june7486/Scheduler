@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -15,11 +16,11 @@ class ManageTabsScreen extends StatelessWidget {
     final cats = store.categories;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Tabs'),
+        title: Text(context.tr('manage_tabs_title')),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, size: 22),
-            tooltip: 'Add tab',
+            tooltip: context.tr('add_tab'),
             onPressed: () => _addTab(context, store),
           ),
         ],
@@ -53,7 +54,7 @@ class ManageTabsScreen extends StatelessWidget {
                   child: Text(c.emoji, style: const TextStyle(fontSize: 16)),
                 ),
                 title: Text(
-                  c.label,
+                  catLabel(c),
                   style: const TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -62,7 +63,9 @@ class ManageTabsScreen extends StatelessWidget {
                 subtitle: Row(
                   children: [
                     Text(
-                      'Top tab: ${c.showInTopTabs ? "on" : "off"}',
+                      c.showInTopTabs
+                          ? context.tr('top_tab_on')
+                          : context.tr('top_tab_off'),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSoft,
@@ -70,7 +73,9 @@ class ManageTabsScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      '${store.taskCountFor(c.id)} open',
+                      context.tr('open_count', args: {
+                        'n': '${store.taskCountFor(c.id)}',
+                      }),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSoft,
@@ -113,15 +118,15 @@ class ManageTabsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Add tab'),
+        title: Text(context.tr('add_tab')),
         content: TextField(
           controller: label,
-          decoration: const InputDecoration(hintText: 'Tab name'),
+          decoration: InputDecoration(hintText: context.tr('tab_name')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
@@ -130,7 +135,7 @@ class ManageTabsScreen extends StatelessWidget {
               }
               Navigator.pop(context);
             },
-            child: const Text('Add'),
+            child: Text(context.tr('add')),
           ),
         ],
       ),
@@ -138,30 +143,30 @@ class ManageTabsScreen extends StatelessWidget {
   }
 
   void _editTab(BuildContext context, Store store, Category c) {
-    final label = TextEditingController(text: c.label);
+    final label = TextEditingController(text: catLabel(c));
     final emoji = TextEditingController(text: c.emoji);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Edit tab'),
+        title: Text(context.tr('edit_tab')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: label,
-              decoration: const InputDecoration(hintText: 'Tab name'),
+              decoration: InputDecoration(hintText: context.tr('tab_name')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: emoji,
-              decoration: const InputDecoration(hintText: 'Emoji (e.g. 🎂)'),
+              decoration: InputDecoration(hintText: context.tr('emoji_hint')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
@@ -170,7 +175,7 @@ class ManageTabsScreen extends StatelessWidget {
               store.saveCategory(c);
               Navigator.pop(context);
             },
-            child: const Text('Save'),
+            child: Text(context.tr('save')),
           ),
         ],
       ),
@@ -181,21 +186,21 @@ class ManageTabsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Delete "${c.label}"?'),
-        content: const Text('Tasks in this tab will be moved to "Other".'),
+        title: Text(context.tr('delete_tab_q', args: {'name': catLabel(c)})),
+        content: Text(context.tr('delete_tab_msg')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
               store.deleteCategory(c.id);
               Navigator.pop(context);
             },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: AppColors.danger),
+            child: Text(
+              context.tr('delete'),
+              style: const TextStyle(color: AppColors.danger),
             ),
           ),
         ],
@@ -212,24 +217,24 @@ class OutputSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<Store>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Output Settings')),
+      appBar: AppBar(title: Text(context.tr('output_settings'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const _Head('Design mode'),
+            _Head(context.tr('design_mode')),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _modeChip(context, store, 'muji', 'Muji (plain)'),
-                _modeChip(context, store, 'minimal', 'Minimal (underline)'),
-                _modeChip(context, store, 'fancy', 'Fancy (graphic)'),
-                _modeChip(context, store, 'whitespace', 'Whitespace'),
+                _modeChip(context, store, 'muji', context.tr('muji')),
+                _modeChip(context, store, 'minimal', context.tr('minimal_design')),
+                _modeChip(context, store, 'fancy', context.tr('fancy')),
+                _modeChip(context, store, 'whitespace', context.tr('whitespace')),
               ],
             ),
             const SizedBox(height: 22),
-            const _Head('Default font size'),
+            _Head(context.tr('default_font')),
             Text(
               '${store.baseFontSize.toStringAsFixed(0)} pt',
               style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
@@ -244,20 +249,19 @@ class OutputSettingsScreen extends StatelessWidget {
               onChanged: (v) => store.setBaseFontSize(v),
             ),
             const SizedBox(height: 14),
-            const _Head('App theme (screen)'),
+            _Head(context.tr('app_theme')),
             Wrap(
               spacing: 8,
               children: [
-                _themeChip(context, store, 'material', 'Material (Style 1)'),
-                _themeChip(context, store, 'minimal', 'Minimal (Style 3)'),
-                _themeChip(context, store, 'mix', 'Mix (1 + 3)'),
+                _themeChip(context, store, 'material', context.tr('theme_material')),
+                _themeChip(context, store, 'minimal', context.tr('theme_minimal')),
+                _themeChip(context, store, 'mix', context.tr('theme_mix')),
               ],
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Tip: Open "Print / Export" from the top bar to preview and choose '
-              'tabs, no-two-line, line spacing, orientation, font size and design mode.',
-              style: TextStyle(
+            Text(
+              context.tr('output_tip'),
+              style: const TextStyle(
                 fontSize: 11.5,
                 color: AppColors.inkSoft,
                 height: 1.4,
@@ -324,21 +328,21 @@ class LogScreen extends StatelessWidget {
     final logs = store.logs;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Activity Log'),
+        title: Text(context.tr('activity_log')),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined, size: 20),
-            tooltip: 'Clear log',
+            tooltip: context.tr('clear_log'),
             onPressed: () => store.clearLogs(),
           ),
         ],
       ),
       body: SafeArea(
         child: logs.isEmpty
-            ? const Center(
+            ? Center(
                 child: Text(
-                  'No activity yet.',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                  context.tr('no_activity'),
+                  style: const TextStyle(fontSize: 13, color: AppColors.inkSoft),
                 ),
               )
             : ListView.separated(

@@ -256,10 +256,11 @@ class Store extends ChangeNotifier {
   Future<void> _seedCategories(String ownerId) async {
     for (var i = 0; i < defaultCategories.length; i++) {
       final c = defaultCategories[i];
-      await _cats.put(_catKey(ownerId, c['id'] as String), {
-        'id': c['id'],
+      final id = c['id'] as String;
+      await _cats.put(_catKey(ownerId, id), {
+        'id': id,
         'ownerId': ownerId,
-        'label': c['label'],
+        'label': _label(id, c['label'] as String),
         'emoji': c['emoji'],
         'colorValue': c['color'],
         'order': i,
@@ -267,6 +268,30 @@ class Store extends ChangeNotifier {
         'showInTopTabs': i < 6,
       });
     }
+  }
+
+  /// Localised default label for a built-in category id.
+  String _label(String id, String fallback) {
+    if (language == 'ko') {
+      const ko = {
+        'birthday': '생일',
+        'todo': '할일',
+        'finance': '금전출납',
+        'company': '회사업무',
+        'personal': '개인업무',
+        'bank': '은행업무',
+        'debt': '채무리스트',
+        'receivable': '받을 돈',
+        'scout': '스카우트업무',
+        'longterm': '롱텀',
+        'repeat': '반복',
+        'memo': '메모',
+        'daily': '매일 할일',
+        'other': '기타',
+      };
+      return ko[id] ?? fallback;
+    }
+    return fallback;
   }
 
   List<Category> categoriesFor(String ownerId) {
@@ -464,13 +489,16 @@ class Store extends ChangeNotifier {
   Future<void> seedRecurringBillsIfEmpty() async {
     final ownerId = _scopeId;
     final mine = tasksForOwner(ownerId);
-    if (mine.any((t) => t.title.contains('Rent'))) return;
+    final ko = language == 'ko';
+    if (mine.any((t) => t.recurrence == 'monthly' && t.recurrenceDay == 12)) {
+      return;
+    }
     final rent = Task(
       id: _uuid.v4(),
       ownerId: ownerId,
-      title: 'Rent — ₩2,500,000',
+      title: ko ? '월세 — ₩2,500,000' : 'Rent — ₩2,500,000',
       categoryId: 'repeat',
-      note: 'Monthly rent, due on the 12th',
+      note: ko ? '매월 12일 납부' : 'Monthly rent, due on the 12th',
       recurrence: 'monthly',
       recurrenceDay: 12,
       amount: 2500000,
@@ -478,9 +506,9 @@ class Store extends ChangeNotifier {
     final warehouse = Task(
       id: _uuid.v4(),
       ownerId: ownerId,
-      title: 'Warehouse fee — ₩30,000',
+      title: ko ? '창고비 — ₩30,000' : 'Warehouse fee — ₩30,000',
       categoryId: 'repeat',
-      note: 'Monthly warehouse fee',
+      note: ko ? '매월 창고비' : 'Monthly warehouse fee',
       recurrence: 'monthly',
       recurrenceDay: 12,
       amount: 30000,
@@ -495,12 +523,11 @@ class Store extends ChangeNotifier {
     final ownerId = _scopeId;
     final mine = tasksForOwner(ownerId);
     if (mine.any((t) => t.categoryId == 'daily')) return;
-    for (final item in [
-      'Take medicine',
-      'Laundry',
-      'Cleaning',
-      'Make the bed',
-    ]) {
+    final ko = language == 'ko';
+    final items = ko
+        ? ['약 먹기', '빨래', '청소', '이불 개기']
+        : ['Take medicine', 'Laundry', 'Cleaning', 'Make the bed'];
+    for (final item in items) {
       final t = Task(
         id: _uuid.v4(),
         ownerId: ownerId,
@@ -585,6 +612,14 @@ class Store extends ChangeNotifier {
 
   Future<void> setAppVersion(String v) async {
     await _users.put('__app_version__', v);
+    notifyListeners();
+  }
+
+  /// UI language: 'ko' (default) or 'en'.
+  String get language => (_users.get('__lang__') as String?) ?? 'ko';
+
+  Future<void> setLanguage(String lang) async {
+    await _users.put('__lang__', lang);
     notifyListeners();
   }
 

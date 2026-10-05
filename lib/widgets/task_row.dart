@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 
@@ -135,7 +136,7 @@ class TaskRow extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(5),
                                 ),
                                 child: Text(
-                                  '${category.emoji} ${category.label}',
+                                  '${category.emoji} ${catLabel(category)}',
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: catColor,
@@ -204,7 +205,7 @@ class TaskRow extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        '${c.emoji} ${c.label}',
+                        '${c.emoji} ${catLabel(c)}',
                         style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: selected

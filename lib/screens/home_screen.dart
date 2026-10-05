@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/calendar_service.dart';
 import '../services/session_service.dart';
@@ -55,11 +56,13 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("June's Scheduler"),
+            Text(store.language == 'en' ? "June's Scheduler" : 'June 스케줄러'),
             Text(
               store.isMaster && store.masterViewingAll
-                  ? 'Master · viewing ALL users'
-                  : 'Signed in: ${store.currentUserId}${store.isMaster ? " (master)" : ""}',
+                  ? context.tr('master_viewing_all')
+                  : context.tr('signed_in', args: {
+                      'id': '${store.currentUserId}${store.isMaster ? " (${context.tr('master')})" : ""}'
+                    }),
               style: const TextStyle(
                 fontSize: 10.5,
                 color: AppColors.inkSoft,
@@ -71,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (store.isMaster)
             IconButton(
-              tooltip: 'Master console',
+              tooltip: context.tr('master_console'),
               icon: const Icon(Icons.admin_panel_settings_outlined, size: 21),
               onPressed: () => Navigator.push(
                 context,
@@ -79,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           IconButton(
-            tooltip: 'Print / Export',
+            tooltip: context.tr('print_export'),
             icon: const Icon(Icons.print_outlined, size: 21),
             onPressed: () => Navigator.push(
               context,
@@ -87,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Voice note',
+            tooltip: context.tr('voice_note'),
             icon: const Icon(Icons.mic_none_rounded, size: 21),
             onPressed: () => Navigator.push(
               context,
@@ -95,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Settings',
+            tooltip: context.tr('settings'),
             icon: const Icon(Icons.settings_outlined, size: 21),
             onPressed: () => Navigator.push(
               context,
@@ -103,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Sign out',
+            tooltip: context.tr('sign_out'),
             icon: const Icon(Icons.logout_rounded, size: 20),
             onPressed: () async {
               await SessionService().logout();
@@ -136,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         onPressed: () => _openEditor(),
         icon: const Icon(Icons.add, size: 20),
-        label: const Text('Add task', style: TextStyle(fontSize: 13)),
+        label: Text(context.tr('add_task'), style: const TextStyle(fontSize: 13)),
       ),
     );
   }
@@ -150,9 +153,9 @@ class _HomeScreenState extends State<HomeScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
-          _topChip('all', '📋', 'All'),
+          _topChip('all', '📋', context.tr('all')),
           for (final c in topCats)
-            _topChip(c.id, c.emoji, c.label, color: Color(c.colorValue)),
+            _topChip(c.id, c.emoji, catLabel(c), color: Color(c.colorValue)),
         ],
       ),
     );
@@ -198,13 +201,13 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     return Column(
       children: [
-        _sectionHeader('Tasks', active.length),
+        _sectionHeader(context.tr('tasks'), active.length),
         Expanded(
           child: active.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
-                    'No tasks here. Tap "Add task" to begin.',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
+                    context.tr('no_tasks'),
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
                   ),
                 )
               : ListView.builder(
@@ -260,8 +263,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Completed',
-                        style: TextStyle(
+                        context.tr('completed'),
+                        style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.inkSoft,
@@ -291,11 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 220),
                   child: done.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.only(bottom: 14),
+                      ? Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
                           child: Text(
-                            'Nothing completed yet.',
-                            style: TextStyle(
+                            context.tr('nothing_completed'),
+                            style: const TextStyle(
                               fontSize: 11.5,
                               color: AppColors.inkSoft,
                             ),
@@ -408,8 +411,8 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Text(
               _selectedTaskId == null
-                  ? 'Select a task,\nthen a tab'
-                  : 'Assign to:',
+                  ? context.tr('select_task_then_tab')
+                  : context.tr('assign_to'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 9.5,
@@ -462,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(c.emoji, style: const TextStyle(fontSize: 15)),
                         const SizedBox(height: 1),
                         Text(
-                          c.label,
+                          catLabel(c),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -518,7 +521,8 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _selectedTaskId = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Moved "${t.title}" → ${c.label}'),
+            content: Text(context.tr('moved_to',
+                args: {'title': t.title, 'category': catLabel(c)})),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -533,12 +537,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete task?'),
-        content: Text('"${t.title}" will be removed.'),
+        title: Text(context.tr('delete_task_q')),
+        content: Text(context.tr('will_be_removed', args: {'title': t.title})),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -597,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             ListTile(
               leading: const Icon(Icons.edit_outlined, size: 20),
-              title: const Text('Edit task', style: TextStyle(fontSize: 13.5)),
+              title: Text(context.tr('edit_task'), style: const TextStyle(fontSize: 13.5)),
               onTap: () {
                 Navigator.pop(context);
                 _editTask(store, t);
@@ -605,9 +609,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.event_available_outlined, size: 20),
-              title: const Text(
-                'Add to Google Calendar',
-                style: TextStyle(fontSize: 13.5),
+              title: Text(
+                context.tr('add_to_calendar'),
+                style: const TextStyle(fontSize: 13.5),
               ),
               onTap: () async {
                 final messenger = ScaffoldMessenger.of(context);
@@ -616,7 +620,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!ok) {
                   messenger.showSnackBar(
                     const SnackBar(
-                      content: Text('Could not open Google Calendar.'),
+                      content: Text(context.tr('cannot_open_calendar')),
                     ),
                   );
                 }
@@ -628,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 20,
               ),
               title: Text(
-                t.completed ? 'Reopen task' : 'Mark complete',
+                t.completed ? context.tr('reopen_task') : context.tr('mark_complete'),
                 style: const TextStyle(fontSize: 13.5),
               ),
               onTap: () {

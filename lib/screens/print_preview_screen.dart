@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -72,10 +73,10 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Print / Export'),
+        title: Text(context.tr('print_export')),
         actions: [
           IconButton(
-            tooltip: _showPreview ? 'Hide preview' : 'Show preview',
+            tooltip: _showPreview ? context.tr('hide_preview') : context.tr('show_preview'),
             icon: Icon(_showPreview ? Icons.visibility_off : Icons.visibility),
             onPressed: () => setState(() => _showPreview = !_showPreview),
           ),
@@ -99,10 +100,10 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                           ),
                         ),
                       )
-                    : const Center(
+                    : Center(
                         child: Text(
-                          'Preview hidden',
-                          style: TextStyle(
+                          context.tr('preview_hidden'),
+                          style: const TextStyle(
                             color: AppColors.inkSoft,
                             fontSize: 13,
                           ),
@@ -117,7 +118,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SecTitle('Tabs to include'),
+                    _SecTitle(context.tr('tabs_to_include')),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -145,13 +146,13 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const _SecTitle('Layout'),
+                    _SecTitle(context.tr('layout')),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: const Text(
-                        'Prevent two-line wrapping (1 line per item)',
-                        style: TextStyle(fontSize: 12.5),
+                      title: Text(
+                        context.tr('no_two_line'),
+                        style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _noTwoLine,
                       activeThumbColor: AppColors.indigo,
@@ -160,9 +161,9 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: const Text(
-                        'Landscape orientation',
-                        style: TextStyle(fontSize: 12.5),
+                      title: Text(
+                        context.tr('landscape'),
+                        style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _landscape,
                       activeThumbColor: AppColors.indigo,
@@ -170,7 +171,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Line spacing — ${_lineSpacing.toStringAsFixed(1)}',
+                      '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.inkSoft,
@@ -186,7 +187,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       onChanged: (v) => setState(() => _lineSpacing = v),
                     ),
                     Text(
-                      'Font size — ${_fontSize.toStringAsFixed(0)} pt',
+                      '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.inkSoft,
@@ -202,7 +203,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       onChanged: (v) => setState(() => _fontSize = v),
                     ),
                     const SizedBox(height: 10),
-                    const _SecTitle('Design mode'),
+                    _SecTitle(context.tr('design_mode')),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -251,9 +252,9 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () => _shareImage(store),
                             icon: const Icon(Icons.image_outlined, size: 18),
-                            label: const Text(
-                              'Image',
-                              style: TextStyle(fontSize: 12),
+                            label: Text(
+                              context.tr('image'),
+                              style: const TextStyle(fontSize: 12),
                             ),
                           ),
                         ),
@@ -262,9 +263,9 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () => _printNow(store),
                             icon: const Icon(Icons.print_outlined, size: 18),
-                            label: const Text(
-                              'Print',
-                              style: TextStyle(fontSize: 12),
+                            label: Text(
+                              context.tr('print'),
+                              style: const TextStyle(fontSize: 12),
                             ),
                           ),
                         ),
@@ -276,9 +277,9 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _email(store),
                         icon: const Icon(Icons.email_outlined, size: 18),
-                        label: const Text(
-                          'Send by e-mail',
-                          style: TextStyle(fontSize: 12),
+                        label: Text(
+                          context.tr('send_email'),
+                          style: const TextStyle(fontSize: 12),
                         ),
                       ),
                     ),
@@ -293,10 +294,10 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
   }
 
   String _designLabel(PrintDesign d) => switch (d) {
-    PrintDesign.muji => 'Muji (plain)',
-    PrintDesign.minimal => 'Minimal (underline)',
-    PrintDesign.fancy => 'Fancy (graphic)',
-    PrintDesign.whitespace => 'Whitespace',
+    PrintDesign.muji => context.tr('muji'),
+    PrintDesign.minimal => context.tr('minimal_design'),
+    PrintDesign.fancy => context.tr('fancy'),
+    PrintDesign.whitespace => context.tr('whitespace'),
   };
 
   // ---------------- In-app preview ----------------

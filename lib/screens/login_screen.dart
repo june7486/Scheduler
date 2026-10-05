@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -40,13 +41,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok) {
       await _session.login(store.currentUserId);
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
     } else {
       setState(() {
         _loading = false;
-        _error = 'Incorrect ID or password.';
+        _error = context.tr('incorrect_login');
       });
     }
   }
@@ -56,9 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
     await _session.clearCache();
     await store.clearCache();
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Cache cleared.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.tr('cache_cleared'))),
+    );
   }
 
   void _showVersion() {
@@ -66,15 +67,13 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('App Version'),
-        content: Text(
-          'Installed version: v${store.appVersion}\n'
-          'Version is defined by the stored build date & time.',
-        ),
+        title: Text(context.tr('app_version')),
+        content: Text('${context.tr('installed_version')}: v${store.appVersion}\n'
+            '${context.tr('version_note')}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(context.tr('close')),
           ),
         ],
       ),
@@ -88,36 +87,30 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Create new ID'),
+        title: Text(ctx.tr('create_id')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: idCtrl,
-              decoration: const InputDecoration(
-                hintText: 'New ID (login name)',
-              ),
+              decoration: InputDecoration(hintText: ctx.tr('new_id_hint')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: pwCtrl,
               obscureText: true,
-              decoration: const InputDecoration(hintText: 'Password (min 4)'),
+              decoration: InputDecoration(hintText: ctx.tr('password_min')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Display name (optional)',
-              ),
+              decoration: InputDecoration(hintText: ctx.tr('display_name')),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(ctx), child: Text(ctx.tr('cancel'))),
           TextButton(
             onPressed: () async {
               final store = context.read<Store>();
@@ -132,16 +125,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('ID "${idCtrl.text.trim()}" created.'),
-                  ),
+                      content: Text(context
+                          .tr('id_created', args: {'id': idCtrl.text.trim()}))),
                 );
               } else {
-                ScaffoldMessenger.of(
-                  ctx,
-                ).showSnackBar(SnackBar(content: Text(err)));
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(err)),
+                );
               }
             },
-            child: const Text('Create'),
+            child: Text(ctx.tr('create')),
           ),
         ],
       ),
@@ -151,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<Store>();
+    final isKo = store.language != 'en';
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -163,6 +157,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _LangToggle(store: store),
+                  ),
+                  const SizedBox(height: 4),
                   Container(
                     width: 72,
                     height: 72,
@@ -171,17 +170,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: AppColors.indigo.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
-                      Icons.calendar_month_rounded,
-                      size: 38,
-                      color: AppColors.indigo,
-                    ),
+                    child: const Icon(Icons.calendar_month_rounded,
+                        size: 38, color: AppColors.indigo),
                   ),
                   const SizedBox(height: 22),
-                  const Text(
-                    "June's Scheduler",
+                  Text(
+                    isKo ? 'June 스케줄러' : "June's Scheduler",
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink,
@@ -189,18 +185,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Sign in to continue',
+                  Text(
+                    context.tr('sign_in_hint'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
                   ),
                   const SizedBox(height: 30),
                   TextField(
                     controller: _idCtrl,
                     style: const TextStyle(fontSize: 13.5),
-                    decoration: const InputDecoration(
-                      hintText: 'ID',
-                      prefixIcon: Icon(Icons.person_outline, size: 20),
+                    decoration: InputDecoration(
+                      hintText: context.tr('id'),
+                      prefixIcon: const Icon(Icons.person_outline, size: 20),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -210,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: const TextStyle(fontSize: 13.5),
                     onSubmitted: (_) => _login(),
                     decoration: InputDecoration(
-                      hintText: 'Password',
+                      hintText: context.tr('password'),
                       prefixIcon: const Icon(Icons.lock_outline, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -225,10 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _error!,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: AppColors.danger, fontSize: 12),
                     ),
                   ],
                   const SizedBox(height: 22),
@@ -241,21 +234,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                                  strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('Sign in'),
+                          : Text(context.tr('sign_in')),
                     ),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
                     onPressed: _openSignUp,
                     icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
-                    label: const Text(
-                      'Create a new ID',
-                      style: TextStyle(fontSize: 12.5),
-                    ),
+                    label: Text(context.tr('create_id'),
+                        style: const TextStyle(fontSize: 12.5)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.indigo,
                       side: const BorderSide(color: AppColors.indigo),
@@ -263,11 +252,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Each ID keeps its own separate schedule data. '
-                    'Session is kept for 1 hour.',
+                  Text(
+                    context.tr('session_kept'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                    style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
                   ),
                   const SizedBox(height: 28),
                   const Divider(),
@@ -277,14 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _clearCache,
-                          icon: const Icon(
-                            Icons.cleaning_services_outlined,
-                            size: 17,
-                          ),
-                          label: const Text(
-                            'Clear cache',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          icon: const Icon(Icons.cleaning_services_outlined, size: 17),
+                          label: Text(context.tr('clear_cache'),
+                              style: const TextStyle(fontSize: 12)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.inkSoft,
                             side: const BorderSide(color: AppColors.line),
@@ -297,10 +280,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _showVersion,
                           icon: const Icon(Icons.info_outline, size: 17),
-                          label: const Text(
-                            'Version',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          label: Text(context.tr('version'),
+                              style: const TextStyle(fontSize: 12)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.inkSoft,
                             side: const BorderSide(color: AppColors.line),
@@ -314,14 +295,61 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'v${store.appVersion}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: AppColors.inkSoft,
-                    ),
+                    style: const TextStyle(fontSize: 10.5, color: AppColors.inkSoft),
                   ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small KO / EN language switcher.
+class _LangToggle extends StatelessWidget {
+  final Store store;
+  const _LangToggle({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F3F8),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _chip(context, '한국어', 'ko'),
+          _chip(context, 'English', 'en'),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, String label, String code) {
+    final sel = store.language == code;
+    return GestureDetector(
+      onTap: () {
+        store.setLanguage(code);
+        L10n.currentLang = code == 'en' ? AppLang.en : AppLang.ko;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: sel ? AppColors.indigo : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+            color: sel ? Colors.white : AppColors.inkSoft,
           ),
         ),
       ),

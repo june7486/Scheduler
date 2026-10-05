@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/session_service.dart';
@@ -11,6 +12,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = Store();
   await store.init();
+  // Sync the static language used by the L10n helper.
+  L10n.currentLang = store.language == 'en' ? AppLang.en : AppLang.ko;
   runApp(JuneSchedulerApp(store: store));
 }
 
@@ -22,11 +25,19 @@ class JuneSchedulerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: store,
-      child: MaterialApp(
-        title: "June's Scheduler",
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.build(),
-        home: const _Gate(),
+      child: Consumer<Store>(
+        builder: (context, s, _) {
+          // Keep the global language in sync with the store.
+          L10n.currentLang = s.language == 'en' ? AppLang.en : AppLang.ko;
+          return MaterialApp(
+            title: s.language == 'en'
+                ? "June's Scheduler"
+                : 'June 스케줄러',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.build(),
+            home: const _Gate(),
+          );
+        },
       ),
     );
   }
@@ -79,7 +90,9 @@ class _GateState extends State<_Gate> {
   @override
   Widget build(BuildContext context) {
     if (_loggedIn == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     return _loggedIn! ? const HomeScreen() : const LoginScreen();
   }
