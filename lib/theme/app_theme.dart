@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 /// A resolved colour palette for one brightness (light or dark).
 ///
-/// The design follows a serene, natural "paper" aesthetic — a muted sage
-/// canvas, warm cream cards and soft charcoal type (referenced from the
-/// user's notice-poster palette). [indigo] is the primary accent (a quiet
-/// sage-olive); the rest stays deliberately low-key.
+/// The design blends Style 1 (Modern Material — indigo/blue, cards, soft
+/// shadows) with Style 3 (Minimal/Muji — whitespace, thin dividers, refined
+/// small typography). Indigo is the primary accent; the rest stays quiet.
 class AppPalette {
-  final Color indigo; // primary accent (sage olive)
+  final Color indigo; // primary accent (indigo)
   final Color indigoDark;
   final Color teal; // secondary accent
   final Color bg;
@@ -38,35 +37,35 @@ class AppPalette {
   });
 
   static const light = AppPalette(
-    indigo: Color(0xFF6C7A5D), // sage olive
-    indigoDark: Color(0xFF556149),
-    teal: Color(0xFF8D9C7B), // light sage
-    bg: Color(0xFFE4E6DC), // soft sage canvas
-    card: Color(0xFFFBFAF5), // warm cream paper
-    ink: Color(0xFF2E2E2D), // soft charcoal
-    inkSoft: Color(0xFF70746B), // muted olive-gray
-    line: Color(0xFFD3D6C9),
-    danger: Color(0xFFB0513C), // muted terracotta
-    soft: Color(0xFFEDEEE5),
-    paper: Color(0xFFF4F2E9),
-    tracker: Color(0xFFE2E4D8),
+    indigo: Color(0xFF3F51B5), // indigo
+    indigoDark: Color(0xFF303F9F),
+    teal: Color(0xFF00897B), // teal
+    bg: Color(0xFFF7F8FC), // soft blue-gray canvas
+    card: Color(0xFFFFFFFF), // white cards
+    ink: Color(0xFF1F2233), // near-black ink
+    inkSoft: Color(0xFF5A5F73), // muted gray
+    line: Color(0xFFE3E6EF),
+    danger: Color(0xFFE53935), // red
+    soft: Color(0xFFF2F3F8),
+    paper: Color(0xFFFAF9F6),
+    tracker: Color(0xFFEDEFF5),
     onAccent: Color(0xFFFFFFFF),
   );
 
   static const dark = AppPalette(
-    indigo: Color(0xFFA7B892), // light sage
-    indigoDark: Color(0xFF80906C),
-    teal: Color(0xFF9DB08A),
-    bg: Color(0xFF171A14),
-    card: Color(0xFF22261E),
-    ink: Color(0xFFECEDE2),
-    inkSoft: Color(0xFFA2A996),
-    line: Color(0xFF373C30),
-    danger: Color(0xFFE08A75),
-    soft: Color(0xFF2C3127),
-    paper: Color(0xFF23271E),
-    tracker: Color(0xFF2B3026),
-    onAccent: Color(0xFF14170F),
+    indigo: Color(0xFF8C9EFF), // light indigo
+    indigoDark: Color(0xFF5C6BC0),
+    teal: Color(0xFF4DB6AC),
+    bg: Color(0xFF111219),
+    card: Color(0xFF1C1E27),
+    ink: Color(0xFFECEDF5),
+    inkSoft: Color(0xFF9EA3B8),
+    line: Color(0xFF2B2D3A),
+    danger: Color(0xFFEF5350),
+    soft: Color(0xFF262833),
+    paper: Color(0xFF1B1D26),
+    tracker: Color(0xFF2A2C39),
+    onAccent: Color(0xFF0E0F14),
   );
 
   /// A soft tint of a category colour that stays visible on the surface.
