@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: p.danger,
             ),
             visualDensity: VisualDensity.compact,
-            tooltip: 'Delete',
+            tooltip: context.tr('delete'),
           ),
         ],
       ),

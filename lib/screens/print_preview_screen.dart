@@ -764,7 +764,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Image export failed: $e')));
+      ).showSnackBar(SnackBar(content: Text(context.tr('image_failed', args: {'err': '$e'}))));
     }
   }
 

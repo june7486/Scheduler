@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -56,7 +57,7 @@ class _ReportScreenState extends State<ReportScreen> {
     final users = store.allUsers;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('User Reports')),
+      appBar: AppBar(title: Text(context.tr('user_reports_title'))),
       body: SafeArea(
         child: Column(
           children: [
@@ -83,18 +84,18 @@ class _ReportScreenState extends State<ReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _Sec('Report type'),
+                    _Sec(context.tr('report_type')),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _typeChip(ReportType.userStatus, 'ID status'),
-                        _typeChip(ReportType.byUser, 'By ID (schedules)'),
-                        _typeChip(ReportType.byDate, 'By date'),
+                        _typeChip(ReportType.userStatus, context.tr('id_status')),
+                        _typeChip(ReportType.byUser, context.tr('by_id')),
+                        _typeChip(ReportType.byDate, context.tr('by_date')),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const _Sec('Users to include'),
+                    _Sec(context.tr('users_to_include')),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -125,13 +126,13 @@ class _ReportScreenState extends State<ReportScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const _Sec('Layout'),
+                    _Sec(context.tr('layout')),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: const Text(
-                        'Prevent two-line wrapping',
-                        style: TextStyle(fontSize: 12.5),
+                      title: Text(
+                        context.tr('prevent_two_line'),
+                        style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _noTwoLine,
                       activeThumbColor: p.indigo,
@@ -140,16 +141,16 @@ class _ReportScreenState extends State<ReportScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: const Text(
-                        'Landscape orientation',
-                        style: TextStyle(fontSize: 12.5),
+                      title: Text(
+                        context.tr('landscape'),
+                        style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _landscape,
                       activeThumbColor: p.indigo,
                       onChanged: (v) => setState(() => _landscape = v),
                     ),
                     Text(
-                      'Line spacing — ${_lineSpacing.toStringAsFixed(1)}',
+                      '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
                       style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
@@ -164,7 +165,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       onChanged: (v) => setState(() => _lineSpacing = v),
                     ),
                     Text(
-                      'Font size — ${_fontSize.toStringAsFixed(0)} pt',
+                      '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
                       style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
@@ -199,9 +200,9 @@ class _ReportScreenState extends State<ReportScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () => _shareImage(),
                             icon: const Icon(Icons.image_outlined, size: 18),
-                            label: const Text(
-                              'Image',
-                              style: TextStyle(fontSize: 12),
+                            label: Text(
+                              context.tr('image'),
+                              style: const TextStyle(fontSize: 12),
                             ),
                           ),
                         ),
@@ -210,9 +211,9 @@ class _ReportScreenState extends State<ReportScreen> {
                           child: OutlinedButton.icon(
                             onPressed: () => _print(store),
                             icon: const Icon(Icons.print_outlined, size: 18),
-                            label: const Text(
-                              'Print',
-                              style: TextStyle(fontSize: 12),
+                            label: Text(
+                              context.tr('print'),
+                              style: const TextStyle(fontSize: 12),
                             ),
                           ),
                         ),
@@ -256,7 +257,7 @@ class _ReportScreenState extends State<ReportScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'JUNE\'S SCHEDULER — USER REPORT',
+            context.tr('report_header'),
             style: base.copyWith(
               fontSize: _fontSize + 2,
               fontWeight: FontWeight.w800,
@@ -291,7 +292,13 @@ class _ReportScreenState extends State<ReportScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _row(['ID', 'Name', 'Open', 'Done', 'Created'], base, bold: true),
+        _row([
+          context.tr('col_id'),
+          context.tr('col_name'),
+          context.tr('col_open'),
+          context.tr('col_done'),
+          context.tr('col_created'),
+        ], base, bold: true),
         const Divider(),
         ...users.map((u) {
           final tasks = store.tasksForOwner(u.id);
@@ -379,7 +386,7 @@ class _ReportScreenState extends State<ReportScreen> {
     if (tasks.isEmpty) {
       return [
         Text(
-          '— no tasks —',
+          context.tr('no_tasks_dash'),
           style: base.copyWith(fontSize: _fontSize - 3, color: Colors.grey),
         ),
       ];
@@ -452,7 +459,7 @@ class _ReportScreenState extends State<ReportScreen> {
           final w = <pw.Widget>[];
           w.add(
             pw.Text(
-              "JUNE'S SCHEDULER — USER REPORT",
+              context.tr('report_header'),
               style: pw.TextStyle(
                 fontSize: _fontSize + 2,
                 fontWeight: pw.FontWeight.bold,
@@ -660,7 +667,9 @@ class _ReportScreenState extends State<ReportScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Image export failed: $e')));
+      ).showSnackBar(
+        SnackBar(content: Text(context.tr('image_failed', args: {'err': '$e'}))),
+      );
     }
   }
 }

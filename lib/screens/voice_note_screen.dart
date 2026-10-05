@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -55,7 +56,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     final cleaned = text.trim();
     if (cleaned.isEmpty) {
       return {
-        'summary': 'No content to summarise.',
+        'summary': tr('no_content'),
         'bullets': <String>[],
         'tags': <String, int>{},
       };
@@ -107,9 +108,10 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         .take(5)
         .map((s) => s.length > 90 ? '${s.substring(0, 90)}…' : s)
         .toList();
-    final summary =
-        'Key points (${sentences.length} sentences): '
-        '${bullets.take(2).join(' / ')}';
+    final summary = tr('key_points', args: {
+      'n': '${sentences.length}',
+      'summary': bullets.take(2).join(' / '),
+    });
 
     return {
       'summary': summary,
@@ -135,7 +137,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     await store.saveVoiceNote(note);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Voice note saved with summary.')),
+      SnackBar(content: Text(context.tr('note_saved'))),
     );
     setState(() {
       _transcriptCtrl.clear();
@@ -158,7 +160,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     final bullets = (result['bullets'] as List).cast<String>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Voice Note')),
+      appBar: AppBar(title: Text(context.tr('voice_title'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -212,10 +214,10 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   const SizedBox(height: 8),
                   Text(
                     kIsWeb
-                        ? 'Recording may be limited on web. Type your memo below.'
+                        ? context.tr('recording_limited')
                         : (_recording
-                              ? 'Recording… tap to stop'
-                              : 'Tap to record'),
+                              ? context.tr('recording_tap_stop')
+                              : context.tr('tap_to_record')),
                     style: TextStyle(
                       fontSize: 11.5,
                       color: p.inkSoft,
@@ -225,8 +227,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'Transcript / memo',
+            Text(
+              context.tr('transcript_memo'),
               style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
@@ -235,14 +237,13 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               maxLines: 5,
               style: const TextStyle(fontSize: 13.5),
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText:
-                    'Speak or type a quick memo… (e.g. "Call the bank tomorrow about the loan, also buy paint")',
+              decoration: InputDecoration(
+                hintText: context.tr('transcript_hint'),
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Summary',
+            Text(
+              context.tr('summary'),
               style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -303,8 +304,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
             ),
             if (tags.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text(
-                'Keyword graphic',
+              Text(
+                context.tr('keyword_graphic'),
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
@@ -316,13 +317,13 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               child: ElevatedButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Save note'),
+                label: Text(context.tr('save_note')),
               ),
             ),
             if (store.voiceNotes.isNotEmpty) ...[
               const SizedBox(height: 24),
-              const Text(
-                'Saved notes',
+              Text(
+                context.tr('saved_notes'),
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),

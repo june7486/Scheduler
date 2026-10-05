@@ -21,7 +21,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<Store>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.tr('settings'))),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -120,7 +120,7 @@ class SettingsScreen extends StatelessWidget {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(const SnackBar(content: Text('Cache cleared.')));
+                ).showSnackBar(SnackBar(content: Text(context.tr('cache_cleared'))));
               },
             ),
             _Tile(
@@ -139,6 +139,20 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const LogScreen()),
               ),
+            ),
+            _Group(context.tr('display_grp')),
+            _Tile(
+              icon: Icons.language_outlined,
+              title: context.tr('language'),
+              subtitle: '${context.tr('language_korean')} (${store.language == 'ko' ? '●' : '○'})  ·  '
+                  '${context.tr('language_english')} (${store.language == 'en' ? '●' : '○'})',
+              onTap: () => _pickLanguage(context, store),
+            ),
+            _Tile(
+              icon: Icons.brightness_6_outlined,
+              title: context.tr('screen_theme'),
+              subtitle: _themeLabel(context, store),
+              onTap: () => _pickTheme(context, store),
             ),
             _Group(context.tr('app_grp')),
             _Tile(
@@ -343,6 +357,124 @@ class SettingsScreen extends StatelessWidget {
             child: Text(context.tr('restore')),
           ),
         ],
+      ),
+    );
+  }
+
+  String _themeLabel(BuildContext context, Store store) {
+    switch (store.themeModeKey) {
+      case 'light':
+        return context.tr('light_mode');
+      case 'dark':
+        return context.tr('dark_mode');
+      default:
+        return context.tr('follow_system');
+    }
+  }
+
+  void _pickLanguage(BuildContext context, Store store) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Text(
+                context.tr('language'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                context.tr('language_hint'),
+                style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+              ),
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: store.language,
+              onChanged: (v) async {
+                if (v == null) return;
+                await store.setLanguage(v);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              },
+              child: Column(
+                children: [
+                  RadioListTile<String>(
+                    value: 'ko',
+                    activeColor: p.indigo,
+                    title: Text(context.tr('language_korean')),
+                  ),
+                  RadioListTile<String>(
+                    value: 'en',
+                    activeColor: p.indigo,
+                    title: Text(context.tr('language_english')),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _pickTheme(BuildContext context, Store store) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Text(
+                context.tr('screen_theme'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: store.themeModeKey,
+              onChanged: (v) async {
+                if (v == null) return;
+                await store.setThemeModeKey(v);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+              },
+              child: Column(
+                children: [
+                  RadioListTile<String>(
+                    value: 'system',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.settings_suggest_outlined),
+                    title: Text(context.tr('follow_system')),
+                  ),
+                  RadioListTile<String>(
+                    value: 'light',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.light_mode_outlined),
+                    title: Text(context.tr('light_mode')),
+                  ),
+                  RadioListTile<String>(
+                    value: 'dark',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.dark_mode_outlined),
+                    title: Text(context.tr('dark_mode')),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

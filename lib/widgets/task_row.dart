@@ -170,7 +170,7 @@ class TaskRow extends StatelessWidget {
                     color: p.danger,
                   ),
                   visualDensity: VisualDensity.compact,
-                  tooltip: 'Delete',
+                  tooltip: context.tr('delete'),
                 ),
               ],
             ),

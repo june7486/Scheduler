@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -17,10 +18,10 @@ class AdminScreen extends StatelessWidget {
     final store = context.watch<Store>();
     if (!store.isMaster) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Admin')),
+        appBar: AppBar(title: Text(context.tr('master_admin'))),
         body: Center(
           child: Text(
-            'Master access only.',
+            context.tr('admin_only'),
             style: TextStyle(fontSize: 13, color: p.inkSoft),
           ),
         ),
@@ -29,10 +30,10 @@ class AdminScreen extends StatelessWidget {
     final users = store.allUsers;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Master Console'),
+        title: Text(context.tr('master_console')),
         actions: [
           IconButton(
-            tooltip: 'User reports',
+            tooltip: context.tr('user_reports'),
             icon: const Icon(Icons.summarize_outlined, size: 21),
             onPressed: () => Navigator.push(
               context,
@@ -40,7 +41,7 @@ class AdminScreen extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Create user',
+            tooltip: context.tr('create_user'),
             icon: const Icon(Icons.person_add_alt_1_outlined, size: 21),
             onPressed: () => _createUser(context, store),
           ),
@@ -49,7 +50,7 @@ class AdminScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            _masterHeader(store),
+            _masterHeader(context, store),
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -63,7 +64,7 @@ class AdminScreen extends StatelessWidget {
     );
   }
 
-  Widget _masterHeader(Store store) {
+  Widget _masterHeader(BuildContext context, Store store) {
     return Container(
       width: double.infinity,
       color: p.indigo.withValues(alpha: 0.06),
@@ -72,7 +73,7 @@ class AdminScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Master account',
+            context.tr('master_account'),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -82,8 +83,10 @@ class AdminScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${store.allUsers.length} ID(s) · '
-            '${store.allTaskTotal()} total tasks',
+            context.tr('n_ids_tasks', args: {
+              'ids': '${store.allUsers.length}',
+              'tasks': '${store.allTaskTotal()}',
+            }),
             style: TextStyle(fontSize: 11.5, color: p.inkSoft),
           ),
           const SizedBox(height: 8),
@@ -97,9 +100,9 @@ class AdminScreen extends StatelessWidget {
                   dense: true,
                   value: false,
                   activeColor: p.indigo,
-                  title: const Text(
-                    'View my own data only',
-                    style: TextStyle(fontSize: 12),
+                  title: Text(
+                    context.tr('view_own'),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
                 RadioListTile<bool>(
@@ -107,9 +110,9 @@ class AdminScreen extends StatelessWidget {
                   dense: true,
                   value: true,
                   activeColor: p.indigo,
-                  title: const Text(
-                    'View ALL users\' data combined',
-                    style: TextStyle(fontSize: 12),
+                  title: Text(
+                    context.tr('view_all'),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
               ],
@@ -188,7 +191,7 @@ class AdminScreen extends StatelessWidget {
                             Padding(
                               padding: EdgeInsets.only(left: 6),
                               child: Text(
-                                '(disabled)',
+                                context.tr('disabled'),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: p.danger,
@@ -198,7 +201,8 @@ class AdminScreen extends StatelessWidget {
                         ],
                       ),
                       Text(
-                        '${u.displayName.isEmpty ? "—" : u.displayName} · $open open / $done done',
+                        '${u.displayName.isEmpty ? "—" : u.displayName} · '
+                        '${context.tr('open_done', args: {'open': '$open', 'done': '$done'})}',
                         style: TextStyle(
                           fontSize: 11,
                           color: p.inkSoft,
@@ -208,7 +212,7 @@ class AdminScreen extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'View data',
+                  tooltip: context.tr('view_data'),
                   icon: Icon(
                     Icons.list_alt_outlined,
                     size: 19,
@@ -226,23 +230,23 @@ class AdminScreen extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   _miniBtn(
-                    'Show password',
+                    context.tr('show_password'),
                     Icons.visibility_outlined,
                     () => _showPassword(context, store, u),
                   ),
                   _miniBtn(
-                    'Change',
+                    context.tr('change'),
                     Icons.edit_outlined,
                     () => _changePassword(context, store, u),
                   ),
                   _miniBtn(
-                    'Reset',
+                    context.tr('reset_pw'),
                     Icons.restart_alt,
                     () => _resetPassword(context, store, u),
                   ),
                   if (!u.isMaster)
                     _miniBtn(
-                      'Delete ID',
+                      context.tr('delete_id'),
                       Icons.delete_outline,
                       () => _deleteUser(context, store, u),
                       danger: true,
@@ -280,7 +284,7 @@ class AdminScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Password — ${u.id}'),
+        title: Text(context.tr('password_for', args: {'id': u.id})),
         content: SelectableText(
           u.password,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
@@ -288,7 +292,7 @@ class AdminScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(context.tr('close')),
           ),
         ],
       ),
@@ -300,15 +304,15 @@ class AdminScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Change password — ${u.id}'),
+        title: Text(context.tr('change_pw_for', args: {'id': u.id})),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(hintText: 'New password (min 4)'),
+          decoration: InputDecoration(hintText: context.tr('new_pw_hint')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
@@ -316,15 +320,15 @@ class AdminScreen extends StatelessWidget {
                 store.setUserPassword(u.id, ctrl.text);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Password for "${u.id}" changed.')),
+                  SnackBar(content: Text(context.tr('pw_changed', args: {'id': u.id}))),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Min 4 characters.')),
+                  SnackBar(content: Text(context.tr('min_4'))),
                 );
               }
             },
-            child: const Text('Save'),
+            child: Text(context.tr('save')),
           ),
         ],
       ),
@@ -335,7 +339,7 @@ class AdminScreen extends StatelessWidget {
     final def = await store.resetUserPassword(u.id);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Password for "${u.id}" reset to "$def".')),
+      SnackBar(content: Text(context.tr('pw_reset_to', args: {'id': u.id, 'pw': def}))),
     );
   }
 
@@ -343,15 +347,12 @@ class AdminScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Delete ID "${u.id}"?'),
-        content: const Text(
-          'This permanently deletes the user and all of their '
-          'tasks, tabs, logs and voice notes.',
-        ),
+        title: Text(context.tr('delete_id_q', args: {'id': u.id})),
+        content: Text(context.tr('delete_id_msg')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () {
@@ -359,7 +360,7 @@ class AdminScreen extends StatelessWidget {
               Navigator.pop(context);
             },
             child: Text(
-              'Delete',
+              context.tr('delete'),
               style: TextStyle(color: p.danger),
             ),
           ),
@@ -382,25 +383,25 @@ class AdminScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Create new ID'),
+        title: Text(context.tr('create_id')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: idCtrl,
-              decoration: const InputDecoration(hintText: 'New ID'),
+              decoration: InputDecoration(hintText: context.tr('new_id_hint')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: pwCtrl,
               obscureText: true,
-              decoration: const InputDecoration(hintText: 'Password (min 4)'),
+              decoration: InputDecoration(hintText: context.tr('password_min')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Display name (optional)',
+              decoration: InputDecoration(
+                hintText: context.tr('display_name'),
               ),
             ),
           ],
@@ -408,7 +409,7 @@ class AdminScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(context.tr('cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -426,7 +427,7 @@ class AdminScreen extends StatelessWidget {
                 ).showSnackBar(SnackBar(content: Text(err)));
               }
             },
-            child: const Text('Create'),
+            child: Text(context.tr('create')),
           ),
         ],
       ),
@@ -447,12 +448,12 @@ class UserDataScreen extends StatelessWidget {
     final tasks = store.tasksForOwner(userId);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Data — ${u?.id ?? userId}')),
+      appBar: AppBar(title: Text(context.tr('data_for', args: {'id': u?.id ?? userId}))),
       body: SafeArea(
         child: tasks.isEmpty
             ? Center(
                 child: Text(
-                  'No tasks for this user yet.',
+                  context.tr('no_tasks_user'),
                   style: TextStyle(fontSize: 13, color: p.inkSoft),
                 ),
               )
@@ -493,7 +494,7 @@ class UserDataScreen extends StatelessWidget {
               ),
             ),
             child: Text(
-              '${c.emoji} ${c.label}  (${items.length})',
+              '${c.emoji} ${catLabel(c)}  (${items.length})',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,

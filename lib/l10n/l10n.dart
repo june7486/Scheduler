@@ -99,6 +99,16 @@ class L10n {
     'cache_cleared': '캐시가 삭제되었습니다.',
     'id_created': '아이디 "{id}"가 생성되었습니다.',
     'language': '언어',
+    'display_grp': '화면 표시',
+    'language_korean': '한국어',
+    'language_english': 'English',
+    'language_hint': '기본은 한국어입니다. English로도 사용할 수 있습니다.',
+    'language_changed': '언어가 변경되었습니다.',
+    'screen_theme': '화면 테마',
+    'follow_system': '휴대폰 설정 따름',
+    'light_mode': '밝은 화면',
+    'dark_mode': '어두운 화면',
+    'theme_changed': '화면 테마가 변경되었습니다.',
 
     // Home
     'signed_in': '로그인: {id}',
@@ -326,6 +336,16 @@ class L10n {
     'cache_cleared': 'Cache cleared.',
     'id_created': 'ID "{id}" created.',
     'language': 'Language',
+    'display_grp': 'Display',
+    'language_korean': '한국어',
+    'language_english': 'English',
+    'language_hint': 'Korean is the default. You can also use English.',
+    'language_changed': 'Language changed.',
+    'screen_theme': 'Screen theme',
+    'follow_system': 'Follow phone setting',
+    'light_mode': 'Light',
+    'dark_mode': 'Dark',
+    'theme_changed': 'Screen theme changed.',
 
     'signed_in': 'Signed in: {id}',
     'master_viewing_all': 'Master · viewing ALL users',
@@ -526,6 +546,10 @@ extension L10nX on BuildContext {
   String tr(String key, {Map<String, String>? args}) =>
       L10n(L10n.currentLang).t(key, args: args);
 }
+
+/// Context-free translation (for code without a BuildContext, e.g. helpers).
+String tr(String key, {Map<String, String>? args}) =>
+    L10n(L10n.currentLang).t(key, args: args);
 
 /// Resolves a category's display name.
 /// Built-in categories (known ids) follow the active language; user-created
