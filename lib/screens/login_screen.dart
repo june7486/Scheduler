@@ -146,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final store = context.watch<Store>();
     final isKo = store.language != 'en';
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -167,11 +167,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 72,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: AppColors.indigo.withValues(alpha: 0.10),
+                      color: p.indigo.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Icon(Icons.calendar_month_rounded,
-                        size: 38, color: AppColors.indigo),
+                        size: 38, color: p.indigo),
                   ),
                   const SizedBox(height: 22),
                   Text(
@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
+                      color: p.ink,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     context.tr('sign_in_hint'),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
+                    style: TextStyle(fontSize: 12.5, color: p.inkSoft),
                   ),
                   const SizedBox(height: 30),
                   TextField(
@@ -221,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _error!,
-                      style: const TextStyle(color: AppColors.danger, fontSize: 12),
+                      style: TextStyle(color: p.danger, fontSize: 12),
                     ),
                   ],
                   const SizedBox(height: 22),
@@ -234,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2, color: p.card),
                             )
                           : Text(context.tr('sign_in')),
                     ),
@@ -246,8 +246,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: Text(context.tr('create_id'),
                         style: const TextStyle(fontSize: 12.5)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.indigo,
-                      side: const BorderSide(color: AppColors.indigo),
+                      foregroundColor: p.indigo,
+                      side: BorderSide(color: p.indigo),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -255,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     context.tr('session_kept'),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                    style: TextStyle(fontSize: 11, color: p.inkSoft),
                   ),
                   const SizedBox(height: 28),
                   const Divider(),
@@ -269,8 +269,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           label: Text(context.tr('clear_cache'),
                               style: const TextStyle(fontSize: 12)),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.inkSoft,
-                            side: const BorderSide(color: AppColors.line),
+                            foregroundColor: p.inkSoft,
+                            side: BorderSide(color: p.line),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
@@ -283,8 +283,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           label: Text(context.tr('version'),
                               style: const TextStyle(fontSize: 12)),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.inkSoft,
-                            side: const BorderSide(color: AppColors.line),
+                            foregroundColor: p.inkSoft,
+                            side: BorderSide(color: p.line),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
@@ -295,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'v${store.appVersion}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10.5, color: AppColors.inkSoft),
+                    style: TextStyle(fontSize: 10.5, color: p.inkSoft),
                   ),
                 ],
               ),
@@ -341,7 +341,7 @@ class _LangToggle extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: sel ? AppColors.indigo : Colors.transparent,
+          color: sel ? p.indigo : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Text(
@@ -349,7 +349,7 @@ class _LangToggle extends StatelessWidget {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-            color: sel ? Colors.white : AppColors.inkSoft,
+            color: sel ? p.card : p.inkSoft,
           ),
         ),
       ),

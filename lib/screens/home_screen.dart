@@ -65,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     }),
               style: const TextStyle(
                 fontSize: 10.5,
-                color: AppColors.inkSoft,
+                color: p.inkSoft,
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -135,8 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.indigo,
-        foregroundColor: Colors.white,
+        backgroundColor: p.indigo,
+        foregroundColor: p.card,
         onPressed: () => _openEditor(),
         icon: const Icon(Icons.add, size: 20),
         label: Text(context.tr('add_task'), style: const TextStyle(fontSize: 13)),
@@ -148,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _topTabBar(List<Category> topCats) {
     return Container(
       height: 42,
-      color: Colors.white,
+      color: p.card,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _topChip(String id, String emoji, String label, {Color? color}) {
     final selected = _topTab == id;
-    final col = color ?? AppColors.indigo;
+    final col = color ?? p.indigo;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
       child: GestureDetector(
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
             color: selected ? col.withValues(alpha: 0.14) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? col.withValues(alpha: 0.5) : AppColors.line,
+              color: selected ? col.withValues(alpha: 0.5) : p.line,
             ),
           ),
           child: Text(
@@ -184,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? col : AppColors.inkSoft,
+              color: selected ? col : p.inkSoft,
             ),
           ),
         ),
@@ -207,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? Center(
                   child: Text(
                     context.tr('no_tasks'),
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
+                    style: TextStyle(fontSize: 12.5, color: p.inkSoft),
                   ),
                 )
               : ListView.builder(
@@ -241,8 +241,8 @@ class _HomeScreenState extends State<HomeScreen> {
         // ---------------- Completed section ----------------
         Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: AppColors.line)),
+            color: p.card,
+            border: Border(top: BorderSide(color: p.line)),
           ),
           child: Column(
             children: [
@@ -259,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Icon(
                         Icons.check_circle_outline,
                         size: 16,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -267,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.inkSoft,
+                          color: p.inkSoft,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -275,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         '(${done.length})',
                         style: const TextStyle(
                           fontSize: 11.5,
-                          color: AppColors.inkSoft,
+                          color: p.inkSoft,
                         ),
                       ),
                       const Spacer(),
@@ -284,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ? Icons.expand_more
                             : Icons.expand_less,
                         size: 18,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ],
                   ),
@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             context.tr('nothing_completed'),
                             style: const TextStyle(
                               fontSize: 11.5,
-                              color: AppColors.inkSoft,
+                              color: p.inkSoft,
                             ),
                           ),
                         )
@@ -324,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _sectionHeader(String title, int count) {
     return Container(
-      color: Colors.white,
+      color: p.card,
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
       child: Row(
         children: [
@@ -333,13 +333,13 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: AppColors.ink,
+              color: p.ink,
             ),
           ),
           const SizedBox(width: 6),
           Text(
             '($count)',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+            style: TextStyle(fontSize: 11.5, color: p.inkSoft),
           ),
         ],
       ),
@@ -351,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       decoration: selected
           ? BoxDecoration(
-              border: Border.all(color: AppColors.indigo, width: 1.4),
+              border: Border.all(color: p.indigo, width: 1.4),
               borderRadius: BorderRadius.circular(12),
             )
           : null,
@@ -366,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF7F8FC),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: p.line),
       ),
       child: Row(
         children: [
@@ -377,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
               t.title,
               style: const TextStyle(
                 fontSize: 12,
-                color: AppColors.inkSoft,
+                color: p.inkSoft,
                 decoration: TextDecoration.lineThrough,
               ),
             ),
@@ -387,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(
               Icons.delete_outline,
               size: 17,
-              color: AppColors.danger,
+              color: p.danger,
             ),
             visualDensity: VisualDensity.compact,
             tooltip: 'Delete',
@@ -402,8 +402,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: 78,
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(left: BorderSide(color: AppColors.line)),
+        color: p.card,
+        border: Border(left: BorderSide(color: p.line)),
       ),
       child: Column(
         children: [
@@ -416,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 9.5,
-                color: AppColors.inkSoft,
+                color: p.inkSoft,
                 height: 1.3,
               ),
             ),
@@ -473,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 8.6,
                             height: 1.1,
                             fontWeight: FontWeight.w600,
-                            color: isCurrent ? col : AppColors.inkSoft,
+                            color: isCurrent ? col : p.inkSoft,
                           ),
                         ),
                         if (count > 0)
@@ -548,7 +548,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => Navigator.pop(context, true),
             child: const Text(
               'Delete',
-              style: TextStyle(color: AppColors.danger),
+              style: TextStyle(color: p.danger),
             ),
           ),
         ],
@@ -644,11 +644,11 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: const Icon(
                 Icons.delete_outline,
                 size: 20,
-                color: AppColors.danger,
+                color: p.danger,
               ),
               title: const Text(
                 'Delete',
-                style: TextStyle(fontSize: 13.5, color: AppColors.danger),
+                style: TextStyle(fontSize: 13.5, color: p.danger),
               ),
               onTap: () {
                 Navigator.pop(context);

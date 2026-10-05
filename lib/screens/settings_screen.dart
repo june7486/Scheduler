@@ -182,7 +182,7 @@ class SettingsScreen extends StatelessWidget {
             Center(
               child: Text(
                 'June\'s Scheduler · v${store.appVersion}',
-                style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                style: TextStyle(fontSize: 11, color: p.inkSoft),
               ),
             ),
             const SizedBox(height: 24),
@@ -366,7 +366,7 @@ class SettingsScreen extends StatelessWidget {
             },
             child: Text(
               context.tr('reset'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: p.danger),
             ),
           ),
         ],
@@ -386,7 +386,7 @@ class _Group extends StatelessWidget {
       style: const TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w800,
-        color: AppColors.indigo,
+        color: p.indigo,
         letterSpacing: 1.0,
       ),
     ),
@@ -412,24 +412,24 @@ class _Tile extends StatelessWidget {
       leading: Icon(
         icon,
         size: 20,
-        color: danger ? AppColors.danger : AppColors.indigo,
+        color: danger ? p.danger : p.indigo,
       ),
       title: Text(
         title,
         style: TextStyle(
           fontSize: 13.5,
           fontWeight: FontWeight.w600,
-          color: danger ? AppColors.danger : AppColors.ink,
+          color: danger ? p.danger : p.ink,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+        style: TextStyle(fontSize: 11.5, color: p.inkSoft),
       ),
       trailing: const Icon(
         Icons.chevron_right,
         size: 18,
-        color: AppColors.inkSoft,
+        color: p.inkSoft,
       ),
       onTap: onTap,
     );

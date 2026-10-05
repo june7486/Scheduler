@@ -623,6 +623,15 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Screen theme mode: 'system' (follow phone, default), 'light' or 'dark'.
+  String get themeModeKey =>
+      (_users.get('__theme_mode__') as String?) ?? 'system';
+
+  Future<void> setThemeModeKey(String mode) async {
+    await _users.put('__theme_mode__', mode);
+    notifyListeners();
+  }
+
   // Per-user convenience accessors for the current user.
   String get username => _currentUserId;
   String get password => currentUser?.password ?? '';

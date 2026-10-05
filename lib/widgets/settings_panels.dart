@@ -68,7 +68,7 @@ class ManageTabsScreen extends StatelessWidget {
                           : context.tr('top_tab_off'),
                       style: const TextStyle(
                         fontSize: 11,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -78,7 +78,7 @@ class ManageTabsScreen extends StatelessWidget {
                       }),
                       style: const TextStyle(
                         fontSize: 11,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                   ],
@@ -88,7 +88,7 @@ class ManageTabsScreen extends StatelessWidget {
                   children: [
                     Switch(
                       value: c.enabled,
-                      activeThumbColor: AppColors.indigo,
+                      activeThumbColor: p.indigo,
                       onChanged: (v) {
                         c.enabled = v;
                         store.saveCategory(c);
@@ -98,7 +98,7 @@ class ManageTabsScreen extends StatelessWidget {
                       icon: const Icon(
                         Icons.delete_outline,
                         size: 19,
-                        color: AppColors.danger,
+                        color: p.danger,
                       ),
                       onPressed: () => _deleteTab(context, store, c),
                     ),
@@ -200,7 +200,7 @@ class ManageTabsScreen extends StatelessWidget {
             },
             child: Text(
               context.tr('delete'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: p.danger),
             ),
           ),
         ],
@@ -237,14 +237,14 @@ class OutputSettingsScreen extends StatelessWidget {
             _Head(context.tr('default_font')),
             Text(
               '${store.baseFontSize.toStringAsFixed(0)} pt',
-              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+              style: TextStyle(fontSize: 12, color: p.inkSoft),
             ),
             Slider(
               value: store.baseFontSize,
               min: 8,
               max: 20,
               divisions: 12,
-              activeColor: AppColors.indigo,
+              activeColor: p.indigo,
               label: store.baseFontSize.toStringAsFixed(0),
               onChanged: (v) => store.setBaseFontSize(v),
             ),
@@ -263,7 +263,7 @@ class OutputSettingsScreen extends StatelessWidget {
               context.tr('output_tip'),
               style: const TextStyle(
                 fontSize: 11.5,
-                color: AppColors.inkSoft,
+                color: p.inkSoft,
                 height: 1.4,
               ),
             ),
@@ -285,12 +285,12 @@ class OutputSettingsScreen extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11.5,
-          color: sel ? AppColors.indigo : AppColors.inkSoft,
+          color: sel ? p.indigo : p.inkSoft,
         ),
       ),
       selected: sel,
-      selectedColor: AppColors.indigo.withValues(alpha: 0.14),
-      side: BorderSide(color: sel ? AppColors.indigo : AppColors.line),
+      selectedColor: p.indigo.withValues(alpha: 0.14),
+      side: BorderSide(color: sel ? p.indigo : p.line),
       onSelected: (_) => store.setPrintDesignMode(value),
     );
   }
@@ -307,12 +307,12 @@ class OutputSettingsScreen extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11.5,
-          color: sel ? AppColors.indigo : AppColors.inkSoft,
+          color: sel ? p.indigo : p.inkSoft,
         ),
       ),
       selected: sel,
-      selectedColor: AppColors.indigo.withValues(alpha: 0.14),
-      side: BorderSide(color: sel ? AppColors.indigo : AppColors.line),
+      selectedColor: p.indigo.withValues(alpha: 0.14),
+      side: BorderSide(color: sel ? p.indigo : p.line),
       onSelected: (_) => store.setAppThemeMode(value),
     );
   }
@@ -342,7 +342,7 @@ class LogScreen extends StatelessWidget {
             ? Center(
                 child: Text(
                   context.tr('no_activity'),
-                  style: const TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                  style: TextStyle(fontSize: 13, color: p.inkSoft),
                 ),
               )
             : ListView.separated(
@@ -358,7 +358,7 @@ class LogScreen extends StatelessWidget {
                         const Icon(
                           Icons.circle,
                           size: 6,
-                          color: AppColors.indigo,
+                          color: p.indigo,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -377,7 +377,7 @@ class LogScreen extends StatelessWidget {
                                   l.detail,
                                   style: const TextStyle(
                                     fontSize: 11.5,
-                                    color: AppColors.inkSoft,
+                                    color: p.inkSoft,
                                   ),
                                 ),
                             ],
@@ -389,7 +389,7 @@ class LogScreen extends StatelessWidget {
                           '${l.timestamp.minute.toString().padLeft(2, '0')}',
                           style: const TextStyle(
                             fontSize: 10.5,
-                            color: AppColors.inkSoft,
+                            color: p.inkSoft,
                           ),
                         ),
                       ],
@@ -413,7 +413,7 @@ class _Head extends StatelessWidget {
       style: const TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
-        color: AppColors.ink,
+        color: p.ink,
       ),
     ),
   );

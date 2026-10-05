@@ -21,7 +21,7 @@ class AdminScreen extends StatelessWidget {
         body: const Center(
           child: Text(
             'Master access only.',
-            style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+            style: TextStyle(fontSize: 13, color: p.inkSoft),
           ),
         ),
       );
@@ -66,7 +66,7 @@ class AdminScreen extends StatelessWidget {
   Widget _masterHeader(Store store) {
     return Container(
       width: double.infinity,
-      color: AppColors.indigo.withValues(alpha: 0.06),
+      color: p.indigo.withValues(alpha: 0.06),
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,7 +76,7 @@ class AdminScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: AppColors.indigo,
+              color: p.indigo,
               letterSpacing: 0.5,
             ),
           ),
@@ -84,7 +84,7 @@ class AdminScreen extends StatelessWidget {
           Text(
             '${store.allUsers.length} ID(s) · '
             '${store.allTaskTotal()} total tasks',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+            style: TextStyle(fontSize: 11.5, color: p.inkSoft),
           ),
           const SizedBox(height: 8),
           RadioGroup<bool>(
@@ -96,7 +96,7 @@ class AdminScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   value: false,
-                  activeColor: AppColors.indigo,
+                  activeColor: p.indigo,
                   title: const Text(
                     'View my own data only',
                     style: TextStyle(fontSize: 12),
@@ -106,7 +106,7 @@ class AdminScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   value: true,
-                  activeColor: AppColors.indigo,
+                  activeColor: p.indigo,
                   title: const Text(
                     'View ALL users\' data combined',
                     style: TextStyle(fontSize: 12),
@@ -138,7 +138,7 @@ class AdminScreen extends StatelessWidget {
                   height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: (u.isMaster ? AppColors.indigo : AppColors.teal)
+                    color: (u.isMaster ? p.indigo : p.teal)
                         .withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(9),
                   ),
@@ -147,7 +147,7 @@ class AdminScreen extends StatelessWidget {
                         ? Icons.workspace_premium_outlined
                         : Icons.person_outline,
                     size: 18,
-                    color: u.isMaster ? AppColors.indigo : AppColors.teal,
+                    color: u.isMaster ? p.indigo : p.teal,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -172,7 +172,7 @@ class AdminScreen extends StatelessWidget {
                                 vertical: 1,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.indigo.withValues(alpha: 0.14),
+                                color: p.indigo.withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(5),
                               ),
                               child: const Text(
@@ -180,7 +180,7 @@ class AdminScreen extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 8.5,
                                   fontWeight: FontWeight.w800,
-                                  color: AppColors.indigo,
+                                  color: p.indigo,
                                 ),
                               ),
                             ),
@@ -191,7 +191,7 @@ class AdminScreen extends StatelessWidget {
                                 '(disabled)',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: AppColors.danger,
+                                  color: p.danger,
                                 ),
                               ),
                             ),
@@ -201,7 +201,7 @@ class AdminScreen extends StatelessWidget {
                         '${u.displayName.isEmpty ? "—" : u.displayName} · $open open / $done done',
                         style: const TextStyle(
                           fontSize: 11,
-                          color: AppColors.inkSoft,
+                          color: p.inkSoft,
                         ),
                       ),
                     ],
@@ -212,7 +212,7 @@ class AdminScreen extends StatelessWidget {
                   icon: const Icon(
                     Icons.list_alt_outlined,
                     size: 19,
-                    color: AppColors.indigo,
+                    color: p.indigo,
                   ),
                   onPressed: () => _viewUserData(context, store, u),
                 ),
@@ -262,7 +262,7 @@ class AdminScreen extends StatelessWidget {
     VoidCallback onTap, {
     bool danger = false,
   }) {
-    final col = danger ? AppColors.danger : AppColors.inkSoft;
+    final col = danger ? p.danger : p.inkSoft;
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 14, color: col),
@@ -271,7 +271,7 @@ class AdminScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         minimumSize: const Size(0, 30),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        side: BorderSide(color: danger ? AppColors.danger : AppColors.line),
+        side: BorderSide(color: danger ? p.danger : p.line),
       ),
     );
   }
@@ -360,7 +360,7 @@ class AdminScreen extends StatelessWidget {
             },
             child: const Text(
               'Delete',
-              style: TextStyle(color: AppColors.danger),
+              style: TextStyle(color: p.danger),
             ),
           ),
         ],
@@ -453,7 +453,7 @@ class UserDataScreen extends StatelessWidget {
             ? const Center(
                 child: Text(
                   'No tasks for this user yet.',
-                  style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                  style: TextStyle(fontSize: 13, color: p.inkSoft),
                 ),
               )
             : ListView(
@@ -476,9 +476,9 @@ class UserDataScreen extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: p.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: p.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,7 +511,7 @@ class UserDataScreen extends StatelessWidget {
                         ? Icons.check_circle
                         : Icons.radio_button_unchecked,
                     size: 14,
-                    color: t.completed ? AppColors.teal : AppColors.inkSoft,
+                    color: t.completed ? p.teal : p.inkSoft,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -522,7 +522,7 @@ class UserDataScreen extends StatelessWidget {
                         decoration: t.completed
                             ? TextDecoration.lineThrough
                             : null,
-                        color: t.completed ? AppColors.inkSoft : AppColors.ink,
+                        color: t.completed ? p.inkSoft : p.ink,
                       ),
                     ),
                   ),
@@ -531,7 +531,7 @@ class UserDataScreen extends StatelessWidget {
                       '₩${t.amount!.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 11,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                 ],

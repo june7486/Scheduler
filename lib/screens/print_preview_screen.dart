@@ -104,7 +104,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                         child: Text(
                           context.tr('preview_hidden'),
                           style: const TextStyle(
-                            color: AppColors.inkSoft,
+                            color: p.inkSoft,
                             fontSize: 13,
                           ),
                         ),
@@ -130,13 +130,13 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                             '${c.emoji} ${c.label}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: sel ? col : AppColors.inkSoft,
+                              color: sel ? col : p.inkSoft,
                             ),
                           ),
                           selected: sel,
                           selectedColor: col.withValues(alpha: 0.15),
                           checkmarkColor: col,
-                          side: BorderSide(color: sel ? col : AppColors.line),
+                          side: BorderSide(color: sel ? col : p.line),
                           onSelected: (v) => setState(() {
                             v
                                 ? _selectedTabs.add(c.id)
@@ -155,7 +155,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                         style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _noTwoLine,
-                      activeThumbColor: AppColors.indigo,
+                      activeThumbColor: p.indigo,
                       onChanged: (v) => setState(() => _noTwoLine = v),
                     ),
                     SwitchListTile(
@@ -166,7 +166,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                         style: const TextStyle(fontSize: 12.5),
                       ),
                       value: _landscape,
-                      activeThumbColor: AppColors.indigo,
+                      activeThumbColor: p.indigo,
                       onChanged: (v) => setState(() => _landscape = v),
                     ),
                     const SizedBox(height: 6),
@@ -174,7 +174,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                     Slider(
@@ -182,7 +182,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       min: 1.0,
                       max: 2.5,
                       divisions: 15,
-                      activeColor: AppColors.indigo,
+                      activeColor: p.indigo,
                       label: _lineSpacing.toStringAsFixed(1),
                       onChanged: (v) => setState(() => _lineSpacing = v),
                     ),
@@ -190,7 +190,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                     Slider(
@@ -198,7 +198,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       min: 8,
                       max: 20,
                       divisions: 12,
-                      activeColor: AppColors.indigo,
+                      activeColor: p.indigo,
                       label: _fontSize.toStringAsFixed(0),
                       onChanged: (v) => setState(() => _fontSize = v),
                     ),
@@ -214,15 +214,15 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                             _designLabel(d),
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: sel ? AppColors.indigo : AppColors.inkSoft,
+                              color: sel ? p.indigo : p.inkSoft,
                             ),
                           ),
                           selected: sel,
-                          selectedColor: AppColors.indigo.withValues(
+                          selectedColor: p.indigo.withValues(
                             alpha: 0.14,
                           ),
                           side: BorderSide(
-                            color: sel ? AppColors.indigo : AppColors.line,
+                            color: sel ? p.indigo : p.line,
                           ),
                           onSelected: (_) {
                             setState(() => _design = d);
@@ -373,13 +373,13 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.indigo,
+                      color: p.indigo,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'JUNE',
                       style: base.copyWith(
-                        color: Colors.white,
+                        color: p.card,
                         fontSize: _fontSize - 2,
                         fontWeight: FontWeight.w800,
                       ),
@@ -391,7 +391,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     style: base.copyWith(
                       fontSize: _fontSize + 2,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.indigo,
+                      color: p.indigo,
                     ),
                   ),
                   const Spacer(),
@@ -444,7 +444,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
     }
   }
 
-  Widget _paper(Widget child, {Color color = Colors.white}) =>
+  Widget _paper(Widget child, {Color color = p.card}) =>
       Container(color: color, padding: const EdgeInsets.all(14), child: child);
 
   Widget _plainList(List<Task> tasks, TextStyle base, Store store) {
@@ -531,7 +531,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
       padding: EdgeInsets.zero,
       children: tasks.map((t) {
         final cat = store.categoryById(t.categoryId);
-        final col = cat != null ? Color(cat.colorValue) : AppColors.indigo;
+        final col = cat != null ? Color(cat.colorValue) : p.indigo;
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 3),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -575,7 +575,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
     return Column(
       children: entries.take(6).map((e) {
         final cat = store.categoryById(e.key);
-        final col = cat != null ? Color(cat.colorValue) : AppColors.indigo;
+        final col = cat != null ? Color(cat.colorValue) : p.indigo;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 1.5),
           child: Row(
@@ -798,7 +798,7 @@ class _SecTitle extends StatelessWidget {
       style: const TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
-        color: AppColors.ink,
+        color: p.ink,
         letterSpacing: 0.3,
       ),
     ),

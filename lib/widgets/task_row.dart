@@ -32,9 +32,9 @@ class TaskRow extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: p.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: p.line),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),
@@ -81,7 +81,7 @@ class TaskRow extends StatelessWidget {
                                 child: Icon(
                                   Icons.push_pin,
                                   size: 12,
-                                  color: AppColors.indigo,
+                                  color: p.indigo,
                                 ),
                               ),
                             if (task.recurrence != 'none')
@@ -90,7 +90,7 @@ class TaskRow extends StatelessWidget {
                                 child: Icon(
                                   Icons.autorenew,
                                   size: 12,
-                                  color: AppColors.teal,
+                                  color: p.teal,
                                 ),
                               ),
                             Expanded(
@@ -100,11 +100,11 @@ class TaskRow extends StatelessWidget {
                                   fontSize: 13.5,
                                   height: 1.25,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.ink,
+                                  color: p.ink,
                                   decoration: task.completed
                                       ? TextDecoration.lineThrough
                                       : null,
-                                  decorationColor: AppColors.inkSoft,
+                                  decorationColor: p.inkSoft,
                                 ),
                               ),
                             ),
@@ -117,7 +117,7 @@ class TaskRow extends StatelessWidget {
                               task.note,
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.inkSoft,
+                                color: p.inkSoft,
                                 height: 1.2,
                               ),
                             ),
@@ -150,7 +150,7 @@ class TaskRow extends StatelessWidget {
                                   '₩${_fmt(task.amount!)}',
                                   style: const TextStyle(
                                     fontSize: 10.5,
-                                    color: AppColors.inkSoft,
+                                    color: p.inkSoft,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -167,7 +167,7 @@ class TaskRow extends StatelessWidget {
                   icon: const Icon(
                     Icons.delete_outline,
                     size: 18,
-                    color: AppColors.danger,
+                    color: p.danger,
                   ),
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Delete',
@@ -197,10 +197,10 @@ class TaskRow extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: selected
                             ? col.withValues(alpha: 0.16)
-                            : Colors.white,
+                            : p.card,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: selected ? col : AppColors.line,
+                          color: selected ? col : p.line,
                           width: selected ? 1.2 : 0.8,
                         ),
                       ),
@@ -211,7 +211,7 @@ class TaskRow extends StatelessWidget {
                           fontWeight: selected
                               ? FontWeight.w700
                               : FontWeight.w500,
-                          color: selected ? col : AppColors.inkSoft,
+                          color: selected ? col : p.inkSoft,
                         ),
                       ),
                     ),

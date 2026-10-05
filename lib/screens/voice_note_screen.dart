@@ -166,9 +166,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: p.card,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.line),
+                border: Border.all(color: p.line),
               ),
               child: Column(
                 children: [
@@ -178,7 +178,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                       fontSize: 30,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
-                      color: AppColors.ink,
+                      color: p.ink,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -188,14 +188,14 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                       width: 66,
                       height: 66,
                       decoration: BoxDecoration(
-                        color: _recording ? AppColors.danger : AppColors.indigo,
+                        color: _recording ? p.danger : p.indigo,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color:
                                 (_recording
-                                        ? AppColors.danger
-                                        : AppColors.indigo)
+                                        ? p.danger
+                                        : p.indigo)
                                     .withValues(alpha: 0.3),
                             blurRadius: 14,
                             spreadRadius: 2,
@@ -204,7 +204,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                       ),
                       child: Icon(
                         _recording ? Icons.stop_rounded : Icons.mic_rounded,
-                        color: Colors.white,
+                        color: p.card,
                         size: 32,
                       ),
                     ),
@@ -218,7 +218,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                               : 'Tap to record'),
                     style: const TextStyle(
                       fontSize: 11.5,
-                      color: AppColors.inkSoft,
+                      color: p.inkSoft,
                     ),
                   ),
                 ],
@@ -250,10 +250,10 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.indigo.withValues(alpha: 0.06),
+                color: p.indigo.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AppColors.indigo.withValues(alpha: 0.2),
+                  color: p.indigo.withValues(alpha: 0.2),
                 ),
               ),
               child: Column(
@@ -264,7 +264,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                     style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.45,
-                      color: AppColors.ink,
+                      color: p.ink,
                     ),
                   ),
                   if (bullets.isNotEmpty) ...[
@@ -280,7 +280,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                               child: Icon(
                                 Icons.circle,
                                 size: 5,
-                                color: AppColors.indigo,
+                                color: p.indigo,
                               ),
                             ),
                             Expanded(
@@ -289,7 +289,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                                 style: const TextStyle(
                                   fontSize: 12,
                                   height: 1.4,
-                                  color: AppColors.ink,
+                                  color: p.ink,
                                 ),
                               ),
                             ),
@@ -331,16 +331,16 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: p.card,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.line),
+                    border: Border.all(color: p.line),
                   ),
                   child: Row(
                     children: [
                       const Icon(
                         Icons.graphic_eq,
                         size: 18,
-                        color: AppColors.teal,
+                        color: p.teal,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -359,7 +359,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                               '${v.createdAt.minute.toString().padLeft(2, '0')} · ${v.durationSeconds}s',
                               style: const TextStyle(
                                 fontSize: 10.5,
-                                color: AppColors.inkSoft,
+                                color: p.inkSoft,
                               ),
                             ),
                           ],
@@ -369,7 +369,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         icon: const Icon(
                           Icons.delete_outline,
                           size: 17,
-                          color: AppColors.danger,
+                          color: p.danger,
                         ),
                         onPressed: () => store.deleteVoiceNote(v.id),
                       ),
@@ -387,8 +387,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
   Widget _keywordGraphic(Map<String, int> tags) {
     final maxV = tags.values.reduce((a, b) => a > b ? a : b);
     final colors = [
-      AppColors.indigo,
-      AppColors.teal,
+      p.indigo,
+      p.teal,
       const Color(0xFFFFA726),
       const Color(0xFFEC407A),
       const Color(0xFF7E57C2),
@@ -410,7 +410,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11.5,
-                    color: AppColors.inkSoft,
+                    color: p.inkSoft,
                   ),
                 ),
               ),
@@ -442,7 +442,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               const SizedBox(width: 6),
               Text(
                 '${e.value}',
-                style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                style: TextStyle(fontSize: 11, color: p.inkSoft),
               ),
             ],
           ),

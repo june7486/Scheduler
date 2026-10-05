@@ -105,16 +105,16 @@ class _ReportScreenState extends State<ReportScreen> {
                             u.isMaster ? '★ ${u.id}' : u.id,
                             style: TextStyle(
                               fontSize: 11,
-                              color: sel ? AppColors.indigo : AppColors.inkSoft,
+                              color: sel ? p.indigo : p.inkSoft,
                             ),
                           ),
                           selected: sel,
-                          selectedColor: AppColors.indigo.withValues(
+                          selectedColor: p.indigo.withValues(
                             alpha: 0.15,
                           ),
-                          checkmarkColor: AppColors.indigo,
+                          checkmarkColor: p.indigo,
                           side: BorderSide(
-                            color: sel ? AppColors.indigo : AppColors.line,
+                            color: sel ? p.indigo : p.line,
                           ),
                           onSelected: (v) => setState(() {
                             v
@@ -134,7 +134,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         style: TextStyle(fontSize: 12.5),
                       ),
                       value: _noTwoLine,
-                      activeThumbColor: AppColors.indigo,
+                      activeThumbColor: p.indigo,
                       onChanged: (v) => setState(() => _noTwoLine = v),
                     ),
                     SwitchListTile(
@@ -145,14 +145,14 @@ class _ReportScreenState extends State<ReportScreen> {
                         style: TextStyle(fontSize: 12.5),
                       ),
                       value: _landscape,
-                      activeThumbColor: AppColors.indigo,
+                      activeThumbColor: p.indigo,
                       onChanged: (v) => setState(() => _landscape = v),
                     ),
                     Text(
                       'Line spacing — ${_lineSpacing.toStringAsFixed(1)}',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                     Slider(
@@ -160,14 +160,14 @@ class _ReportScreenState extends State<ReportScreen> {
                       min: 1.0,
                       max: 2.5,
                       divisions: 15,
-                      activeColor: AppColors.indigo,
+                      activeColor: p.indigo,
                       onChanged: (v) => setState(() => _lineSpacing = v),
                     ),
                     Text(
                       'Font size — ${_fontSize.toStringAsFixed(0)} pt',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.inkSoft,
+                        color: p.inkSoft,
                       ),
                     ),
                     Slider(
@@ -175,7 +175,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       min: 8,
                       max: 20,
                       divisions: 12,
-                      activeColor: AppColors.indigo,
+                      activeColor: p.indigo,
                       onChanged: (v) => setState(() => _fontSize = v),
                     ),
                     const SizedBox(height: 8),
@@ -235,12 +235,12 @@ class _ReportScreenState extends State<ReportScreen> {
         label,
         style: TextStyle(
           fontSize: 11.5,
-          color: sel ? AppColors.indigo : AppColors.inkSoft,
+          color: sel ? p.indigo : p.inkSoft,
         ),
       ),
       selected: sel,
-      selectedColor: AppColors.indigo.withValues(alpha: 0.14),
-      side: BorderSide(color: sel ? AppColors.indigo : AppColors.line),
+      selectedColor: p.indigo.withValues(alpha: 0.14),
+      side: BorderSide(color: sel ? p.indigo : p.line),
       onSelected: (_) => setState(() => _type = t),
     );
   }
@@ -250,7 +250,7 @@ class _ReportScreenState extends State<ReportScreen> {
     final base = TextStyle(fontSize: _fontSize, height: _lineSpacing);
     final date = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
     return Container(
-      color: Colors.white,
+      color: p.card,
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -321,7 +321,7 @@ class _ReportScreenState extends State<ReportScreen> {
               '${u.isMaster ? "★ " : ""}${u.id}${u.displayName.isNotEmpty ? " (${u.displayName})" : ""}',
               style: base.copyWith(
                 fontWeight: FontWeight.w800,
-                color: AppColors.indigo,
+                color: p.indigo,
               ),
             ),
           ),
@@ -353,7 +353,7 @@ class _ReportScreenState extends State<ReportScreen> {
               k,
               style: base.copyWith(
                 fontWeight: FontWeight.w800,
-                color: AppColors.indigo,
+                color: p.indigo,
               ),
             ),
           ),
@@ -676,7 +676,7 @@ class _Sec extends StatelessWidget {
       style: const TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
-        color: AppColors.ink,
+        color: p.ink,
         letterSpacing: 0.3,
       ),
     ),

@@ -17,6 +17,12 @@ Future<void> main() async {
   runApp(JuneSchedulerApp(store: store));
 }
 
+ThemeMode _themeModeFor(String key) => switch (key) {
+  'light' => ThemeMode.light,
+  'dark' => ThemeMode.dark,
+  _ => ThemeMode.system,
+};
+
 class JuneSchedulerApp extends StatelessWidget {
   final Store store;
   const JuneSchedulerApp({super.key, required this.store});
