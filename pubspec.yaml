@@ -1,0 +1,50 @@
+name: june_scheduler
+description: "June's Scheduler - All-in-one personal & business task scheduler."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  provider: ^6.1.5+1
+
+  # Local storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.5.3
+
+  # Utilities
+  intl: ^0.20.2
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.1
+  uuid: ^4.5.1
+
+  # Export / print
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  share_plus: ^10.1.2
+  screenshot: ^3.0.0
+
+  # Voice note
+  record: ^5.2.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
