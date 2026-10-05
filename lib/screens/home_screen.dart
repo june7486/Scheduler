@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   : context.tr('signed_in', args: {
                       'id': '${store.currentUserId}${store.isMaster ? " (${context.tr('master')})" : ""}'
                     }),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
                 color: p.inkSoft,
                 fontWeight: FontWeight.w400,
@@ -184,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? col : p.inkSoft,
+              color: selected ? ct(col) : p.inkSoft,
             ),
           ),
         ),
@@ -240,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         // ---------------- Completed section ----------------
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: p.card,
             border: Border(top: BorderSide(color: p.line)),
           ),
@@ -256,7 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.check_circle_outline,
                         size: 16,
                         color: p.inkSoft,
@@ -264,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Text(
                         context.tr('completed'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
                           color: p.inkSoft,
@@ -273,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Text(
                         '(${done.length})',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           color: p.inkSoft,
                         ),
@@ -298,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.only(bottom: 14),
                           child: Text(
                             context.tr('nothing_completed'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               color: p.inkSoft,
                             ),
@@ -330,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
               color: p.ink,
@@ -370,12 +370,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.check, size: 15, color: Color(cat.colorValue)),
+          Icon(Icons.check, size: 15, color: ct(Color(cat.colorValue))),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               t.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: p.inkSoft,
                 decoration: TextDecoration.lineThrough,
@@ -384,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             onPressed: () => store.deleteTask(t),
-            icon: const Icon(
+            icon: Icon(
               Icons.delete_outline,
               size: 17,
               color: p.danger,
@@ -401,7 +401,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _rightRail(Store store, List<Category> cats) {
     return Container(
       width: 78,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: p.card,
         border: Border(left: BorderSide(color: p.line)),
       ),
@@ -414,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? context.tr('select_task_then_tab')
                   : context.tr('assign_to'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9.5,
                 color: p.inkSoft,
                 height: 1.3,
@@ -473,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 8.6,
                             height: 1.1,
                             fontWeight: FontWeight.w600,
-                            color: isCurrent ? col : p.inkSoft,
+                            color: isCurrent ? ct(col) : p.inkSoft,
                           ),
                         ),
                         if (count > 0)
@@ -491,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               '$count',
                               style: TextStyle(
                                 fontSize: 8.5,
-                                color: col,
+                                color: ct(col),
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -546,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
+            child: Text(
               'Delete',
               style: TextStyle(color: p.danger),
             ),
@@ -615,14 +615,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onTap: () async {
                 final messenger = ScaffoldMessenger.of(context);
+                final failMsg = context.tr('cannot_open_calendar');
                 Navigator.pop(context);
                 final ok = await CalendarService.addToCalendar(context, t);
                 if (!ok) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(context.tr('cannot_open_calendar')),
-                    ),
-                  );
+                  messenger.showSnackBar(SnackBar(content: Text(failMsg)));
                 }
               },
             ),
@@ -641,12 +638,12 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.delete_outline,
                 size: 20,
                 color: p.danger,
               ),
-              title: const Text(
+              title: Text(
                 'Delete',
                 style: TextStyle(fontSize: 13.5, color: p.danger),
               ),

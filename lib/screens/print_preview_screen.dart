@@ -103,7 +103,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     : Center(
                         child: Text(
                           context.tr('preview_hidden'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: p.inkSoft,
                             fontSize: 13,
                           ),
@@ -130,7 +130,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                             '${c.emoji} ${c.label}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: sel ? col : p.inkSoft,
+                              color: sel ? ct(col) : p.inkSoft,
                             ),
                           ),
                           selected: sel,
@@ -172,7 +172,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     const SizedBox(height: 6),
                     Text(
                       '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
                       ),
@@ -188,7 +188,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     ),
                     Text(
                       '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
                       ),
@@ -444,8 +444,11 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
     }
   }
 
-  Widget _paper(Widget child, {Color color = p.card}) =>
-      Container(color: color, padding: const EdgeInsets.all(14), child: child);
+  Widget _paper(Widget child, {Color? color}) => Container(
+    color: color ?? p.card,
+    padding: const EdgeInsets.all(14),
+    child: child,
+  );
 
   Widget _plainList(List<Task> tasks, TextStyle base, Store store) {
     return ListView(
@@ -552,8 +555,8 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
               ),
               if (cat != null)
                 Text(
-                  '${cat.emoji} ${cat.label}',
-                  style: base.copyWith(fontSize: _fontSize - 3, color: col),
+                  '${cat.emoji} ${catLabel(cat)}',
+                  style: base.copyWith(fontSize: _fontSize - 3, color: ct(col)),
                 ),
             ],
           ),
@@ -583,7 +586,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
               SizedBox(
                 width: 62,
                 child: Text(
-                  cat?.label ?? e.key,
+                  cat != null ? catLabel(cat) : e.key,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: base.copyWith(fontSize: _fontSize - 3),
@@ -795,7 +798,7 @@ class _SecTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: p.ink,

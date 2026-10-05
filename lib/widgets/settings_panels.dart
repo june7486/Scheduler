@@ -66,7 +66,7 @@ class ManageTabsScreen extends StatelessWidget {
                       c.showInTopTabs
                           ? context.tr('top_tab_on')
                           : context.tr('top_tab_off'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: p.inkSoft,
                       ),
@@ -76,7 +76,7 @@ class ManageTabsScreen extends StatelessWidget {
                       context.tr('open_count', args: {
                         'n': '${store.taskCountFor(c.id)}',
                       }),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: p.inkSoft,
                       ),
@@ -95,7 +95,7 @@ class ManageTabsScreen extends StatelessWidget {
                       },
                     ),
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.delete_outline,
                         size: 19,
                         color: p.danger,
@@ -261,7 +261,7 @@ class OutputSettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               context.tr('output_tip'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11.5,
                 color: p.inkSoft,
                 height: 1.4,
@@ -355,7 +355,7 @@ class LogScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.circle,
                           size: 6,
                           color: p.indigo,
@@ -375,7 +375,7 @@ class LogScreen extends StatelessWidget {
                               if (l.detail.isNotEmpty)
                                 Text(
                                   l.detail,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11.5,
                                     color: p.inkSoft,
                                   ),
@@ -387,7 +387,7 @@ class LogScreen extends StatelessWidget {
                           '${l.timestamp.month}/${l.timestamp.day} '
                           '${l.timestamp.hour.toString().padLeft(2, '0')}:'
                           '${l.timestamp.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10.5,
                             color: p.inkSoft,
                           ),
@@ -410,7 +410,7 @@ class _Head extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
         color: p.ink,

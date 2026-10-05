@@ -150,7 +150,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     Text(
                       'Line spacing — ${_lineSpacing.toStringAsFixed(1)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
                       ),
@@ -165,7 +165,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     Text(
                       'Font size — ${_fontSize.toStringAsFixed(0)} pt',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: p.inkSoft,
                       ),
@@ -673,7 +673,7 @@ class _Sec extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: p.ink,

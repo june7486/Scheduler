@@ -103,7 +103,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             TextField(
               controller: _title,
               style: const TextStyle(fontSize: 14),
-              decoration: const InputDecoration(hintText: context.tr('title_hint')),
+              decoration: InputDecoration(hintText: context.tr('title_hint')),
             ),
             const SizedBox(height: 16),
             _Label(context.tr('note')),
@@ -111,7 +111,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               controller: _note,
               style: const TextStyle(fontSize: 13.5),
               maxLines: 3,
-              decoration: const InputDecoration(hintText: context.tr('note_hint')),
+              decoration: InputDecoration(hintText: context.tr('note_hint')),
             ),
             const SizedBox(height: 16),
             _Label(context.tr('category_tab')),
@@ -138,7 +138,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                        color: sel ? col : p.inkSoft,
+                        color: sel ? ct(col) : p.inkSoft,
                       ),
                     ),
                   ),
@@ -181,7 +181,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 controller: _day,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(fontSize: 13.5),
-                decoration: const InputDecoration(hintText: context.tr('day_of_month_hint')),
+                decoration: InputDecoration(hintText: context.tr('day_of_month_hint')),
               ),
             ],
             const SizedBox(height: 16),
@@ -190,14 +190,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               controller: _amount,
               keyboardType: TextInputType.number,
               style: const TextStyle(fontSize: 13.5),
-              decoration: const InputDecoration(hintText: context.tr('amount_hint')),
+              decoration: InputDecoration(hintText: context.tr('amount_hint')),
             ),
             const SizedBox(height: 16),
             _Label(context.tr('related_to')),
             TextField(
               controller: _related,
               style: const TextStyle(fontSize: 13.5),
-              decoration: const InputDecoration(hintText: context.tr('related_hint')),
+              decoration: InputDecoration(hintText: context.tr('related_hint')),
             ),
             const SizedBox(height: 8),
             SwitchListTile(
@@ -265,7 +265,7 @@ class _Label extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11.5,
         fontWeight: FontWeight.w700,
         color: p.inkSoft,

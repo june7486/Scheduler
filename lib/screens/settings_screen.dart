@@ -383,7 +383,7 @@ class _Group extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(18, 18, 18, 6),
     child: Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w800,
         color: p.indigo,
@@ -426,7 +426,7 @@ class _Tile extends StatelessWidget {
         subtitle,
         style: TextStyle(fontSize: 11.5, color: p.inkSoft),
       ),
-      trailing: const Icon(
+      trailing: Icon(
         Icons.chevron_right,
         size: 18,
         color: p.inkSoft,

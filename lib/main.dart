@@ -40,7 +40,19 @@ class JuneSchedulerApp extends StatelessWidget {
                 ? "June's Scheduler"
                 : 'June 스케줄러',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.build(),
+            theme: AppTheme.build(Brightness.light),
+            darkTheme: AppTheme.build(Brightness.dark),
+            themeMode: _themeModeFor(s.themeModeKey),
+            // Sync the global palette with the *effective* brightness so
+            // widgets reading `p.…` always match the on-screen theme.
+            builder: (context, child) {
+              setGlobalPalette(
+                Theme.of(context).brightness == Brightness.dark
+                    ? AppPalette.dark
+                    : AppPalette.light,
+              );
+              return child ?? const SizedBox.shrink();
+            },
             home: const _Gate(),
           );
         },

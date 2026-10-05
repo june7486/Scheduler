@@ -76,7 +76,7 @@ class TaskRow extends StatelessWidget {
                         Row(
                           children: [
                             if (task.pinned)
-                              const Padding(
+                              Padding(
                                 padding: EdgeInsets.only(right: 4),
                                 child: Icon(
                                   Icons.push_pin,
@@ -85,7 +85,7 @@ class TaskRow extends StatelessWidget {
                                 ),
                               ),
                             if (task.recurrence != 'none')
-                              const Padding(
+                              Padding(
                                 padding: EdgeInsets.only(right: 4),
                                 child: Icon(
                                   Icons.autorenew,
@@ -115,7 +115,7 @@ class TaskRow extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               task.note,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11.5,
                                 color: p.inkSoft,
                                 height: 1.2,
@@ -139,7 +139,7 @@ class TaskRow extends StatelessWidget {
                                   '${category.emoji} ${catLabel(category)}',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: catColor,
+                                    color: ct(catColor),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -148,7 +148,7 @@ class TaskRow extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   '₩${_fmt(task.amount!)}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10.5,
                                     color: p.inkSoft,
                                     fontWeight: FontWeight.w600,
@@ -164,7 +164,7 @@ class TaskRow extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: onDelete,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline,
                     size: 18,
                     color: p.danger,
@@ -211,7 +211,7 @@ class TaskRow extends StatelessWidget {
                           fontWeight: selected
                               ? FontWeight.w700
                               : FontWeight.w500,
-                          color: selected ? col : p.inkSoft,
+                          color: selected ? ct(col) : p.inkSoft,
                         ),
                       ),
                     ),

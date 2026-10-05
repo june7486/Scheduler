@@ -170,14 +170,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: p.indigo.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.calendar_month_rounded,
+                    child: Icon(Icons.calendar_month_rounded,
                         size: 38, color: p.indigo),
                   ),
                   const SizedBox(height: 22),
                   Text(
                     isKo ? 'June 스케줄러' : "June's Scheduler",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       color: p.ink,
@@ -230,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: _loading ? null : _login,
                       child: _loading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(

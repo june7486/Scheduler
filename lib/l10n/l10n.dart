@@ -531,7 +531,8 @@ extension L10nX on BuildContext {
 /// Built-in categories (known ids) follow the active language; user-created
 /// categories keep their custom label.
 String catName(String id, String fallback) =>
-    L10n.categoryLabel(id, fallback);
+    (L10n.currentLang == AppLang.ko ? L10n.categoryKo : L10n.categoryEn)[id] ??
+    fallback;
 
 /// Localised label for a [Category] (built-ins follow the active language).
 String catLabel(Category c) => catName(c.id, c.label);

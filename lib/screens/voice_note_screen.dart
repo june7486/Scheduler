@@ -174,7 +174,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                 children: [
                   Text(
                     _time,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
@@ -216,7 +216,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         : (_recording
                               ? 'Recording… tap to stop'
                               : 'Tap to record'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       color: p.inkSoft,
                     ),
@@ -261,7 +261,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                 children: [
                   Text(
                     result['summary'] as String,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       height: 1.45,
                       color: p.ink,
@@ -275,7 +275,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.only(top: 5, right: 6),
                               child: Icon(
                                 Icons.circle,
@@ -286,7 +286,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                             Expanded(
                               child: Text(
                                 b,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   height: 1.4,
                                   color: p.ink,
@@ -337,7 +337,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.graphic_eq,
                         size: 18,
                         color: p.teal,
@@ -357,7 +357,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                               '${v.createdAt.month}/${v.createdAt.day} '
                               '${v.createdAt.hour.toString().padLeft(2, '0')}:'
                               '${v.createdAt.minute.toString().padLeft(2, '0')} · ${v.durationSeconds}s',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 10.5,
                                 color: p.inkSoft,
                               ),
@@ -366,7 +366,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.delete_outline,
                           size: 17,
                           color: p.danger,
@@ -408,7 +408,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   e.key,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11.5,
                     color: p.inkSoft,
                   ),

@@ -18,7 +18,7 @@ class AdminScreen extends StatelessWidget {
     if (!store.isMaster) {
       return Scaffold(
         appBar: AppBar(title: const Text('Admin')),
-        body: const Center(
+        body: Center(
           child: Text(
             'Master access only.',
             style: TextStyle(fontSize: 13, color: p.inkSoft),
@@ -71,7 +71,7 @@ class AdminScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Master account',
             style: TextStyle(
               fontSize: 12,
@@ -175,7 +175,7 @@ class AdminScreen extends StatelessWidget {
                                 color: p.indigo.withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(5),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'MASTER',
                                 style: TextStyle(
                                   fontSize: 8.5,
@@ -185,7 +185,7 @@ class AdminScreen extends StatelessWidget {
                               ),
                             ),
                           if (!u.enabled)
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.only(left: 6),
                               child: Text(
                                 '(disabled)',
@@ -199,7 +199,7 @@ class AdminScreen extends StatelessWidget {
                       ),
                       Text(
                         '${u.displayName.isEmpty ? "—" : u.displayName} · $open open / $done done',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: p.inkSoft,
                         ),
@@ -209,7 +209,7 @@ class AdminScreen extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'View data',
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.list_alt_outlined,
                     size: 19,
                     color: p.indigo,
@@ -358,7 +358,7 @@ class AdminScreen extends StatelessWidget {
               store.deleteUser(u.id);
               Navigator.pop(context);
             },
-            child: const Text(
+            child: Text(
               'Delete',
               style: TextStyle(color: p.danger),
             ),
@@ -450,7 +450,7 @@ class UserDataScreen extends StatelessWidget {
       appBar: AppBar(title: Text('Data — ${u?.id ?? userId}')),
       body: SafeArea(
         child: tasks.isEmpty
-            ? const Center(
+            ? Center(
                 child: Text(
                   'No tasks for this user yet.',
                   style: TextStyle(fontSize: 13, color: p.inkSoft),
@@ -497,7 +497,7 @@ class UserDataScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: col,
+                color: ct(col),
               ),
             ),
           ),
@@ -529,7 +529,7 @@ class UserDataScreen extends StatelessWidget {
                   if (t.amount != null)
                     Text(
                       '₩${t.amount!.toStringAsFixed(0)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: p.inkSoft,
                       ),
