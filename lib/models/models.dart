@@ -1,8 +1,68 @@
+/// A user account. The master account is flagged with [isMaster].
+class User {
+  final String id; // login id (unique)
+  String password; // plaintext for local-only app (see note in settings)
+  String displayName;
+  bool isMaster;
+  bool enabled;
+  DateTime createdAt;
+
+  // Per-user preferences
+  String forwardUrl;
+  String appThemeMode; // material | minimal | mix
+  String printDesignMode; // muji | minimal | fancy | whitespace
+  double baseFontSize;
+
+  User({
+    required this.id,
+    required this.password,
+    this.displayName = '',
+    this.isMaster = false,
+    this.enabled = true,
+    DateTime? createdAt,
+    this.forwardUrl = 'https://aqdesign.co.kr',
+    this.appThemeMode = 'mix',
+    this.printDesignMode = 'minimal',
+    this.baseFontSize = 13.0,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'password': password,
+    'displayName': displayName,
+    'isMaster': isMaster,
+    'enabled': enabled,
+    'createdAt': createdAt.toIso8601String(),
+    'forwardUrl': forwardUrl,
+    'appThemeMode': appThemeMode,
+    'printDesignMode': printDesignMode,
+    'baseFontSize': baseFontSize,
+  };
+
+  factory User.fromMap(Map<dynamic, dynamic> map) => User(
+    id: (map['id'] ?? '') as String,
+    password: (map['password'] ?? '') as String,
+    displayName: (map['displayName'] ?? '') as String,
+    isMaster: (map['isMaster'] ?? false) as bool,
+    enabled: (map['enabled'] ?? true) as bool,
+    createdAt: map['createdAt'] != null
+        ? DateTime.tryParse(map['createdAt'] as String) ?? DateTime.now()
+        : DateTime.now(),
+    forwardUrl: (map['forwardUrl'] ?? 'https://aqdesign.co.kr') as String,
+    appThemeMode: (map['appThemeMode'] ?? 'mix') as String,
+    printDesignMode: (map['printDesignMode'] ?? 'minimal') as String,
+    baseFontSize: (map['baseFontSize'] as num?)?.toDouble() ?? 13.0,
+  );
+}
+
 /// A single schedulable task/item in June's Scheduler.
 class Task {
   final String id;
   String title;
   String note;
+
+  /// Owner (user id) this task belongs to.
+  String ownerId;
 
   /// Category/tab id this task belongs to.
   String categoryId;
@@ -36,6 +96,7 @@ class Task {
   Task({
     required this.id,
     required this.title,
+    this.ownerId = '',
     this.note = '',
     required this.categoryId,
     this.order = 0,
@@ -54,6 +115,7 @@ class Task {
   Map<String, dynamic> toMap() => {
     'id': id,
     'title': title,
+    'ownerId': ownerId,
     'note': note,
     'categoryId': categoryId,
     'order': order,
@@ -72,6 +134,7 @@ class Task {
   factory Task.fromMap(Map<dynamic, dynamic> map) => Task(
     id: map['id'] as String,
     title: (map['title'] ?? '') as String,
+    ownerId: (map['ownerId'] ?? '') as String,
     note: (map['note'] ?? '') as String,
     categoryId: (map['categoryId'] ?? 'other') as String,
     order: (map['order'] ?? 0) as int,
@@ -97,6 +160,7 @@ class Task {
 /// A configurable category / tab. Users can add, rename, reorder or remove.
 class Category {
   final String id;
+  String ownerId;
   String label;
   String emoji;
   int colorValue;
@@ -108,6 +172,7 @@ class Category {
 
   Category({
     required this.id,
+    this.ownerId = '',
     required this.label,
     this.emoji = '',
     required this.colorValue,
@@ -118,6 +183,7 @@ class Category {
 
   Map<String, dynamic> toMap() => {
     'id': id,
+    'ownerId': ownerId,
     'label': label,
     'emoji': emoji,
     'colorValue': colorValue,
@@ -128,6 +194,7 @@ class Category {
 
   factory Category.fromMap(Map<dynamic, dynamic> map) => Category(
     id: map['id'] as String,
+    ownerId: (map['ownerId'] ?? '') as String,
     label: (map['label'] ?? '') as String,
     emoji: (map['emoji'] ?? '') as String,
     colorValue: (map['colorValue'] ?? 0xFF5C6BC0) as int,
@@ -143,12 +210,14 @@ class LogEntry {
   final DateTime timestamp;
   final String action;
   final String detail;
+  final String ownerId;
 
   LogEntry({
     required this.id,
     required this.timestamp,
     required this.action,
     this.detail = '',
+    this.ownerId = '',
   });
 
   Map<String, dynamic> toMap() => {
@@ -156,6 +225,7 @@ class LogEntry {
     'timestamp': timestamp.toIso8601String(),
     'action': action,
     'detail': detail,
+    'ownerId': ownerId,
   };
 
   factory LogEntry.fromMap(Map<dynamic, dynamic> map) => LogEntry(
@@ -163,6 +233,7 @@ class LogEntry {
     timestamp: DateTime.tryParse(map['timestamp'] as String) ?? DateTime.now(),
     action: (map['action'] ?? '') as String,
     detail: (map['detail'] ?? '') as String,
+    ownerId: (map['ownerId'] ?? '') as String,
   );
 }
 
@@ -175,6 +246,7 @@ class VoiceNote {
   String transcript;
   String summary;
   List<String> bulletPoints;
+  String ownerId;
 
   VoiceNote({
     required this.id,
@@ -184,6 +256,7 @@ class VoiceNote {
     this.transcript = '',
     this.summary = '',
     List<String>? bulletPoints,
+    this.ownerId = '',
   }) : bulletPoints = bulletPoints ?? [];
 
   Map<String, dynamic> toMap() => {
@@ -194,6 +267,7 @@ class VoiceNote {
     'transcript': transcript,
     'summary': summary,
     'bulletPoints': bulletPoints,
+    'ownerId': ownerId,
   };
 
   factory VoiceNote.fromMap(Map<dynamic, dynamic> map) => VoiceNote(
@@ -205,5 +279,6 @@ class VoiceNote {
     summary: (map['summary'] ?? '') as String,
     bulletPoints:
         (map['bulletPoints'] as List?)?.map((e) => e.toString()).toList() ?? [],
+    ownerId: (map['ownerId'] ?? '') as String,
   );
 }

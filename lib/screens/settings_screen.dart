@@ -9,7 +9,9 @@ import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_panels.dart';
+import 'admin_screen.dart';
 import 'login_screen.dart';
+import 'report_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -23,6 +25,28 @@ class SettingsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
+            if (store.isMaster) ...[
+              _Group('Master administration'),
+              _Tile(
+                icon: Icons.admin_panel_settings_outlined,
+                title: 'Master console',
+                subtitle: 'Manage IDs, passwords, and view all users\' data',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminScreen()),
+                ),
+              ),
+              _Tile(
+                icon: Icons.summarize_outlined,
+                title: 'User reports & output',
+                subtitle:
+                    'ID status · per-ID schedules · by-date, with preview',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReportScreen()),
+                ),
+              ),
+            ],
             _Group('Account'),
             _Tile(
               icon: Icons.lock_outline,
@@ -147,6 +171,7 @@ class SettingsScreen extends StatelessWidget {
               onTap: () async {
                 await SessionService().logout();
                 if (!context.mounted) return;
+                context.read<Store>().logoutCurrent();
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                 );

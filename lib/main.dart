@@ -61,6 +61,17 @@ class _GateState extends State<_Gate> {
     }
 
     final logged = await session.isLoggedIn();
+    if (logged) {
+      final uid = await session.loggedInUserId();
+      if (uid.isNotEmpty && store.userById(uid) != null) {
+        store.setCurrentUser(uid);
+      } else {
+        await session.logout();
+        if (!mounted) return;
+        setState(() => _loggedIn = false);
+        return;
+      }
+    }
     if (!mounted) return;
     setState(() => _loggedIn = logged);
   }

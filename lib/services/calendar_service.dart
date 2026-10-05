@@ -48,8 +48,9 @@ class CalendarService {
     final now = DateTime.now();
     if (task.recurrence == 'monthly' && task.recurrenceDay != null) {
       var d = DateTime(now.year, now.month, task.recurrenceDay!);
-      if (d.isBefore(now))
+      if (d.isBefore(now)) {
         d = DateTime(now.year, now.month + 1, task.recurrenceDay!);
+      }
       return DateTime(d.year, d.month, d.day, 9, 0);
     }
     final tomorrow = now.add(const Duration(days: 1));

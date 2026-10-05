@@ -8,6 +8,7 @@ import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/task_row.dart';
 import 'settings_screen.dart';
+import 'admin_screen.dart';
 import 'task_editor_screen.dart';
 import 'voice_note_screen.dart';
 import 'print_preview_screen.dart';
@@ -51,8 +52,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("June's Scheduler"),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("June's Scheduler"),
+            Text(
+              store.isMaster && store.masterViewingAll
+                  ? 'Master · viewing ALL users'
+                  : 'Signed in: ${store.currentUserId}${store.isMaster ? " (master)" : ""}',
+              style: const TextStyle(
+                fontSize: 10.5,
+                color: AppColors.inkSoft,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
         actions: [
+          if (store.isMaster)
+            IconButton(
+              tooltip: 'Master console',
+              icon: const Icon(Icons.admin_panel_settings_outlined, size: 21),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminScreen()),
+              ),
+            ),
           IconButton(
             tooltip: 'Print / Export',
             icon: const Icon(Icons.print_outlined, size: 21),
@@ -83,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               await SessionService().logout();
               if (!context.mounted) return;
+              context.read<Store>().logoutCurrent();
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
               );

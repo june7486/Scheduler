@@ -34,14 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
       _loading = true;
       _error = null;
     });
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 250));
 
-    final okId = _idCtrl.text.trim() == store.username;
-    final okPw = _pwCtrl.text == store.password;
-
-    if (okId && okPw) {
-      await _session.login();
-      store.addLog('Login', store.username);
+    final ok = await store.authenticate(_idCtrl.text.trim(), _pwCtrl.text);
+    if (ok) {
+      await _session.login(store.currentUserId);
       if (!mounted) return;
       Navigator.of(
         context,
@@ -78,6 +75,73 @@ class _LoginScreenState extends State<LoginScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openSignUp() {
+    final idCtrl = TextEditingController();
+    final pwCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create new ID'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: idCtrl,
+              decoration: const InputDecoration(
+                hintText: 'New ID (login name)',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: pwCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: 'Password (min 4)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Display name (optional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final store = context.read<Store>();
+              final err = await store.addUser(
+                idCtrl.text,
+                pwCtrl.text,
+                displayName: nameCtrl.text,
+              );
+              if (!ctx.mounted) return;
+              if (err == null) {
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('ID "${idCtrl.text.trim()}" created.'),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(err)));
+              }
+            },
+            child: const Text('Create'),
           ),
         ],
       ),
@@ -185,8 +249,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _openSignUp,
+                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
+                    label: const Text(
+                      'Create a new ID',
+                      style: TextStyle(fontSize: 12.5),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.indigo,
+                      side: const BorderSide(color: AppColors.indigo),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   const Text(
-                    'Session is kept for 1 hour. You will need to sign in again after that.',
+                    'Each ID keeps its own separate schedule data. '
+                    'Session is kept for 1 hour.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
                   ),

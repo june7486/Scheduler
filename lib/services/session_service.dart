@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Manages the 1-hour login session and version/cache handling.
 class SessionService {
   static const _kLoginAt = 'login_at';
+  static const _kUserId = 'login_user_id';
   static const _kSessionHours = 1;
 
   /// Returns true if a valid (non-expired) session exists.
@@ -25,14 +26,23 @@ class SessionService {
     return remain < 0 ? 0 : remain;
   }
 
-  Future<void> login() async {
+  /// The user id of the active session (empty if none).
+  Future<String> loggedInUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!await isLoggedIn()) return '';
+    return prefs.getString(_kUserId) ?? '';
+  }
+
+  Future<void> login(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kLoginAt, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setString(_kUserId, userId);
   }
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kLoginAt);
+    await prefs.remove(_kUserId);
   }
 
   /// Stores the version string that has been "downloaded".
@@ -46,7 +56,7 @@ class SessionService {
     return prefs.getString('installed_version');
   }
 
-  /// Clear cached data (shared preferences cache keys, not user content).
+  /// Clear cached data (cached version info, not user content).
   Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('installed_version');

@@ -5,41 +5,209 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 
 /// Central application state & persistence layer.
-/// Uses Hive boxes (maps) so no code-gen adapters are required — keeps the
-/// web build simple and reliable.
+///
+/// Multi-user model:
+///   * `users` box holds [User] records keyed by login id.
+///   * every task / category / log / voice note carries an `ownerId`.
+///   * the master account can read and manage every user's data.
+///
+/// Uses Hive boxes of plain maps (no code-gen adapters) so the web build stays
+/// simple and reliable.
 class Store extends ChangeNotifier {
+  static const _userBox = 'users';
   static const _taskBox = 'tasks';
   static const _catBox = 'categories';
   static const _logBox = 'logs';
   static const _voiceBox = 'voices';
-  static const _settingsBox = 'settings';
 
+  static const masterId = 'june7486';
+  static const masterPw = 'Corbuser7!@@';
+
+  late Box _users;
   late Box _tasks;
   late Box _cats;
   late Box _logs;
   late Box _voices;
-  late Box _settings;
 
   final _uuid = const Uuid();
 
   bool _ready = false;
   bool get isReady => _ready;
 
-  /// ---------------- Init ----------------
+  String _currentUserId = '';
+  bool _masterViewingAll = false;
+
+  // ---------------- Init ----------------
   Future<void> init() async {
     await Hive.initFlutter();
+    _users = await Hive.openBox(_userBox);
     _tasks = await Hive.openBox(_taskBox);
     _cats = await Hive.openBox(_catBox);
     _logs = await Hive.openBox(_logBox);
     _voices = await Hive.openBox(_voiceBox);
-    _settings = await Hive.openBox(_settingsBox);
 
-    if (_cats.isEmpty) await _seedCategories();
+    await _ensureMaster();
     _ready = true;
     notifyListeners();
   }
 
-  /// ---------------- Categories ----------------
+  Future<void> _ensureMaster() async {
+    if (!_users.containsKey(masterId)) {
+      final master = User(
+        id: masterId,
+        password: masterPw,
+        displayName: 'Master',
+        isMaster: true,
+      );
+      await _users.put(masterId, master.toMap());
+    }
+  }
+
+  // ---------------- Users ----------------
+  List<User> get allUsers {
+    final list = _users.values.map((e) => User.fromMap(e)).toList();
+    list.sort((a, b) {
+      if (a.isMaster != b.isMaster) return a.isMaster ? -1 : 1;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+    return list;
+  }
+
+  User? userById(String id) {
+    final raw = _users.get(id);
+    return raw == null ? null : User.fromMap(raw);
+  }
+
+  User? get currentUser => userById(_currentUserId);
+  String get currentUserId => _currentUserId;
+  bool get isMaster => currentUser?.isMaster ?? false;
+
+  /// When true, a non-master... (reserved) ; master can switch data scope.
+  bool get masterViewingAll => _masterViewingAll;
+  void setMasterViewingAll(bool v) {
+    _masterViewingAll = v;
+    notifyListeners();
+  }
+
+  /// Verifies credentials. On success sets the current user & seeds data.
+  Future<bool> authenticate(String id, String pw) async {
+    final u = userById(id);
+    if (u == null) return false;
+    if (!u.enabled) return false;
+    if (u.password != pw) return false;
+    _currentUserId = u.id;
+    await _ensureUserSeed(u.id);
+    addLog('Login', u.id);
+    notifyListeners();
+    return true;
+  }
+
+  void setCurrentUser(String id) {
+    _currentUserId = id;
+    notifyListeners();
+  }
+
+  void logoutCurrent() {
+    _currentUserId = '';
+    _masterViewingAll = false;
+    notifyListeners();
+  }
+
+  /// Creates a new (non-master) user. Returns null on success, or an error
+  /// message describing why creation failed.
+  Future<String?> addUser(
+    String id,
+    String pw, {
+    String displayName = '',
+  }) async {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) return 'ID cannot be empty.';
+    if (!RegExp(r'^[A-Za-z0-9_.@-]{3,}$').hasMatch(trimmed)) {
+      return 'ID must be at least 3 chars (letters, numbers, . _ - @).';
+    }
+    if (pw.length < 4) return 'Password must be at least 4 characters.';
+    if (_users.containsKey(trimmed)) return 'That ID already exists.';
+    final u = User(id: trimmed, password: pw, displayName: displayName);
+    await _users.put(trimmed, u.toMap());
+    await _seedCategories(trimmed);
+    addLog('Create user', trimmed);
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> deleteUser(String id) async {
+    if (id == masterId) return; // never delete the master
+    await _users.delete(id);
+    // Remove that user's data
+    for (final k in _tasks.keys.toList()) {
+      final m = _tasks.get(k);
+      if (m != null && m['ownerId'] == id) await _tasks.delete(k);
+    }
+    for (final k in _cats.keys.toList()) {
+      final m = _cats.get(k);
+      if (m != null && m['ownerId'] == id) await _cats.delete(k);
+    }
+    for (final k in _logs.keys.toList()) {
+      final m = _logs.get(k);
+      if (m != null && m['ownerId'] == id) await _logs.delete(k);
+    }
+    for (final k in _voices.keys.toList()) {
+      final m = _voices.get(k);
+      if (m != null && m['ownerId'] == id) await _voices.delete(k);
+    }
+    addLog('Delete user', id);
+    notifyListeners();
+  }
+
+  /// Master-only: change another user's password directly.
+  Future<void> setUserPassword(String id, String newPw) async {
+    final u = userById(id);
+    if (u == null) return;
+    u.password = newPw;
+    await _users.put(id, u.toMap());
+    addLog('Change password (admin)', id);
+    notifyListeners();
+  }
+
+  /// Master-only: reset a user's password to a default value.
+  Future<String> resetUserPassword(String id) async {
+    const def = '1234';
+    await setUserPassword(id, def);
+    return def;
+  }
+
+  Future<void> updateUserPrefs(
+    String id, {
+    String? forwardUrl,
+    String? appThemeMode,
+    String? printDesignMode,
+    double? baseFontSize,
+    String? displayName,
+  }) async {
+    final u = userById(id);
+    if (u == null) return;
+    if (forwardUrl != null) u.forwardUrl = forwardUrl;
+    if (appThemeMode != null) u.appThemeMode = appThemeMode;
+    if (printDesignMode != null) u.printDesignMode = printDesignMode;
+    if (baseFontSize != null) u.baseFontSize = baseFontSize;
+    if (displayName != null) u.displayName = displayName;
+    await _users.put(id, u.toMap());
+    notifyListeners();
+  }
+
+  // ---------------- Ownership scope ----------------
+  /// The owner scope used for the "my data" getters.
+  String get _scopeId => _currentUserId;
+
+  /// Owner ids the master can see; a normal user only sees themselves.
+  List<String> get visibleOwnerIds {
+    if (isMaster && _masterViewingAll) {
+      return allUsers.map((u) => u.id).toList();
+    }
+    return [_scopeId];
+  }
+
+  // ---------------- Categories ----------------
   static const defaultCategories = <Map<String, dynamic>>[
     {'id': 'birthday', 'label': 'Birthday', 'emoji': '🎂', 'color': 0xFFEC407A},
     {'id': 'todo', 'label': 'To-Do', 'emoji': '✅', 'color': 0xFF66BB6A},
@@ -77,11 +245,20 @@ class Store extends ChangeNotifier {
     {'id': 'other', 'label': 'Other', 'emoji': '📌', 'color': 0xFF90A4AE},
   ];
 
-  Future<void> _seedCategories() async {
+  String _catKey(String ownerId, String catId) => '$ownerId::$catId';
+  String _logKey(String ownerId, String logId) => '$ownerId::$logId';
+
+  Future<void> _ensureUserSeed(String ownerId) async {
+    final hasCats = _cats.values.any((e) => e['ownerId'] == ownerId);
+    if (!hasCats) await _seedCategories(ownerId);
+  }
+
+  Future<void> _seedCategories(String ownerId) async {
     for (var i = 0; i < defaultCategories.length; i++) {
       final c = defaultCategories[i];
-      await _cats.put(c['id'], {
+      await _cats.put(_catKey(ownerId, c['id'] as String), {
         'id': c['id'],
+        'ownerId': ownerId,
         'label': c['label'],
         'emoji': c['emoji'],
         'colorValue': c['color'],
@@ -92,25 +269,31 @@ class Store extends ChangeNotifier {
     }
   }
 
-  List<Category> get categories {
-    final list = _cats.values.map((e) => Category.fromMap(e)).toList();
+  List<Category> categoriesFor(String ownerId) {
+    final list = _cats.values
+        .where((e) => e['ownerId'] == ownerId)
+        .map((e) => Category.fromMap(e))
+        .toList();
     list.sort((a, b) => a.order.compareTo(b.order));
     return list;
   }
 
+  List<Category> get categories => categoriesFor(_scopeId);
   List<Category> get enabledCategories =>
       categories.where((c) => c.enabled).toList();
-
   List<Category> get topTabCategories =>
       categories.where((c) => c.enabled && c.showInTopTabs).toList();
 
-  Category? categoryById(String id) {
-    final raw = _cats.get(id);
+  Category? categoryById(String catId, {String? ownerId}) {
+    final oid = ownerId ?? _scopeId;
+    final raw = _cats.get(_catKey(oid, catId));
     return raw == null ? null : Category.fromMap(raw);
   }
 
   Future<void> saveCategory(Category c) async {
-    await _cats.put(c.id, c.toMap());
+    final oid = c.ownerId.isEmpty ? _scopeId : c.ownerId;
+    c.ownerId = oid;
+    await _cats.put(_catKey(oid, c.id), c.toMap());
     notifyListeners();
   }
 
@@ -119,10 +302,13 @@ class Store extends ChangeNotifier {
     String emoji = '📌',
     int color = 0xFF5C6BC0,
   }) async {
+    final ownerId = _scopeId;
     final id = 'cat_${_uuid.v4().substring(0, 8)}';
-    final maxOrder = categories.isEmpty ? 0 : categories.last.order + 1;
-    await _cats.put(id, {
+    final existing = categoriesFor(ownerId);
+    final maxOrder = existing.isEmpty ? 0 : existing.last.order + 1;
+    await _cats.put(_catKey(ownerId, id), {
       'id': id,
+      'ownerId': ownerId,
       'label': label,
       'emoji': emoji,
       'colorValue': color,
@@ -134,48 +320,96 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteCategory(String id) async {
-    final c = categoryById(id);
-    await _cats.delete(id);
-    // Re-assign tasks of this category to 'other'
-    for (final t in tasks.where((t) => t.categoryId == id)) {
+  Future<void> deleteCategory(String catId) async {
+    final ownerId = _scopeId;
+    final c = categoryById(catId);
+    await _cats.delete(_catKey(ownerId, catId));
+    for (final t in tasksForCategory(catId, includeCompleted: true)) {
       t.categoryId = 'other';
       await _tasks.put(t.id, t.toMap());
     }
-    addLog('Delete tab', c?.label ?? id);
+    addLog('Delete tab', c?.label ?? catId);
     notifyListeners();
   }
 
   Future<void> reorderCategories(List<Category> ordered) async {
     for (var i = 0; i < ordered.length; i++) {
       ordered[i].order = i;
-      await _cats.put(ordered[i].id, ordered[i].toMap());
+      final oid = ordered[i].ownerId.isEmpty ? _scopeId : ordered[i].ownerId;
+      await _cats.put(_catKey(oid, ordered[i].id), ordered[i].toMap());
     }
     notifyListeners();
   }
 
-  /// ---------------- Tasks ----------------
-  List<Task> get tasks {
-    final list = _tasks.values.map((e) => Task.fromMap(e)).toList();
+  // ---------------- Tasks ----------------
+  List<Task> tasksForOwner(String ownerId) {
+    final list = _tasks.values
+        .where((e) => e['ownerId'] == ownerId)
+        .map((e) => Task.fromMap(e))
+        .toList();
+    _sortTasks(list);
+    return list;
+  }
+
+  void _sortTasks(List<Task> list) {
     list.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
       final byOrder = a.order.compareTo(b.order);
       if (byOrder != 0) return byOrder;
       return a.createdAt.compareTo(b.createdAt);
     });
-    return list;
   }
 
-  List<Task> tasksForCategory(String categoryId) =>
-      tasks.where((t) => t.categoryId == categoryId && !t.completed).toList();
+  /// Tasks for the current scope (own data, or all users if master-viewing-all).
+  List<Task> get tasks {
+    if (isMaster && _masterViewingAll) {
+      final list = _tasks.values.map((e) => Task.fromMap(e)).toList();
+      _sortTasks(list);
+      return list;
+    }
+    return tasksForOwner(_scopeId);
+  }
 
-  List<Task> completedForCategory(String categoryId) =>
-      tasks.where((t) => t.categoryId == categoryId && t.completed).toList();
+  List<Task> allTasksRaw() =>
+      _tasks.values.map((e) => Task.fromMap(e)).toList();
 
-  int taskCountFor(String categoryId) =>
-      tasks.where((t) => t.categoryId == categoryId && !t.completed).length;
+  int allTaskTotal() => _tasks.length;
+
+  List<Task> tasksForCategory(
+    String categoryId, {
+    bool includeCompleted = false,
+    String? ownerId,
+  }) {
+    final oid = ownerId ?? _scopeId;
+    return tasks
+        .where((t) => t.ownerId == oid && t.categoryId == categoryId)
+        .where((t) => includeCompleted || !t.completed)
+        .toList();
+  }
+
+  List<Task> completedForCategory(String categoryId, {String? ownerId}) {
+    final oid = ownerId ?? _scopeId;
+    return tasks
+        .where(
+          (t) => t.ownerId == oid && t.categoryId == categoryId && t.completed,
+        )
+        .toList();
+  }
+
+  int taskCountFor(String categoryId, {String? ownerId}) {
+    final oid = ownerId ?? _scopeId;
+    return tasks
+        .where(
+          (t) => t.ownerId == oid && t.categoryId == categoryId && !t.completed,
+        )
+        .length;
+  }
+
+  int openTaskCountForOwner(String ownerId) =>
+      tasksForOwner(ownerId).where((t) => !t.completed).length;
 
   Future<void> saveTask(Task t) async {
+    if (t.ownerId.isEmpty) t.ownerId = _scopeId;
     await _tasks.put(t.id, t.toMap());
     notifyListeners();
   }
@@ -185,13 +419,16 @@ class Store extends ChangeNotifier {
     String categoryId, {
     String note = '',
   }) async {
-    final maxOrder = tasks.isEmpty
+    final ownerId = _scopeId;
+    final existing = tasksForOwner(ownerId);
+    final maxOrder = existing.isEmpty
         ? 0
-        : tasks.map((e) => e.order).reduce((a, b) => a > b ? a : b) + 1;
+        : existing.map((e) => e.order).reduce((a, b) => a > b ? a : b) + 1;
     final t = Task(
       id: _uuid.v4(),
       title: title,
       note: note,
+      ownerId: ownerId,
       categoryId: categoryId,
       order: maxOrder,
     );
@@ -223,12 +460,14 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Seed the recurring bills described by the user (rent & warehouse).
+  /// Seed the recurring bills (rent & warehouse) for the current user.
   Future<void> seedRecurringBillsIfEmpty() async {
-    final hasRent = tasks.any((t) => t.title.contains('Rent'));
-    if (hasRent) return;
+    final ownerId = _scopeId;
+    final mine = tasksForOwner(ownerId);
+    if (mine.any((t) => t.title.contains('Rent'))) return;
     final rent = Task(
       id: _uuid.v4(),
+      ownerId: ownerId,
       title: 'Rent — ₩2,500,000',
       categoryId: 'repeat',
       note: 'Monthly rent, due on the 12th',
@@ -238,6 +477,7 @@ class Store extends ChangeNotifier {
     );
     final warehouse = Task(
       id: _uuid.v4(),
+      ownerId: ownerId,
       title: 'Warehouse fee — ₩30,000',
       categoryId: 'repeat',
       note: 'Monthly warehouse fee',
@@ -252,7 +492,9 @@ class Store extends ChangeNotifier {
 
   /// Seed daily routine tasks (medicine, laundry, cleaning, make bed).
   Future<void> seedDailyRoutinesIfEmpty() async {
-    if (tasks.any((t) => t.categoryId == 'daily')) return;
+    final ownerId = _scopeId;
+    final mine = tasksForOwner(ownerId);
+    if (mine.any((t) => t.categoryId == 'daily')) return;
     for (final item in [
       'Take medicine',
       'Laundry',
@@ -261,6 +503,7 @@ class Store extends ChangeNotifier {
     ]) {
       final t = Task(
         id: _uuid.v4(),
+        ownerId: ownerId,
         title: item,
         categoryId: 'daily',
         recurrence: 'daily',
@@ -270,36 +513,54 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ---------------- Logs ----------------
+  // ---------------- Logs ----------------
   List<LogEntry> get logs {
+    final list = _logs.values
+        .where((e) => e['ownerId'] == _scopeId)
+        .map((e) => LogEntry.fromMap(e))
+        .toList();
+    list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return list;
+  }
+
+  List<LogEntry> allLogs() {
     final list = _logs.values.map((e) => LogEntry.fromMap(e)).toList();
     list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return list;
   }
 
   void addLog(String action, [String detail = '']) {
+    if (_currentUserId.isEmpty) return;
     final entry = LogEntry(
       id: _uuid.v4(),
       timestamp: DateTime.now(),
       action: action,
       detail: detail,
+      ownerId: _scopeId,
     );
-    _logs.put(entry.id, entry.toMap());
+    _logs.put(_logKey(_scopeId, entry.id), entry.toMap());
   }
 
   Future<void> clearLogs() async {
-    await _logs.clear();
+    for (final k in _logs.keys.toList()) {
+      final m = _logs.get(k);
+      if (m != null && m['ownerId'] == _scopeId) await _logs.delete(k);
+    }
     notifyListeners();
   }
 
-  /// ---------------- Voice notes ----------------
+  // ---------------- Voice notes ----------------
   List<VoiceNote> get voiceNotes {
-    final list = _voices.values.map((e) => VoiceNote.fromMap(e)).toList();
+    final list = _voices.values
+        .where((e) => e['ownerId'] == _scopeId)
+        .map((e) => VoiceNote.fromMap(e))
+        .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
 
   Future<void> saveVoiceNote(VoiceNote v) async {
+    if (v.ownerId.isEmpty) v.ownerId = _scopeId;
     await _voices.put(v.id, v.toMap());
     notifyListeners();
   }
@@ -309,86 +570,69 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ---------------- Settings ----------------
+  // ---------------- Per-user settings ----------------
   String get appVersion {
-    final v = _settings.get('appVersion') as String?;
+    final v = _users.get('__app_version__') as String?;
     if (v != null) return v;
     final now = DateTime.now();
     final generated =
         '${now.year}.${now.month.toString().padLeft(2, '0')}'
         '.${now.day.toString().padLeft(2, '0')}.'
         '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    _settings.put('appVersion', generated);
+    _users.put('__app_version__', generated);
     return generated;
   }
 
   Future<void> setAppVersion(String v) async {
-    await _settings.put('appVersion', v);
+    await _users.put('__app_version__', v);
     notifyListeners();
   }
 
-  String get password => (_settings.get('password') as String?) ?? '748652';
-  String get username => (_settings.get('username') as String?) ?? 'tiger415';
+  // Per-user convenience accessors for the current user.
+  String get username => _currentUserId;
+  String get password => currentUser?.password ?? '';
 
+  /// Change the current user's own password.
   Future<void> setPassword(String pw) async {
-    await _settings.put('password', pw);
+    await updatePassword(_currentUserId, pw);
+  }
+
+  Future<void> updatePassword(String id, String pw) async {
+    final u = userById(id);
+    if (u == null) return;
+    u.password = pw;
+    await _users.put(id, u.toMap());
     addLog('Change password');
     notifyListeners();
   }
 
-  String get forwardUrl =>
-      (_settings.get('forwardUrl') as String?) ?? 'https://aqdesign.co.kr';
+  String get forwardUrl => currentUser?.forwardUrl ?? 'https://aqdesign.co.kr';
+  Future<void> setForwardUrl(String url) async =>
+      updateUserPrefs(_currentUserId, forwardUrl: url);
 
-  Future<void> setForwardUrl(String url) async {
-    await _settings.put('forwardUrl', url);
-    notifyListeners();
-  }
+  String get appThemeMode => currentUser?.appThemeMode ?? 'mix';
+  Future<void> setAppThemeMode(String mode) async =>
+      updateUserPrefs(_currentUserId, appThemeMode: mode);
 
-  /// Design/theme mode for the app itself: 'material' | 'minimal'
-  String get appThemeMode =>
-      (_settings.get('appThemeMode') as String?) ?? 'mix';
+  String get printDesignMode => currentUser?.printDesignMode ?? 'minimal';
+  Future<void> setPrintDesignMode(String mode) async =>
+      updateUserPrefs(_currentUserId, printDesignMode: mode);
 
-  Future<void> setAppThemeMode(String mode) async {
-    await _settings.put('appThemeMode', mode);
-    notifyListeners();
-  }
+  double get baseFontSize => currentUser?.baseFontSize ?? 13.0;
+  Future<void> setBaseFontSize(double v) async =>
+      updateUserPrefs(_currentUserId, baseFontSize: v);
 
-  /// Output/print design mode: muji | minimal | fancy | whitespace
-  String get printDesignMode =>
-      (_settings.get('printDesignMode') as String?) ?? 'minimal';
-
-  Future<void> setPrintDesignMode(String mode) async {
-    await _settings.put('printDesignMode', mode);
-    notifyListeners();
-  }
-
-  double get baseFontSize =>
-      (_settings.get('baseFontSize') as num?)?.toDouble() ?? 13.0;
-
-  Future<void> setBaseFontSize(double v) async {
-    await _settings.put('baseFontSize', v);
-    notifyListeners();
-  }
-
-  /// ---------------- Backup / Restore ----------------
+  // ---------------- Backup / Restore ----------------
   Map<String, dynamic> exportBackup() => {
     'version': appVersion,
     'exportedAt': DateTime.now().toIso8601String(),
+    'users': allUsers.map((e) => e.toMap()).toList(),
     'tasks': _tasks.values.map((e) => Map<String, dynamic>.from(e)).toList(),
     'categories': _cats.values
         .map((e) => Map<String, dynamic>.from(e))
         .toList(),
     'logs': _logs.values.map((e) => Map<String, dynamic>.from(e)).toList(),
     'voices': _voices.values.map((e) => Map<String, dynamic>.from(e)).toList(),
-    'settings': {
-      'password': password,
-      'username': username,
-      'forwardUrl': forwardUrl,
-      'appThemeMode': appThemeMode,
-      'printDesignMode': printDesignMode,
-      'baseFontSize': baseFontSize,
-      'appVersion': appVersion,
-    },
   };
 
   Future<void> importBackup(Map<String, dynamic> data) async {
@@ -400,43 +644,48 @@ class Store extends ChangeNotifier {
       await _tasks.put(e['id'], Map<String, dynamic>.from(e));
     }
     for (final e in (data['categories'] as List? ?? [])) {
-      await _cats.put(e['id'], Map<String, dynamic>.from(e));
+      final m = Map<String, dynamic>.from(e);
+      await _cats.put(_catKey(m['ownerId'] ?? '', m['id']), m);
     }
     for (final e in (data['logs'] as List? ?? [])) {
-      await _logs.put(e['id'], Map<String, dynamic>.from(e));
+      final m = Map<String, dynamic>.from(e);
+      await _logs.put(_logKey(m['ownerId'] ?? '', m['id']), m);
     }
     for (final e in (data['voices'] as List? ?? [])) {
       await _voices.put(e['id'], Map<String, dynamic>.from(e));
     }
-    final s = data['settings'] as Map?;
-    if (s != null) {
-      await _settings.put('password', s['password'] ?? password);
-      await _settings.put('username', s['username'] ?? username);
-      await _settings.put('forwardUrl', s['forwardUrl'] ?? forwardUrl);
-      await _settings.put('appThemeMode', s['appThemeMode'] ?? appThemeMode);
-      await _settings.put(
-        'printDesignMode',
-        s['printDesignMode'] ?? printDesignMode,
-      );
-      await _settings.put('baseFontSize', s['baseFontSize'] ?? baseFontSize);
-      await _settings.put('appVersion', s['appVersion'] ?? appVersion);
+    if (data['users'] is List) {
+      for (final e in (data['users'] as List)) {
+        final m = Map<String, dynamic>.from(e);
+        await _users.put(m['id'], m);
+      }
     }
+    await _ensureMaster();
     addLog('Restore backup');
     notifyListeners();
   }
 
   Future<void> clearCache() async {
     // Clear non-essential cached data but keep user content & settings.
-    await _logs.clear();
+    await clearLogs();
     notifyListeners();
   }
 
   Future<void> wipeAll() async {
-    await _tasks.clear();
-    await _cats.clear();
-    await _logs.clear();
-    await _voices.clear();
-    await _seedCategories();
+    // Remove the current user's data only.
+    for (final k in _tasks.keys.toList()) {
+      final m = _tasks.get(k);
+      if (m != null && m['ownerId'] == _scopeId) await _tasks.delete(k);
+    }
+    for (final k in _cats.keys.toList()) {
+      final m = _cats.get(k);
+      if (m != null && m['ownerId'] == _scopeId) await _cats.delete(k);
+    }
+    for (final k in _logs.keys.toList()) {
+      final m = _logs.get(k);
+      if (m != null && m['ownerId'] == _scopeId) await _logs.delete(k);
+    }
+    await _seedCategories(_scopeId);
     notifyListeners();
   }
 }
