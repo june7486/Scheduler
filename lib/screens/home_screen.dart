@@ -119,24 +119,31 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topTabBar(topCats),
-            Expanded(
-              child: Row(
+      body: Column(
+        children: [
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Column(
                 children: [
-                  Expanded(child: _taskArea(store, cats, active, done)),
-                  _rightRail(store, cats),
+                  _topTabBar(topCats),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(child: _taskArea(store, cats, active, done)),
+                        _rightRail(store, cats),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: p.indigo,
-        foregroundColor: p.card,
+        foregroundColor: p.onAccent,
         onPressed: () => _openEditor(),
         icon: const Icon(Icons.add, size: 20),
         label: Text(context.tr('add_task'), style: const TextStyle(fontSize: 13)),
@@ -569,7 +576,25 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-    if (result != null) await store.saveTask(result);
+    if (result != null) {
+      await store.saveTask(result);
+      await _maybeAutoCalendar(store, result);
+    }
+  }
+
+  /// In 'auto' calendar mode, push a freshly created task to Google Calendar.
+  Future<void> _maybeAutoCalendar(Store store, Task t) async {
+    if (store.calendarMode != 'auto') return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await CalendarService.addToCalendar(context, t);
+    if (ok && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.tr('calendar_auto_sent')),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   Future<void> _editTask(Store store, Task t) async {
@@ -607,22 +632,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 _editTask(store, t);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.event_available_outlined, size: 20),
-              title: Text(
-                context.tr('add_to_calendar'),
-                style: const TextStyle(fontSize: 13.5),
+            if (store.calendarEnabled)
+              ListTile(
+                leading: const Icon(Icons.event_available_outlined, size: 20),
+                title: Text(
+                  context.tr('add_to_calendar'),
+                  style: const TextStyle(fontSize: 13.5),
+                ),
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final failMsg = context.tr('cannot_open_calendar');
+                  Navigator.pop(context);
+                  final ok = await CalendarService.addToCalendar(context, t);
+                  if (!ok) {
+                    messenger.showSnackBar(SnackBar(content: Text(failMsg)));
+                  }
+                },
               ),
-              onTap: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final failMsg = context.tr('cannot_open_calendar');
-                Navigator.pop(context);
-                final ok = await CalendarService.addToCalendar(context, t);
-                if (!ok) {
-                  messenger.showSnackBar(SnackBar(content: Text(failMsg)));
-                }
-              },
-            ),
             ListTile(
               leading: Icon(
                 t.completed ? Icons.undo : Icons.check_circle_outline,

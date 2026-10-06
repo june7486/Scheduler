@@ -6,10 +6,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
+import '../services/calendar_service.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_panels.dart';
+import '../widgets/skin_lang_bar.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
 import 'report_screen.dart';
@@ -142,6 +144,12 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Group(context.tr('display_grp')),
             _Tile(
+              icon: Icons.palette_outlined,
+              title: context.tr('skin'),
+              subtitle: '${AppSkins.emojiFor(store.skinKey)}  ${context.tr('skin_${store.skinKey}')}',
+              onTap: () => showSkinPicker(context, store),
+            ),
+            _Tile(
               icon: Icons.language_outlined,
               title: context.tr('language'),
               subtitle: '${context.tr('language_korean')} (${store.language == 'ko' ? '●' : '○'})  ·  '
@@ -153,6 +161,19 @@ class SettingsScreen extends StatelessWidget {
               title: context.tr('screen_theme'),
               subtitle: _themeLabel(context, store),
               onTap: () => _pickTheme(context, store),
+            ),
+            _Group(context.tr('calendar_grp')),
+            _Tile(
+              icon: Icons.event_available_outlined,
+              title: context.tr('calendar_sync'),
+              subtitle: _calLabel(context, store),
+              onTap: () => _pickCalendar(context, store),
+            ),
+            _Tile(
+              icon: Icons.open_in_new,
+              title: context.tr('open_calendar'),
+              subtitle: context.tr('open_calendar_hint'),
+              onTap: () => CalendarService.openCalendar(),
             ),
             _Group(context.tr('app_grp')),
             _Tile(
@@ -370,6 +391,87 @@ class SettingsScreen extends StatelessWidget {
       default:
         return context.tr('follow_system');
     }
+  }
+
+  String _calLabel(BuildContext context, Store store) {
+    switch (store.calendarMode) {
+      case 'manual':
+        return context.tr('cal_mode_manual');
+      case 'auto':
+        return context.tr('cal_mode_auto');
+      default:
+        return context.tr('cal_mode_off');
+    }
+  }
+
+  void _pickCalendar(BuildContext context, Store store) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Text(
+                context.tr('calendar_sync'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                context.tr('calendar_hint'),
+                style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+              ),
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: store.calendarMode,
+              onChanged: (v) async {
+                if (v == null) return;
+                await store.setCalendarMode(v);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('calendar_changed'))),
+                );
+              },
+              child: Column(
+                children: [
+                  RadioListTile<String>(
+                    value: 'off',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.block_outlined),
+                    title: Text(context.tr('cal_mode_off')),
+                    subtitle: Text(context.tr('cal_mode_off_hint'),
+                        style: const TextStyle(fontSize: 11)),
+                  ),
+                  RadioListTile<String>(
+                    value: 'manual',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.touch_app_outlined),
+                    title: Text(context.tr('cal_mode_manual')),
+                    subtitle: Text(context.tr('cal_mode_manual_hint'),
+                        style: const TextStyle(fontSize: 11)),
+                  ),
+                  RadioListTile<String>(
+                    value: 'auto',
+                    activeColor: p.indigo,
+                    secondary: const Icon(Icons.sync_outlined),
+                    title: Text(context.tr('cal_mode_auto')),
+                    subtitle: Text(context.tr('cal_mode_auto_hint'),
+                        style: const TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   void _pickLanguage(BuildContext context, Store store) {

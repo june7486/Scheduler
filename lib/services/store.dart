@@ -694,6 +694,28 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Active colour skin id (see [AppSkins.ids]). Defaults to 'sage'.
+  String get skinKey => (_users.get('__skin__') as String?) ?? 'sage';
+
+  Future<void> setSkinKey(String id) async {
+    await _users.put('__skin__', id);
+    notifyListeners();
+  }
+
+  /// Google Calendar integration mode:
+  ///   'off'    — feature hidden, nothing happens on save (default).
+  ///   'manual' — "Add to Calendar" appears in the task menu only.
+  ///   'auto'   — every newly saved task is also pushed to Google Calendar.
+  String get calendarMode =>
+      (_users.get('__cal_mode__') as String?) ?? 'off';
+
+  bool get calendarEnabled => calendarMode != 'off';
+
+  Future<void> setCalendarMode(String mode) async {
+    await _users.put('__cal_mode__', mode);
+    notifyListeners();
+  }
+
   // Per-user convenience accessors for the current user.
   String get username => _currentUserId;
   String get password => currentUser?.password ?? '';

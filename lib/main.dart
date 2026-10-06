@@ -7,6 +7,8 @@ import 'screens/login_screen.dart';
 import 'services/session_service.dart';
 import 'services/store.dart';
 import 'theme/app_theme.dart';
+import 'widgets/skin_backdrop.dart';
+import 'widgets/skin_lang_bar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,23 +37,39 @@ class JuneSchedulerApp extends StatelessWidget {
         builder: (context, s, _) {
           // Keep the global language in sync with the store.
           L10n.currentLang = s.language == 'en' ? AppLang.en : AppLang.ko;
+          // Keep the active skin in sync with the store.
+          setSkin(s.skinKey);
           return MaterialApp(
             title: s.language == 'en'
                 ? "June's Scheduler"
                 : 'June 스케줄러',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.build(Brightness.light),
-            darkTheme: AppTheme.build(Brightness.dark),
+            navigatorKey: appNavKey,
+            theme: AppTheme.build(s.skinKey, Brightness.light),
+            darkTheme: AppTheme.build(s.skinKey, Brightness.dark),
             themeMode: _themeModeFor(s.themeModeKey),
-            // Sync the global palette with the *effective* brightness so
-            // widgets reading `p.…` always match the on-screen theme.
+            // Sync the effective brightness, then paint the skin's decorative
+            // backdrop behind every route (ruled paper / grid / gradient…).
+            // The skin + language bar is pinned at the very top so both are
+            // ALWAYS reachable, on every screen.
             builder: (context, child) {
-              setGlobalPalette(
-                Theme.of(context).brightness == Brightness.dark
-                    ? AppPalette.dark
-                    : AppPalette.light,
+              setGlobalBrightness(Theme.of(context).brightness);
+              return SkinBackdrop(
+                child: Column(
+                  children: [
+                    const SkinLangBar(),
+                    Expanded(
+                      // The bar already consumed the top inset — stop the
+                      // routes below (app bars etc.) from padding it again.
+                      child: MediaQuery.removePadding(
+                        context: context,
+                        removeTop: true,
+                        child: child ?? const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                ),
               );
-              return child ?? const SizedBox.shrink();
             },
             home: const _Gate(),
           );

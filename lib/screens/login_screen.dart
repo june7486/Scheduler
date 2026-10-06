@@ -146,33 +146,34 @@ class _LoginScreenState extends State<LoginScreen> {
     final store = context.watch<Store>();
     final isKo = store.language != 'en';
     return Scaffold(
-      backgroundColor: p.card,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _LangToggle(store: store),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: 72,
-                    height: 72,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: p.indigo.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(Icons.calendar_month_rounded,
-                        size: 38, color: p.indigo),
-                  ),
+      backgroundColor: Colors.transparent,
+      body: Column(
+        children: [
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 380),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 10),
+                        Container(
+                          width: 72,
+                          height: 72,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: p.indigo.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(Icons.calendar_month_rounded,
+                              size: 38, color: p.indigo),
+                        ),
                   const SizedBox(height: 22),
                   Text(
                     isKo ? 'June 스케줄러' : "June's Scheduler",
@@ -297,62 +298,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 10.5, color: p.inkSoft),
                   ),
-                ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-/// Small KO / EN language switcher.
-class _LangToggle extends StatelessWidget {
-  final Store store;
-  const _LangToggle({required this.store});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF2F3F8),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _chip(context, '한국어', 'ko'),
-          _chip(context, 'English', 'en'),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(BuildContext context, String label, String code) {
-    final sel = store.language == code;
-    return GestureDetector(
-      onTap: () {
-        store.setLanguage(code);
-        L10n.currentLang = code == 'en' ? AppLang.en : AppLang.ko;
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: sel ? p.indigo : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-            color: sel ? p.card : p.inkSoft,
-          ),
-        ),
-      ),
     );
   }
 }

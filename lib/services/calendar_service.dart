@@ -74,4 +74,17 @@ class CalendarService {
     } catch (_) {}
     return false;
   }
+
+  /// Opens Google Calendar itself (month view). Used by the "open calendar"
+  /// action so the user can glance at their synced diary.
+  static Future<bool> openCalendar() async {
+    final uri = Uri.https('calendar.google.com', '/calendar/u/0/r/month');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
 }

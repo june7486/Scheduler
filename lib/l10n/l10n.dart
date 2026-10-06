@@ -109,6 +109,33 @@ class L10n {
     'light_mode': '밝은 화면',
     'dark_mode': '어두운 화면',
     'theme_changed': '화면 테마가 변경되었습니다.',
+    'choose_skin': '스킨 선택',
+
+    // Skins
+    'skin': '스킨',
+    'skin_hint': '앱 전체 색상 스킨을 선택하세요 (줄노트 포함).',
+    'skin_changed': '스킨이 변경되었습니다.',
+    'skin_sage': '사이지',
+    'skin_notebook': '줄노트',
+    'skin_midnight': '미드나잇',
+    'skin_ocean': '오션',
+    'skin_sunset': '선셋',
+    'skin_forest': '포레스트',
+
+    // Google Calendar
+    'calendar_grp': '구글 캘린더 연동',
+    'calendar_sync': '구글 캘린더 연동',
+    'calendar_hint': '할일을 구글 캘린더 일정으로 보냅니다.',
+    'cal_mode_off': '사용 안 함',
+    'cal_mode_off_hint': '캘린더 기능을 숨깁니다',
+    'cal_mode_manual': '수동 (메뉴에서 추가)',
+    'cal_mode_manual_hint': '할일 메뉴에서 직접 추가합니다',
+    'cal_mode_auto': '자동 (저장 시 연동)',
+    'cal_mode_auto_hint': '새 할일을 저장하면 캘린더에 추가됩니다',
+    'calendar_changed': '구글 캘린더 연동 설정이 변경되었습니다.',
+    'open_calendar': '구글 캘린더 열기',
+    'open_calendar_hint': '월간 캘린더를 새 창에서 엽니다',
+    'calendar_auto_sent': '구글 캘린더로 전송했습니다.',
 
     // Home
     'signed_in': '로그인: {id}',
@@ -346,6 +373,33 @@ class L10n {
     'light_mode': 'Light',
     'dark_mode': 'Dark',
     'theme_changed': 'Screen theme changed.',
+    'choose_skin': 'Choose a skin',
+
+    // Skins
+    'skin': 'Skin',
+    'skin_hint': 'Pick an app-wide colour skin (including ruled notebook).',
+    'skin_changed': 'Skin changed.',
+    'skin_sage': 'Sage',
+    'skin_notebook': 'Notebook',
+    'skin_midnight': 'Midnight',
+    'skin_ocean': 'Ocean',
+    'skin_sunset': 'Sunset',
+    'skin_forest': 'Forest',
+
+    // Google Calendar
+    'calendar_grp': 'Google Calendar',
+    'calendar_sync': 'Google Calendar sync',
+    'calendar_hint': 'Send tasks to Google Calendar as events.',
+    'cal_mode_off': 'Off',
+    'cal_mode_off_hint': 'Hide the calendar feature',
+    'cal_mode_manual': 'Manual (add from the menu)',
+    'cal_mode_manual_hint': 'Add tasks to the calendar yourself',
+    'cal_mode_auto': 'Auto (sync on save)',
+    'cal_mode_auto_hint': 'New tasks are added on save',
+    'calendar_changed': 'Google Calendar setting changed.',
+    'open_calendar': 'Open Google Calendar',
+    'open_calendar_hint': 'Open the month view in a new window',
+    'calendar_auto_sent': 'Sent to Google Calendar.',
 
     'signed_in': 'Signed in: {id}',
     'master_viewing_all': 'Master · viewing ALL users',
