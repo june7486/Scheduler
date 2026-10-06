@@ -23,6 +23,10 @@ class Store extends ChangeNotifier {
   static const masterId = 'june7486';
   static const masterPw = 'Corbuser7!@@';
 
+  // A ready-to-use demo account (id/pw = test/test).
+  static const testId = 'test';
+  static const testPw = 'test';
+
   late Box _users;
   late Box _tasks;
   late Box _cats;
@@ -47,6 +51,7 @@ class Store extends ChangeNotifier {
     _voices = await Hive.openBox(_voiceBox);
 
     await _ensureMaster();
+    await _ensureTestUser();
     _ready = true;
     notifyListeners();
   }
@@ -63,9 +68,66 @@ class Store extends ChangeNotifier {
     }
   }
 
+  /// Ensures the demo account (id/pw = test/test) exists with sample content,
+  /// so reviewers can sign in immediately without the master credentials.
+  Future<void> _ensureTestUser() async {
+    if (!_users.containsKey(testId)) {
+      final u = User(id: testId, password: testPw, displayName: 'Test');
+      await _users.put(testId, u.toMap());
+    }
+    await _ensureUserSeed(testId);
+    if (tasksForOwner(testId).isEmpty) {
+      final ko = language == 'ko';
+      final samples = <Map<String, dynamic>>[
+        {
+          'cat': 'todo',
+          'title': ko ? '샘플 할일 — 시험용' : 'Sample to-do — for testing',
+          'note': ko ? '테스트 계정입니다' : 'This is the test account',
+        },
+        {
+          'cat': 'finance',
+          'title': ko ? '장보기 (예산 ₩50,000)' : 'Groceries (₩50,000 budget)',
+          'amount': 50000,
+        },
+        {
+          'cat': 'bank',
+          'title': ko ? '은행 업무 확인' : 'Check bank work',
+        },
+        {
+          'cat': 'scout',
+          'title': ko ? '스카우트 대장 미팅' : 'Scout leader meeting',
+        },
+      ];
+      for (final s in samples) {
+        final t = Task(
+          id: _uuid.v4(),
+          ownerId: testId,
+          title: s['title'] as String,
+          note: (s['note'] ?? '') as String,
+          categoryId: s['cat'] as String,
+          amount: (s['amount'] as num?)?.toDouble(),
+        );
+        await _tasks.put(t.id, t.toMap());
+      }
+    }
+  }
+
   // ---------------- Users ----------------
+  /// The `users` box also holds reserved app-metadata entries (keys wrapped in
+  /// `__…__`, e.g. __lang__, __theme_mode__, __app_version__). Those must never
+  /// be parsed as [User] records.
+  static bool _isReservedKey(Object? key) =>
+      key is String && key.startsWith('__') && key.endsWith('__');
+
   List<User> get allUsers {
-    final list = _users.values.map((e) => User.fromMap(e)).toList();
+    final list = <User>[];
+    for (final key in _users.keys) {
+      if (_isReservedKey(key)) continue;
+      final raw = _users.get(key);
+      if (raw is Map) {
+        list.add(User.fromMap(raw));
+      }
+    }
     list.sort((a, b) {
       if (a.isMaster != b.isMaster) return a.isMaster ? -1 : 1;
       return a.createdAt.compareTo(b.createdAt);
