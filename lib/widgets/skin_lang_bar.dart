@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/l10n.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
+import 'notebook_ui.dart';
 
 /// Root navigator key — the top bar lives ABOVE the app's Navigator, so it
 /// needs this key to present bottom sheets / dialogs.
@@ -201,6 +202,8 @@ void showSkinPicker(BuildContext context, Store store) {
             ),
             const SizedBox(height: 8),
             _BrightnessRow(store: s),
+            const SizedBox(height: 6),
+            _HandwritingToggle(store: s),
           ],
         ),
       ),
@@ -340,6 +343,56 @@ class _BrightnessRow extends StatelessWidget {
           if (it.key != 'dark') const SizedBox(width: 8),
         ],
       ],
+    );
+  }
+}
+
+/// A switch for the hand-writing (pen) look, shown under the brightness row.
+class _HandwritingToggle extends StatelessWidget {
+  final Store store;
+  const _HandwritingToggle({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final on = store.handwritingKey;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: p.soft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: p.line),
+      ),
+      child: Row(
+        children: [
+          const HandAsterisk(size: 15, seed: 5),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr('handwriting'),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
+                Text(
+                  context.tr('handwriting_hint'),
+                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: on,
+            activeThumbColor: p.indigo,
+            onChanged: (v) => store.setHandwritingKey(v),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import 'notebook_ui.dart';
 
 /// A single task row in the main list.
 /// Left: checkbox + title (+ note). Right: quick-assign category chips.
@@ -54,16 +55,28 @@ class TaskRow extends StatelessWidget {
                 SizedBox(
                   width: 26,
                   height: 26,
-                  child: Checkbox(
-                    value: task.completed,
-                    onChanged: (_) => onToggle(),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    side: BorderSide(color: catColor, width: 1.4),
-                    activeColor: catColor,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  child: handwritingOn
+                      ? GestureDetector(
+                          onTap: onToggle,
+                          child: Center(
+                            child: HandCheck(
+                              size: 22,
+                              color: catColor,
+                              checked: task.completed,
+                            ),
+                          ),
+                        )
+                      : Checkbox(
+                          value: task.completed,
+                          onChanged: (_) => onToggle(),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          side: BorderSide(color: catColor, width: 1.4),
+                          activeColor: catColor,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -77,12 +90,18 @@ class TaskRow extends StatelessWidget {
                           children: [
                             if (task.pinned)
                               Padding(
-                                padding: EdgeInsets.only(right: 4),
-                                child: Icon(
-                                  Icons.push_pin,
-                                  size: 12,
-                                  color: p.indigo,
-                                ),
+                                padding: const EdgeInsets.only(right: 4),
+                                child: handwritingOn
+                                    ? HandAsterisk(
+                                        size: 14,
+                                        color: p.teal,
+                                        seed: task.id.hashCode,
+                                      )
+                                    : Icon(
+                                        Icons.push_pin,
+                                        size: 12,
+                                        color: p.indigo,
+                                      ),
                               ),
                             if (task.recurrence != 'none')
                               Padding(
@@ -94,19 +113,20 @@ class TaskRow extends StatelessWidget {
                                 ),
                               ),
                             Expanded(
-                              child: Text(
-                                task.title,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  height: 1.25,
-                                  fontWeight: FontWeight.w600,
-                                  color: p.ink,
-                                  decoration: task.completed
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  decorationColor: p.inkSoft,
-                                ),
-                              ),
+                              child: (handwritingOn &&
+                                      task.pinned &&
+                                      !task.completed)
+                                  ? HandHighlight(
+                                      color: const Color(0xFFFFE066),
+                                      child: Text(
+                                        task.title,
+                                        style: _titleStyle(task),
+                                      ),
+                                    )
+                                  : Text(
+                                      task.title,
+                                      style: _titleStyle(task),
+                                    ),
                             ),
                           ],
                         ),
@@ -126,6 +146,15 @@ class TaskRow extends StatelessWidget {
                           padding: const EdgeInsets.only(top: 3),
                           child: Row(
                             children: [
+                              if (handwritingOn && task.categoryId == 'memo')
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: HandAsterisk(
+                                    size: 12,
+                                    color: p.teal,
+                                    seed: task.title.hashCode,
+                                  ),
+                                ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
@@ -224,6 +253,16 @@ class TaskRow extends StatelessWidget {
       ),
     );
   }
+
+  TextStyle _titleStyle(Task task) => TextStyle(
+        fontSize: handwritingOn ? 16.5 : 13.5,
+        height: 1.25,
+        fontFamily: handFamily(),
+        fontWeight: FontWeight.w600,
+        color: p.ink,
+        decoration: task.completed ? TextDecoration.lineThrough : null,
+        decorationColor: p.inkSoft,
+      );
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);

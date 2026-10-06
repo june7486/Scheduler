@@ -39,6 +39,8 @@ class JuneSchedulerApp extends StatelessWidget {
           L10n.currentLang = s.language == 'en' ? AppLang.en : AppLang.ko;
           // Keep the active skin in sync with the store.
           setSkin(s.skinKey);
+          // Hand-writing (pen) preference for non-notebook skins.
+          setHandwriting(s.handwritingKey);
           return MaterialApp(
             title: s.language == 'en'
                 ? "June's Scheduler"

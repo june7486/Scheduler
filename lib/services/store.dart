@@ -702,6 +702,15 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hand-writing (pen) look for non-notebook skins. The notebook skin always
+  /// uses it; here the user can also force it on/off elsewhere.
+  bool get handwritingKey => (_users.get('__handwriting__') as bool?) ?? true;
+
+  Future<void> setHandwritingKey(bool on) async {
+    await _users.put('__handwriting__', on);
+    notifyListeners();
+  }
+
   /// Google Calendar integration mode:
   ///   'off'    — feature hidden, nothing happens on save (default).
   ///   'manual' — "Add to Calendar" appears in the task menu only.

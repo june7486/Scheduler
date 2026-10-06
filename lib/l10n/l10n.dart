@@ -122,6 +122,13 @@ class L10n {
     'skin_sunset': '선셋',
     'skin_forest': '포레스트',
 
+    // Handwriting / notebook
+    'hand_grp': '손글씨 (노트필기)',
+    'handwriting': '손글씨 펜 글씨',
+    'handwriting_hint': '노트필기 느낌의 펜 글씨 + 형광펜 효과를 켭니다',
+    'handwriting_on': '손글씨 켜짐',
+    'handwriting_off': '손글씨 꺼짐',
+
     // Google Calendar
     'calendar_grp': '구글 캘린더 연동',
     'calendar_sync': '구글 캘린더 연동',
@@ -385,6 +392,13 @@ class L10n {
     'skin_ocean': 'Ocean',
     'skin_sunset': 'Sunset',
     'skin_forest': 'Forest',
+
+    // Handwriting / notebook
+    'hand_grp': 'Handwriting',
+    'handwriting': 'Handwritten pen font',
+    'handwriting_hint': 'Pen writing + highlighter, like real note-taking',
+    'handwriting_on': 'Handwriting on',
+    'handwriting_off': 'Handwriting off',
 
     // Google Calendar
     'calendar_grp': 'Google Calendar',

@@ -48,3 +48,16 @@ flutter:
 
   assets:
     - assets/icons/
+
+  # Handwriting fonts (notebook / pen feel). Korean + Latin.
+  fonts:
+    - family: Gaegu
+      fonts:
+        - asset: assets/fonts/Gaegu-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Gaegu-Bold.ttf
+          weight: 700
+    - family: NanumPen
+      fonts:
+        - asset: assets/fonts/NanumPenScript-Regular.ttf
+          weight: 400

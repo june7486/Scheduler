@@ -7,6 +7,7 @@ import '../services/calendar_service.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/notebook_ui.dart';
 import '../widgets/task_row.dart';
 import 'settings_screen.dart';
 import 'admin_screen.dart';
@@ -56,7 +57,13 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(store.language == 'en' ? "June's Scheduler" : 'June 스케줄러'),
+            Text(
+              store.language == 'en' ? "June's Scheduler" : 'June 스케줄러',
+              style: TextStyle(
+                fontFamily: handFamily(),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             Text(
               store.isMaster && store.masterViewingAll
                   ? context.tr('master_viewing_all')
@@ -335,14 +342,31 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
       child: Row(
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: p.ink,
-            ),
-          ),
+          if (handwritingOn) ...[
+            const HandAsterisk(size: 15, seed: 3),
+            const SizedBox(width: 6),
+          ],
+          handwritingOn
+              ? HandHighlight(
+                  color: const Color(0xFFFFE066),
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontFamily: handFamily(),
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                )
+              : Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: p.ink,
+                  ),
+                ),
           const SizedBox(width: 6),
           Text(
             '($count)',

@@ -334,16 +334,35 @@ class AppSkins {
 
 String _skinId = AppSkins.defaultId;
 Brightness _brightness = Brightness.light;
+bool _handwriting = true;
 
 /// The palette currently in effect.
 AppPalette get p => AppSkins.forId(_skinId, _brightness);
 Brightness get globalBrightness => _brightness;
 String get currentSkinId => _skinId;
 
+/// Whether the hand-writing (pen) look is currently applied. Defaults on, so
+/// the notebook skin reads like real note-taking out of the box; the user can
+/// turn it off from the skin picker.
+bool get handwritingOn => _handwriting;
+
+/// A hand-writing font family for a given purpose:
+///   * `'pen'`  → Nanum Pen (thin, fast felt-tip) — used for body + titles.
+///   * `'mark'` → Gaegu (rounder, heavier) — used for accents / asterisks.
+/// Returns `null` when the hand-writing look is disabled so callers can keep
+/// the default Material font.
+String? handFamily([String kind = 'pen']) {
+  if (!handwritingOn) return null;
+  return kind == 'mark' ? 'Gaegu' : 'NanumPen';
+}
+
 /// Selects the active skin (called by the app root from the store).
 void setSkin(String id) {
   _skinId = AppSkins.ids.contains(id) ? id : AppSkins.defaultId;
 }
+
+/// User preference for the hand-writing look on non-notebook skins.
+void setHandwriting(bool on) => _handwriting = on;
 
 /// Updates the effective brightness (called by the MaterialApp builder).
 void setGlobalBrightness(Brightness b) => _brightness = b;
@@ -381,7 +400,7 @@ class AppTheme {
     // scaffold show through.
     final transparentCanvas = p.deco != SkinDeco.plain;
 
-    return base.copyWith(
+    final theme = base.copyWith(
       scaffoldBackgroundColor:
           transparentCanvas ? Colors.transparent : p.bg,
       colorScheme: base.colorScheme.copyWith(
@@ -398,7 +417,8 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: p.ink,
-          fontSize: 16,
+          fontSize: handwritingOn ? 20 : 16,
+          fontFamily: handFamily(),
           fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
         ),
@@ -444,13 +464,28 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          textStyle: TextStyle(
+            fontSize: handwritingOn ? 16 : 13,
+            fontFamily: handFamily(),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     );
+
+    // Hand-writing (pen) feel — swap the whole text theme to a Korean
+    // hand-writing family so the notebook skin reads like real note-taking.
+    if (handwritingOn) {
+      final hand = handFamily('pen')!;
+      return theme.copyWith(
+        textTheme: theme.textTheme.apply(fontFamily: hand),
+        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: hand),
+      );
+    }
+    return theme;
   }
 
   /// Maps a category colour value to a soft tinted background.
