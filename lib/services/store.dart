@@ -720,8 +720,8 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Active colour skin id (see [AppSkins.ids]). Defaults to 'sage'.
-  String get skinKey => (_users.get('__skin__') as String?) ?? 'sage';
+  /// Active colour skin id (see [AppSkins.ids]). Defaults to 'midnight'.
+  String get skinKey => (_users.get('__skin__') as String?) ?? 'midnight';
 
   Future<void> setSkinKey(String id) async {
     await _users.put('__skin__', id);
@@ -737,22 +737,23 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Font family choice: 'auto' (follow skin/handwriting), 'pen' (NanumPen
-  /// hand-writing), 'mark' (Gaegu hand-writing) or 'system' (default gothic).
-  String get fontKey => (_users.get('__font__') as String?) ?? 'auto';
+  /// Font family choice (see [AppFonts.ids]): 'system' (Windows / platform
+  /// default, the app default), 'pen' (NanumPenScript), 'gaegu' (Gaegu),
+  /// 'gothic' (NanumGothic), 'myeongjo', 'dodum', 'jua', 'dohyeon', 'black'.
+  String get fontKey => (_users.get('__font__') as String?) ?? 'system';
 
   Future<void> setFontKey(String k) async {
     await _users.put('__font__', k);
     notifyListeners();
   }
 
-  /// Global text-size multiplier (0.85 – 1.35; 1.0 = normal).
+  /// Global text-size multiplier (0.85 – 1.6; 1.0 = normal).
   double get fontScale =>
       ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0)
-          .clamp(0.85, 1.35);
+          .clamp(0.85, 1.6);
 
   Future<void> setFontScale(double v) async {
-    await _users.put('__font_scale__', v.clamp(0.85, 1.35));
+    await _users.put('__font_scale__', v.clamp(0.85, 1.6));
     notifyListeners();
   }
 

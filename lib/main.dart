@@ -59,9 +59,10 @@ class JuneSchedulerApp extends StatelessWidget {
             builder: (context, child) {
               setGlobalBrightness(Theme.of(context).brightness);
               // Apply the user's global text-size choice to the whole app.
+              // [effectiveFontScale] folds in the hand-writing legibility boost.
               final mq = MediaQuery.of(context);
               return MediaQuery(
-                data: mq.copyWith(textScaler: TextScaler.linear(fontScale)),
+                data: mq.copyWith(textScaler: TextScaler.linear(effectiveFontScale)),
                 child: SkinBackdrop(
                   child: Column(
                     children: [

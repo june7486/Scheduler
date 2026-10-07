@@ -22,6 +22,14 @@ FONT_FILES = [
     "Gaegu-Regular.ttf",
     "Gaegu-Bold.ttf",
     "NanumPenScript-Regular.ttf",
+    "NanumGothic-Regular.ttf",
+    "NanumGothic-Bold.ttf",
+    "NanumMyeongjo-Regular.ttf",
+    "NanumMyeongjo-Bold.ttf",
+    "GowunDodum-Regular.ttf",
+    "Jua-Regular.ttf",
+    "DoHyeon-Regular.ttf",
+    "BlackHanSans-Regular.ttf",
 ]
 
 

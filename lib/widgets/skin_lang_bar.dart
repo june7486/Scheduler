@@ -185,10 +185,9 @@ void showSkinPicker(BuildContext context, Store store) {
                       _SkinTile(
                         id: id,
                         selected: s.skinKey == id,
-                        onTap: () {
-                          s.setSkinKey(id);
-                          Navigator.pop(ctx);
-                        },
+                        // Keep the sheet open so the user can also tweak
+                        // brightness / font / size right after picking a skin.
+                        onTap: () => s.setSkinKey(id),
                       ),
                   ],
                 ),
@@ -405,19 +404,26 @@ class _HandwritingToggle extends StatelessWidget {
   }
 }
 
-/// Font-family chooser: follow-skin / pen hand / Gaegu hand / default gothic.
+/// Font-family chooser: Windows default + 2 hand-writing + 6 typographic fonts.
 class _FontSection extends StatelessWidget {
   final Store store;
   const _FontSection({required this.store});
 
+  String _label(BuildContext context, String id) => switch (id) {
+        'system' => context.tr('font_system'),
+        'pen' => context.tr('font_pen'),
+        'gaegu' => context.tr('font_gaegu'),
+        'gothic' => context.tr('font_gothic'),
+        'myeongjo' => context.tr('font_myeongjo'),
+        'dodum' => context.tr('font_dodum'),
+        'jua' => context.tr('font_jua'),
+        'dohyeon' => context.tr('font_dohyeon'),
+        'black' => context.tr('font_black'),
+        _ => id,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final items = <({String key, String label, String sample})>[
-      (key: 'auto', label: context.tr('font_auto'), sample: '가나다'),
-      (key: 'pen', label: context.tr('font_pen'), sample: '가나다'),
-      (key: 'mark', label: context.tr('font_mark'), sample: '가나다'),
-      (key: 'system', label: context.tr('font_system'), sample: '가나다'),
-    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -435,44 +441,39 @@ class _FontSection extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final it in items)
+            for (final id in AppFonts.ids)
               GestureDetector(
-                onTap: () => store.setFontKey(it.key),
+                onTap: () => store.setFontKey(id),
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: store.fontKey == it.key
+                    color: store.fontKey == id
                         ? p.indigo.withValues(alpha: 0.12)
                         : p.soft,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: store.fontKey == it.key ? p.indigo : p.line,
+                      color: store.fontKey == id ? p.indigo : p.line,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        it.sample,
+                        '가나다',
                         style: TextStyle(
                           fontSize: 15,
-                          fontFamily: switch (it.key) {
-                            'pen' => 'NanumPen',
-                            'mark' => 'Gaegu',
-                            'system' => null,
-                            _ => null,
-                          },
-                          color: store.fontKey == it.key ? p.ink : p.inkSoft,
+                          fontFamily: AppFonts.of(id).family,
+                          color: store.fontKey == id ? p.ink : p.inkSoft,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        it.label,
+                        _label(context, id),
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
-                          color: store.fontKey == it.key ? p.ink : p.inkSoft,
+                          color: store.fontKey == id ? p.ink : p.inkSoft,
                         ),
                       ),
                     ],
@@ -481,12 +482,25 @@ class _FontSection extends StatelessWidget {
               ),
           ],
         ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 13, color: p.inkSoft),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                context.tr('font_hand_note'),
+                style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 }
 
-/// Global text-size slider (0.85–1.35).
+/// Global text-size slider (0.85–1.60).
 class _FontSizeSlider extends StatelessWidget {
   final Store store;
   const _FontSizeSlider({required this.store});
@@ -512,7 +526,7 @@ class _FontSizeSlider extends StatelessWidget {
             Text(
               '${(v * 100).round()}%',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: p.indigo,
               ),
@@ -521,19 +535,27 @@ class _FontSizeSlider extends StatelessWidget {
         ),
         Row(
           children: [
-            Icon(Icons.text_fields, size: 14, color: p.inkSoft),
+            GestureDetector(
+              onTap: () => store.setFontScale((v - 0.05).clamp(0.85, 1.6)),
+              child: Icon(Icons.remove_circle_outline,
+                  size: 18, color: p.inkSoft),
+            ),
             Expanded(
               child: Slider(
                 value: v,
                 min: 0.85,
-                max: 1.35,
-                divisions: 10,
+                max: 1.6,
+                divisions: 15,
                 activeColor: p.indigo,
                 label: '${(v * 100).round()}%',
                 onChanged: (nv) => store.setFontScale(nv),
               ),
             ),
-            const Icon(Icons.text_fields, size: 22, color: Color(0xFF888888)),
+            GestureDetector(
+              onTap: () => store.setFontScale((v + 0.05).clamp(0.85, 1.6)),
+              child: Icon(Icons.add_circle_outline,
+                  size: 18, color: p.inkSoft),
+            ),
           ],
         ),
       ],

@@ -68,7 +68,7 @@ class AppPalette {
 /// swapping the active skin id — colours AND the decorative backdrop update
 /// together.
 class AppSkins {
-  static const String defaultId = 'sage';
+  static const String defaultId = 'midnight';
 
   /// Ordered list of skin ids (also the picker order).
   static const List<String> ids = [
@@ -335,8 +335,72 @@ class AppSkins {
 String _skinId = AppSkins.defaultId;
 Brightness _brightness = Brightness.light;
 bool _handwriting = true;
-String _fontKey = 'auto'; // auto | pen | mark | system
+String _fontKey = 'system'; // see AppFonts.ids
 double _fontScale = 1.0;
+
+/// The catalogue of selectable app fonts.
+///
+/// [id]      — the persisted key (`Store.fontKey`).
+/// [family]  — the registered font family, or null for the platform default.
+/// [fallback]— a font stack used when [family] is null (e.g. Segoe UI on
+///             Windows, then the bundled NanumGothic so Hangul always renders).
+/// [hand]    — true for the hand-writing fonts (they get a size boost + the
+///             highlighter feel, since pen scripts look smaller at a glance).
+class AppFont {
+  final String id;
+  final String? family;
+  final List<String> fallback;
+  final bool hand;
+  const AppFont(this.id, {this.family, this.fallback = const [], this.hand = false});
+}
+
+class AppFonts {
+  /// Hand-writing (pen) scripts.
+  static const String pen = 'pen'; // NanumPenScript
+  static const String gaegu = 'gaegu'; // Gaegu
+
+  /// Typographic families bundled with the app (all open-source).
+  static const String gothic = 'gothic'; // NanumGothic
+  static const String myeongjo = 'myeongjo'; // NanumMyeongjo (serif)
+  static const String dodum = 'dodum'; // Gowun Dodum
+  static const String jua = 'jua'; // Jua (rounded)
+  static const String dohyeon = 'dohyeon'; // Do Hyeon (display)
+  static const String black = 'black'; // Black Han Sans (poster)
+
+  /// The system / Windows default stack (Segoe UI first, then a bundled
+  /// Hangul-capable fallback so Korean text is never left to tofu).
+  static const String system = 'system';
+
+  static const List<String> ids = [
+    system,
+    pen,
+    gaegu,
+    gothic,
+    myeongjo,
+    dodum,
+    jua,
+    dohyeon,
+    black,
+  ];
+
+  static const Map<String, AppFont> _byId = {
+    system: AppFont(system, family: null, fallback: [
+      'Segoe UI', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'NanumGothic', 'Roboto', 'Arial',
+    ]),
+    pen: AppFont(pen, family: 'NanumPen', hand: true),
+    gaegu: AppFont(gaegu, family: 'Gaegu', hand: true),
+    gothic: AppFont(gothic, family: 'NanumGothic'),
+    myeongjo: AppFont(myeongjo, family: 'NanumMyeongjo'),
+    dodum: AppFont(dodum, family: 'GowunDodum'),
+    jua: AppFont(jua, family: 'Jua'),
+    dohyeon: AppFont(dohyeon, family: 'DoHyeon'),
+    black: AppFont(black, family: 'BlackHanSans'),
+  };
+
+  static AppFont of(String id) => _byId[id] ?? _byId[system]!;
+  static bool isHand(String id) => of(id).hand;
+  static bool contains(String id) => _byId.containsKey(id);
+}
 
 /// The palette currently in effect.
 AppPalette get p => AppSkins.forId(_skinId, _brightness);
@@ -349,27 +413,36 @@ String get currentFontKey => _fontKey;
 /// Global text-size multiplier (0.85 – 1.35).
 double get fontScale => _fontScale;
 
-/// Whether the hand-writing (pen) look is currently applied.
+/// Whether the hand-writing (pen) look is currently applied. This is the case
+/// whenever a hand-writing font is selected (pen / gaegu), or the legacy
+/// "auto + handwriting" toggle is on.
 bool get handwritingOn =>
-    _fontKey == 'pen' || _fontKey == 'mark' || (_fontKey == 'auto' && _handwriting);
+    AppFonts.isHand(_fontKey) || (_fontKey == 'auto' && _handwriting);
 
-/// The active hand-writing family (when [handwritingOn]): NanumPen, Gaegu or
-/// null for the default Material gothic font.
-String? get _handFamily {
-  if (_fontKey == 'pen') return 'NanumPen';
-  if (_fontKey == 'mark') return 'Gaegu';
-  if (_fontKey == 'system') return null;
-  return 'NanumPen'; // auto + handwriting on
-}
+/// The currently selected font definition.
+AppFont get currentFont => AppFonts.of(_fontKey);
 
-/// A font family for a given purpose:
-///   * `'pen'`  → hand-writing body font (NanumPen / Gaegu).
-///   * `'mark'` → the rounder accent font (Gaegu).
-/// Returns `null` when the default gothic font should be used.
+/// The active font family (null ⇒ the platform default family).
+String? get fontFamily => currentFont.family;
+
+/// The fallback stack for the active font (empty when a family is set).
+List<String> get fontFamilyFallback => currentFont.fallback;
+
+/// Convenience: the body font family used across the app. `kind == 'mark'`
+/// keeps returning the rounder Gaegu accent when a hand-writing look is on.
 String? handFamily([String kind = 'pen']) {
-  if (kind == 'mark') return handwritingOn ? 'Gaegu' : null;
-  return _handFamily;
+  if (kind == 'mark') return handwritingOn ? 'Gaegu' : currentFont.family;
+  return currentFont.family;
 }
+
+/// Extra size multiplier applied on top of the user's slider. Hand-writing
+/// scripts (NanumPen / Gaegu) have a small x-height and read noticeably
+/// smaller than typographic fonts, so we bump them up so they stay legible.
+double get handwritingBoost => handwritingOn ? 1.22 : 1.0;
+
+/// The effective text-scale actually applied to the whole app — the user's
+/// slider value, plus the hand-writing legibility boost.
+double get effectiveFontScale => _fontScale * handwritingBoost;
 
 /// Selects the active skin (called by the app root from the store).
 void setSkin(String id) {
@@ -381,10 +454,8 @@ void setHandwriting(bool on) => _handwriting = on;
 
 /// Applies the user's font family / size choice (called by the app root).
 void setFontPrefs(String key, double scale) {
-  _fontKey = const ['auto', 'pen', 'mark', 'system'].contains(key)
-      ? key
-      : 'auto';
-  _fontScale = scale.clamp(0.85, 1.35);
+  _fontKey = AppFonts.contains(key) ? key : 'system';
+  _fontScale = scale.clamp(0.85, 1.6);
 }
 
 /// Updates the effective brightness (called by the MaterialApp builder).
@@ -440,8 +511,9 @@ class AppTheme {
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: p.ink,
-          fontSize: handwritingOn ? 20 : 16,
-          fontFamily: handFamily(),
+          fontSize: handwritingOn ? 21 : 17,
+          fontFamily: fontFamily,
+          fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
         ),
@@ -458,7 +530,18 @@ class AppTheme {
       dividerTheme: DividerThemeData(color: p.line, thickness: 0.7, space: 1),
       dialogTheme: DialogThemeData(backgroundColor: p.card),
       bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.card),
-      textTheme: base.textTheme.apply(bodyColor: p.ink, displayColor: p.ink),
+      textTheme: base.textTheme.apply(
+        bodyColor: p.ink,
+        displayColor: p.ink,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+      ),
+      primaryTextTheme: base.primaryTextTheme.apply(
+        bodyColor: p.ink,
+        displayColor: p.ink,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+      ),
       iconTheme: IconThemeData(color: p.inkSoft),
       listTileTheme: ListTileThemeData(iconColor: p.inkSoft, textColor: p.ink),
       inputDecorationTheme: InputDecorationTheme(
@@ -488,8 +571,9 @@ class AppTheme {
             borderRadius: BorderRadius.circular(10),
           ),
           textStyle: TextStyle(
-            fontSize: handwritingOn ? 16 : 13,
-            fontFamily: handFamily(),
+            fontSize: handwritingOn ? 17 : 14,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -499,15 +583,6 @@ class AppTheme {
       ),
     );
 
-    // Hand-writing (pen) feel — swap the whole text theme to a Korean
-    // hand-writing family so the notebook skin reads like real note-taking.
-    if (handwritingOn) {
-      final hand = handFamily('pen')!;
-      return theme.copyWith(
-        textTheme: theme.textTheme.apply(fontFamily: hand),
-        primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: hand),
-      );
-    }
     return theme;
   }
 
