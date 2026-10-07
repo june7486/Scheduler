@@ -46,6 +46,12 @@ flutter build web --release --base-href "$BASE_HREF"
 echo "③ .nojekyll 생성 (Jekyll 비활성화)..."
 touch build/web/.nojekyll
 
+# 웹 빌드 경량화 (폰트 woff2 서브셋 + 불필요 파일 정리)
+if [ "${SKIP_OPTIMIZE:-0}" != "1" ]; then
+  echo "③-0 웹 빌드 경량화 (폰트 woff2 서브셋, 대용량 파일 정리)..."
+  python3 "$PROJECT_DIR/scripts/optimize_web.py" || echo "   (경량화 실패 — 원본 그대로 진행)"
+fi
+
 # 커스텀 도메인 사용 시 CNAME 파일을 빌드에 포함 (GitHub Pages가 도메인 유지)
 CUSTOM_DOMAIN="${CUSTOM_DOMAIN:-}"
 if [ -n "$CUSTOM_DOMAIN" ]; then
