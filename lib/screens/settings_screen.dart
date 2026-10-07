@@ -366,27 +366,39 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _openDrive(Store store) => DriveService.openFolder(store.driveUrl);
 
-  /// Backs up all data to Google Drive (shares the JSON so it can be saved to
-  /// the configured Drive folder, then opens the folder).
+  /// Backs up all data to Google Drive: on web it downloads the JSON backup and
+  /// opens the Drive folder so it can be dropped in; on mobile it shares the
+  /// file so it can be saved to Drive.
   Future<void> _backupToDrive(BuildContext context, Store store) async {
     final messenger = ScaffoldMessenger.of(context);
-    final doneMsg = context.tr('drive_backup_done');
     final name = 'june_scheduler_backup_${_driveStamp()}.json';
-    await DriveService.backupToDrive(store.exportBackup(), name: name);
-    await _openDrive(store);
+    final status = await DriveService.saveToDrive(
+      store.exportBackup(),
+      folderUrl: store.driveUrl,
+      name: name,
+    );
     store.addLog('Drive backup', name);
-    messenger.showSnackBar(SnackBar(content: Text(doneMsg)));
+    final msg = status == 'drive_downloaded'
+        ? context.tr('drive_downloaded')
+        : context.tr('drive_backup_done');
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  /// Uploads the current data to Google Drive (share sheet + open the folder).
+  /// Uploads the current data to Google Drive (download on web / share sheet on
+  /// mobile, then opens the Drive folder).
   Future<void> _uploadToDrive(BuildContext context, Store store) async {
     final messenger = ScaffoldMessenger.of(context);
-    final doneMsg = context.tr('drive_upload_done');
     final name = 'june_scheduler_upload_${_driveStamp()}.json';
-    await DriveService.backupToDrive(store.exportBackup(), name: name);
-    await _openDrive(store);
+    final status = await DriveService.saveToDrive(
+      store.exportBackup(),
+      folderUrl: store.driveUrl,
+      name: name,
+    );
     store.addLog('Drive upload', name);
-    messenger.showSnackBar(SnackBar(content: Text(doneMsg)));
+    final msg = status == 'drive_downloaded'
+        ? context.tr('drive_downloaded')
+        : context.tr('drive_upload_done');
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _editDriveUrl(BuildContext context, Store store) {
