@@ -46,6 +46,13 @@ flutter build web --release --base-href "$BASE_HREF"
 echo "③ .nojekyll 생성 (Jekyll 비활성화)..."
 touch build/web/.nojekyll
 
+# 커스텀 도메인 사용 시 CNAME 파일을 빌드에 포함 (GitHub Pages가 도메인 유지)
+CUSTOM_DOMAIN="${CUSTOM_DOMAIN:-}"
+if [ -n "$CUSTOM_DOMAIN" ]; then
+  echo "③-1 커스텀 도메인 CNAME 파일 생성: ${CUSTOM_DOMAIN}"
+  printf '%s' "$CUSTOM_DOMAIN" > build/web/CNAME
+fi
+
 # ---- 4) 배포용 임시 브랜치(gh-pages) 구성 --------------------------------
 echo "④ gh-pages 브랜치 구성 (build/web 내용만)..."
 DEPLOY_DIR="$(mktemp -d)"
