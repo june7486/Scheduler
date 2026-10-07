@@ -770,6 +770,20 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Google Drive folder used for uploading / backing up all data.
+  /// Editable from Settings. Defaults to the user's shared folder.
+  static const defaultDriveUrl =
+      'https://drive.google.com/drive/folders/1sksOKepRPLxIFcMMT1nB7CZE2AS2NAmL?usp=sharing';
+
+  String get driveUrl =>
+      (_users.get('__drive_url__') as String?) ?? defaultDriveUrl;
+
+  Future<void> setDriveUrl(String url) async {
+    final v = url.trim();
+    await _users.put('__drive_url__', v.isEmpty ? defaultDriveUrl : v);
+    notifyListeners();
+  }
+
   // Per-user convenience accessors for the current user.
   String get username => _currentUserId;
   String get password => currentUser?.password ?? '';

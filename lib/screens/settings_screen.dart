@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
 import '../services/calendar_service.dart';
+import '../services/drive_service.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -175,6 +176,31 @@ class SettingsScreen extends StatelessWidget {
               subtitle: context.tr('open_calendar_hint'),
               onTap: () => CalendarService.openCalendar(),
             ),
+            _Group(context.tr('drive_grp')),
+            _Tile(
+              icon: Icons.add_to_drive_outlined,
+              title: context.tr('drive_backup'),
+              subtitle: context.tr('drive_backup_hint'),
+              onTap: () => _backupToDrive(context, store),
+            ),
+            _Tile(
+              icon: Icons.cloud_upload_outlined,
+              title: context.tr('drive_upload'),
+              subtitle: context.tr('drive_upload_hint'),
+              onTap: () => _uploadToDrive(context, store),
+            ),
+            _Tile(
+              icon: Icons.folder_open_outlined,
+              title: context.tr('drive_open'),
+              subtitle: _driveShort(store.driveUrl),
+              onTap: () => DriveService.openFolder(store.driveUrl),
+            ),
+            _Tile(
+              icon: Icons.edit_outlined,
+              title: context.tr('drive_edit_link'),
+              subtitle: _driveShort(store.driveUrl),
+              onTap: () => _editDriveUrl(context, store),
+            ),
             _Group(context.tr('app_grp')),
             _Tile(
               icon: Icons.info_outline,
@@ -315,6 +341,92 @@ class SettingsScreen extends StatelessWidget {
             onPressed: () {
               store.setForwardUrl(ctrl.text.trim());
               Navigator.pop(context);
+            },
+            child: Text(context.tr('save')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Google Drive ----------------
+
+  String _driveShort(String url) {
+    final m = RegExp(r'/(?:folders|d)/([A-Za-z0-9_-]+)').firstMatch(url);
+    final id = m?.group(1);
+    if (id == null) return url;
+    return 'Google Drive \u00b7 ${id.substring(0, id.length < 8 ? id.length : 8)}\u2026';
+  }
+
+  String _driveStamp() {
+    final n = DateTime.now();
+    String p(int v) => v.toString().padLeft(2, '0');
+    return '${n.year}${p(n.month)}${p(n.day)}_${p(n.hour)}${p(n.minute)}';
+  }
+
+  Future<void> _openDrive(Store store) => DriveService.openFolder(store.driveUrl);
+
+  /// Backs up all data to Google Drive (shares the JSON so it can be saved to
+  /// the configured Drive folder, then opens the folder).
+  Future<void> _backupToDrive(BuildContext context, Store store) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final doneMsg = context.tr('drive_backup_done');
+    final name = 'june_scheduler_backup_${_driveStamp()}.json';
+    await DriveService.backupToDrive(store.exportBackup(), name: name);
+    await _openDrive(store);
+    store.addLog('Drive backup', name);
+    messenger.showSnackBar(SnackBar(content: Text(doneMsg)));
+  }
+
+  /// Uploads the current data to Google Drive (share sheet + open the folder).
+  Future<void> _uploadToDrive(BuildContext context, Store store) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final doneMsg = context.tr('drive_upload_done');
+    final name = 'june_scheduler_upload_${_driveStamp()}.json';
+    await DriveService.backupToDrive(store.exportBackup(), name: name);
+    await _openDrive(store);
+    store.addLog('Drive upload', name);
+    messenger.showSnackBar(SnackBar(content: Text(doneMsg)));
+  }
+
+  void _editDriveUrl(BuildContext context, Store store) {
+    final ctrl = TextEditingController(text: store.driveUrl);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(context.tr('drive_edit_link')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('drive_link_hint'),
+              style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              maxLines: 3,
+              minLines: 2,
+              decoration: const InputDecoration(
+                hintText: 'https://drive.google.com/drive/folders/...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              await store.setDriveUrl(ctrl.text);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(context.tr('drive_link_saved'))),
+              );
             },
             child: Text(context.tr('save')),
           ),
