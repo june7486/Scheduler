@@ -272,6 +272,7 @@ class L10n {
     // Tabs manager
     'manage_tabs_title': '탭 관리',
     'add_tab': '탭 추가',
+    'add_menu': '메뉴 추가',
     'tab_name': '탭 이름',
     'emoji_hint': '이모지 (예: 🎂)',
     'top_tab_on': '상단 탭: 켜짐',
@@ -545,6 +546,7 @@ class L10n {
 
     'manage_tabs_title': 'Manage Tabs',
     'add_tab': 'Add tab',
+    'add_menu': 'Add menu',
     'tab_name': 'Tab name',
     'emoji_hint': 'Emoji (e.g. 🎂)',
     'top_tab_on': 'Top tab: on',

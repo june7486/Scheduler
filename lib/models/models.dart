@@ -64,8 +64,23 @@ class Task {
   /// Owner (user id) this task belongs to.
   String ownerId;
 
-  /// Category/tab id this task belongs to.
+  /// Category/tab id this task belongs to (the primary category).
   String categoryId;
+
+  /// Additional category/tab ids this task also belongs to (multi-tab).
+  List<String> categoryIds;
+
+  /// All categories this task belongs to: the primary [categoryId] plus any
+  /// extra [categoryIds] (deduplicated, primary first).
+  List<String> get allCategoryIds {
+    final list = <String>[categoryId];
+    for (final c in categoryIds) {
+      if (c.isNotEmpty && !list.contains(c)) list.add(c);
+    }
+    return list;
+  }
+
+  bool isInCategory(String id) => allCategoryIds.contains(id);
 
   /// Priority order for display (lower = higher up).
   int order;
@@ -99,6 +114,7 @@ class Task {
     this.ownerId = '',
     this.note = '',
     required this.categoryId,
+    this.categoryIds = const [],
     this.order = 0,
     this.completed = false,
     this.completedAt,
@@ -118,6 +134,7 @@ class Task {
     'ownerId': ownerId,
     'note': note,
     'categoryId': categoryId,
+    'categoryIds': categoryIds,
     'order': order,
     'completed': completed,
     'completedAt': completedAt?.toIso8601String(),
@@ -137,6 +154,9 @@ class Task {
     ownerId: (map['ownerId'] ?? '') as String,
     note: (map['note'] ?? '') as String,
     categoryId: (map['categoryId'] ?? 'other') as String,
+    categoryIds: ((map['categoryIds'] as List?) ?? const [])
+        .map((e) => '$e')
+        .toList(),
     order: (map['order'] ?? 0) as int,
     completed: (map['completed'] ?? false) as bool,
     completedAt: map['completedAt'] != null

@@ -214,7 +214,7 @@ class TaskRow extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(width: 5),
                 itemBuilder: (_, i) {
                   final c = assignTargets[i];
-                  final selected = c.id == task.categoryId;
+                  final selected = task.isInCategory(c.id);
                   final col = Color(c.colorValue);
                   return GestureDetector(
                     onTap: () => onAssign(c),
@@ -233,15 +233,25 @@ class TaskRow extends StatelessWidget {
                           width: selected ? 1.2 : 0.8,
                         ),
                       ),
-                      child: Text(
-                        '${c.emoji} ${catLabel(c)}',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: selected ? ct(col) : p.inkSoft,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (selected)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 3),
+                              child: Icon(Icons.check, size: 10, color: ct(col)),
+                            ),
+                          Text(
+                            '${c.emoji} ${catLabel(c)}',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: selected ? ct(col) : p.inkSoft,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );

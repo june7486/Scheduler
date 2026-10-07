@@ -167,9 +167,76 @@ class _HomeScreenState extends State<HomeScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
+          _addTabChip(),
+          const SizedBox(width: 2),
           _topChip('all', '📋', context.tr('all')),
           for (final c in topCats)
             _topChip(c.id, c.emoji, catLabel(c), color: Color(c.colorValue)),
+        ],
+      ),
+    );
+  }
+
+  /// Left-most "+ 메뉴 추가" chip on the top tab bar.
+  Widget _addTabChip() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
+      child: GestureDetector(
+        onTap: () => _addTabDialog(context, context.read<Store>()),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: p.indigo.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: p.indigo.withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 15, color: p.indigo),
+              const SizedBox(width: 3),
+              Text(
+                context.tr('add_menu'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: p.indigo,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shared "add a new menu/tab" dialog.
+  void _addTabDialog(BuildContext context, Store store) {
+    final label = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(context.tr('add_menu')),
+        content: TextField(
+          controller: label,
+          autofocus: true,
+          decoration: InputDecoration(hintText: context.tr('tab_name')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () {
+              if (label.text.trim().isNotEmpty) {
+                store.addCategory(label.text.trim());
+              }
+              Navigator.pop(context);
+            },
+            child: Text(context.tr('add')),
+          ),
         ],
       ),
     );
@@ -245,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 : t.id,
                           ),
                           onDelete: () => _confirmDelete(store, t),
-                          onAssign: (c) => store.moveTask(t, c.id),
+                          onAssign: (c) => store.toggleCategoryIn(t, c.id),
                         ),
                       ),
                     );
@@ -461,15 +528,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 final c = cats[i];
                 final col = Color(c.colorValue);
                 final count = store.taskCountFor(c.id);
-                final isCurrent =
-                    _selectedTaskId != null &&
+                final isCurrent = _selectedTaskId != null &&
                     store.tasks
-                            .firstWhere(
-                              (t) => t.id == _selectedTaskId,
-                              orElse: () => _emptyTask(),
-                            )
-                            .categoryId ==
-                        c.id;
+                        .firstWhere(
+                          (t) => t.id == _selectedTaskId,
+                          orElse: () => _emptyTask(),
+                        )
+                        .isInCategory(c.id);
                 return InkWell(
                   onTap: () => _railTap(store, c),
                   child: Container(
@@ -532,6 +597,42 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
               },
+            ),
+          ),
+          // Bottom of the left rail: add a new menu/tab.
+          const Divider(height: 1),
+          InkWell(
+            onTap: () => _addTabDialog(context, store),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              child: Column(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: p.indigo.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: p.indigo.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    child: Icon(Icons.add, size: 15, color: p.indigo),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    context.tr('add_menu'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 8.6,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                      color: p.indigo,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

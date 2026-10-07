@@ -412,7 +412,12 @@ class Store extends ChangeNotifier {
     final c = categoryById(catId);
     await _cats.delete(_catKey(ownerId, catId));
     for (final t in tasksForCategory(catId, includeCompleted: true)) {
-      t.categoryId = 'other';
+      // Reassign the primary category if it was this one, and drop the extra
+      // membership so no task points at the deleted tab.
+      if (t.categoryId == catId) t.categoryId = 'other';
+      if (t.categoryIds.contains(catId)) {
+        t.categoryIds = [...t.categoryIds]..remove(catId);
+      }
       await _tasks.put(t.id, t.toMap());
     }
     addLog('Delete tab', c?.label ?? catId);
@@ -469,7 +474,7 @@ class Store extends ChangeNotifier {
   }) {
     final oid = ownerId ?? _scopeId;
     return tasks
-        .where((t) => t.ownerId == oid && t.categoryId == categoryId)
+        .where((t) => t.ownerId == oid && t.isInCategory(categoryId))
         .where((t) => includeCompleted || !t.completed)
         .toList();
   }
@@ -478,7 +483,8 @@ class Store extends ChangeNotifier {
     final oid = ownerId ?? _scopeId;
     return tasks
         .where(
-          (t) => t.ownerId == oid && t.categoryId == categoryId && t.completed,
+          (t) =>
+              t.ownerId == oid && t.isInCategory(categoryId) && t.completed,
         )
         .toList();
   }
@@ -487,11 +493,11 @@ class Store extends ChangeNotifier {
     final oid = ownerId ?? _scopeId;
     return tasks
         .where(
-          (t) => t.ownerId == oid && t.categoryId == categoryId && !t.completed,
+          (t) =>
+              t.ownerId == oid && t.isInCategory(categoryId) && !t.completed,
         )
         .length;
   }
-
   int openTaskCountForOwner(String ownerId) =>
       tasksForOwner(ownerId).where((t) => !t.completed).length;
 
@@ -544,6 +550,26 @@ class Store extends ChangeNotifier {
     await _tasks.put(t.id, t.toMap());
     final label = categoryById(newCategoryId)?.label ?? newCategoryId;
     addLog('Move task', '${t.title} → $label');
+    notifyListeners();
+  }
+
+  /// Adds or removes [categoryId] on [t] (multi-tab membership).
+  ///
+  /// The primary [Task.categoryId] is always kept; the extra memberships live
+  /// in [Task.categoryIds]. Toggling the primary off is a no-op.
+  Future<void> toggleCategoryIn(Task t, String categoryId) async {
+    final extra = [...t.categoryIds];
+    if (categoryId == t.categoryId) {
+      // Primary can't be removed; if it was re-toggled, nothing to do.
+      return;
+    }
+    if (extra.contains(categoryId)) {
+      extra.remove(categoryId);
+    } else {
+      extra.add(categoryId);
+    }
+    t.categoryIds = extra;
+    await _tasks.put(t.id, t.toMap());
     notifyListeners();
   }
 
