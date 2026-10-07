@@ -128,6 +128,13 @@ class L10n {
     'handwriting_hint': '노트필기 느낌의 펜 글씨 + 형광펜 효과를 켭니다',
     'handwriting_on': '손글씨 켜짐',
     'handwriting_off': '손글씨 꺼짐',
+    'font': '글꼴',
+    'font_hint': '앱 전체 글꼴을 선택하세요',
+    'font_auto': '스킨 따름',
+    'font_pen': '손글씨 펜',
+    'font_mark': '손글씨 개구',
+    'font_system': '기본 고딕',
+    'font_changed': '글꼴이 변경되었습니다.',
 
     // Google Calendar
     'calendar_grp': '구글 캘린더 연동',
@@ -399,6 +406,13 @@ class L10n {
     'handwriting_hint': 'Pen writing + highlighter, like real note-taking',
     'handwriting_on': 'Handwriting on',
     'handwriting_off': 'Handwriting off',
+    'font': 'Font',
+    'font_hint': 'Pick the app-wide font',
+    'font_auto': 'Follow skin',
+    'font_pen': 'Pen hand',
+    'font_mark': 'Gaegu hand',
+    'font_system': 'Default gothic',
+    'font_changed': 'Font changed.',
 
     // Google Calendar
     'calendar_grp': 'Google Calendar',

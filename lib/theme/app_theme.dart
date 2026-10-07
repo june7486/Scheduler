@@ -335,25 +335,40 @@ class AppSkins {
 String _skinId = AppSkins.defaultId;
 Brightness _brightness = Brightness.light;
 bool _handwriting = true;
+String _fontKey = 'auto'; // auto | pen | mark | system
+double _fontScale = 1.0;
 
 /// The palette currently in effect.
 AppPalette get p => AppSkins.forId(_skinId, _brightness);
 Brightness get globalBrightness => _brightness;
 String get currentSkinId => _skinId;
 
-/// Whether the hand-writing (pen) look is currently applied. Defaults on, so
-/// the notebook skin reads like real note-taking out of the box; the user can
-/// turn it off from the skin picker.
-bool get handwritingOn => _handwriting;
+/// The user's font choice (see [Store.fontKey]).
+String get currentFontKey => _fontKey;
 
-/// A hand-writing font family for a given purpose:
-///   * `'pen'`  → Nanum Pen (thin, fast felt-tip) — used for body + titles.
-///   * `'mark'` → Gaegu (rounder, heavier) — used for accents / asterisks.
-/// Returns `null` when the hand-writing look is disabled so callers can keep
-/// the default Material font.
+/// Global text-size multiplier (0.85 – 1.35).
+double get fontScale => _fontScale;
+
+/// Whether the hand-writing (pen) look is currently applied.
+bool get handwritingOn =>
+    _fontKey == 'pen' || _fontKey == 'mark' || (_fontKey == 'auto' && _handwriting);
+
+/// The active hand-writing family (when [handwritingOn]): NanumPen, Gaegu or
+/// null for the default Material gothic font.
+String? get _handFamily {
+  if (_fontKey == 'pen') return 'NanumPen';
+  if (_fontKey == 'mark') return 'Gaegu';
+  if (_fontKey == 'system') return null;
+  return 'NanumPen'; // auto + handwriting on
+}
+
+/// A font family for a given purpose:
+///   * `'pen'`  → hand-writing body font (NanumPen / Gaegu).
+///   * `'mark'` → the rounder accent font (Gaegu).
+/// Returns `null` when the default gothic font should be used.
 String? handFamily([String kind = 'pen']) {
-  if (!handwritingOn) return null;
-  return kind == 'mark' ? 'Gaegu' : 'NanumPen';
+  if (kind == 'mark') return handwritingOn ? 'Gaegu' : null;
+  return _handFamily;
 }
 
 /// Selects the active skin (called by the app root from the store).
@@ -363,6 +378,14 @@ void setSkin(String id) {
 
 /// User preference for the hand-writing look on non-notebook skins.
 void setHandwriting(bool on) => _handwriting = on;
+
+/// Applies the user's font family / size choice (called by the app root).
+void setFontPrefs(String key, double scale) {
+  _fontKey = const ['auto', 'pen', 'mark', 'system'].contains(key)
+      ? key
+      : 'auto';
+  _fontScale = scale.clamp(0.85, 1.35);
+}
 
 /// Updates the effective brightness (called by the MaterialApp builder).
 void setGlobalBrightness(Brightness b) => _brightness = b;

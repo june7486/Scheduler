@@ -41,6 +41,8 @@ class JuneSchedulerApp extends StatelessWidget {
           setSkin(s.skinKey);
           // Hand-writing (pen) preference for non-notebook skins.
           setHandwriting(s.handwritingKey);
+          // Font family + text-size choice.
+          setFontPrefs(s.fontKey, s.fontScale);
           return MaterialApp(
             title: s.language == 'en'
                 ? "June's Scheduler"
@@ -56,20 +58,25 @@ class JuneSchedulerApp extends StatelessWidget {
             // ALWAYS reachable, on every screen.
             builder: (context, child) {
               setGlobalBrightness(Theme.of(context).brightness);
-              return SkinBackdrop(
-                child: Column(
-                  children: [
-                    const SkinLangBar(),
-                    Expanded(
-                      // The bar already consumed the top inset — stop the
-                      // routes below (app bars etc.) from padding it again.
-                      child: MediaQuery.removePadding(
-                        context: context,
-                        removeTop: true,
-                        child: child ?? const SizedBox.shrink(),
+              // Apply the user's global text-size choice to the whole app.
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(textScaler: TextScaler.linear(fontScale)),
+                child: SkinBackdrop(
+                  child: Column(
+                    children: [
+                      const SkinLangBar(),
+                      Expanded(
+                        // The bar already consumed the top inset — stop the
+                        // routes below (app bars etc.) from padding it again.
+                        child: MediaQuery.removePadding(
+                          context: context,
+                          removeTop: true,
+                          child: child ?? const SizedBox.shrink(),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

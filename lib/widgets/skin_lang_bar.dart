@@ -154,57 +154,65 @@ void showSkinPicker(BuildContext context, Store store) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
     builder: (ctx) => Consumer<Store>(
-      builder: (ctx, s, _) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      builder: (ctx, s, _) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.palette_outlined, size: 18, color: p.indigo),
-                const SizedBox(width: 8),
+                Row(
+                  children: [
+                    Icon(Icons.palette_outlined, size: 18, color: p.indigo),
+                    const SizedBox(width: 8),
+                    Text(
+                      ctx.tr('choose_skin'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final id in AppSkins.ids)
+                      _SkinTile(
+                        id: id,
+                        selected: s.skinKey == id,
+                        onTap: () {
+                          s.setSkinKey(id);
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
                 Text(
-                  ctx.tr('choose_skin'),
+                  ctx.tr('screen_theme'),
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: p.ink,
+                    color: p.inkSoft,
+                    letterSpacing: 0.3,
                   ),
                 ),
+                const SizedBox(height: 8),
+                _BrightnessRow(store: s),
+                const SizedBox(height: 6),
+                _HandwritingToggle(store: s),
+                const SizedBox(height: 16),
+                _FontSection(store: s),
+                const SizedBox(height: 8),
+                _FontSizeSlider(store: s),
               ],
             ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final id in AppSkins.ids)
-                  _SkinTile(
-                    id: id,
-                    selected: s.skinKey == id,
-                    onTap: () {
-                      s.setSkinKey(id);
-                      Navigator.pop(ctx);
-                    },
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              ctx.tr('screen_theme'),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: p.inkSoft,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _BrightnessRow(store: s),
-            const SizedBox(height: 6),
-            _HandwritingToggle(store: s),
-          ],
+          ),
         ),
       ),
     ),
@@ -393,6 +401,142 @@ class _HandwritingToggle extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Font-family chooser: follow-skin / pen hand / Gaegu hand / default gothic.
+class _FontSection extends StatelessWidget {
+  final Store store;
+  const _FontSection({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <({String key, String label, String sample})>[
+      (key: 'auto', label: context.tr('font_auto'), sample: '가나다'),
+      (key: 'pen', label: context.tr('font_pen'), sample: '가나다'),
+      (key: 'mark', label: context.tr('font_mark'), sample: '가나다'),
+      (key: 'system', label: context.tr('font_system'), sample: '가나다'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('font'),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: p.inkSoft,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final it in items)
+              GestureDetector(
+                onTap: () => store.setFontKey(it.key),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: store.fontKey == it.key
+                        ? p.indigo.withValues(alpha: 0.12)
+                        : p.soft,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: store.fontKey == it.key ? p.indigo : p.line,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        it.sample,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontFamily: switch (it.key) {
+                            'pen' => 'NanumPen',
+                            'mark' => 'Gaegu',
+                            'system' => null,
+                            _ => null,
+                          },
+                          color: store.fontKey == it.key ? p.ink : p.inkSoft,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        it.label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: store.fontKey == it.key ? p.ink : p.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Global text-size slider (0.85–1.35).
+class _FontSizeSlider extends StatelessWidget {
+  final Store store;
+  const _FontSizeSlider({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final v = store.fontScale;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              context.tr('font_size'),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: p.inkSoft,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${(v * 100).round()}%',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: p.indigo,
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Icon(Icons.text_fields, size: 14, color: p.inkSoft),
+            Expanded(
+              child: Slider(
+                value: v,
+                min: 0.85,
+                max: 1.35,
+                divisions: 10,
+                activeColor: p.indigo,
+                label: '${(v * 100).round()}%',
+                onChanged: (nv) => store.setFontScale(nv),
+              ),
+            ),
+            const Icon(Icons.text_fields, size: 22, color: Color(0xFF888888)),
+          ],
+        ),
+      ],
     );
   }
 }

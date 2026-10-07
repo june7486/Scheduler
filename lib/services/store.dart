@@ -711,6 +711,25 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Font family choice: 'auto' (follow skin/handwriting), 'pen' (NanumPen
+  /// hand-writing), 'mark' (Gaegu hand-writing) or 'system' (default gothic).
+  String get fontKey => (_users.get('__font__') as String?) ?? 'auto';
+
+  Future<void> setFontKey(String k) async {
+    await _users.put('__font__', k);
+    notifyListeners();
+  }
+
+  /// Global text-size multiplier (0.85 – 1.35; 1.0 = normal).
+  double get fontScale =>
+      ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0)
+          .clamp(0.85, 1.35);
+
+  Future<void> setFontScale(double v) async {
+    await _users.put('__font_scale__', v.clamp(0.85, 1.35));
+    notifyListeners();
+  }
+
   /// Google Calendar integration mode:
   ///   'off'    — feature hidden, nothing happens on save (default).
   ///   'manual' — "Add to Calendar" appears in the task menu only.
