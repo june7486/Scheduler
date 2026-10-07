@@ -364,13 +364,13 @@ class SettingsScreen extends StatelessWidget {
     return '${n.year}${p(n.month)}${p(n.day)}_${p(n.hour)}${p(n.minute)}';
   }
 
-  Future<void> _openDrive(Store store) => DriveService.openFolder(store.driveUrl);
-
   /// Backs up all data to Google Drive: on web it downloads the JSON backup and
   /// opens the Drive folder so it can be dropped in; on mobile it shares the
   /// file so it can be saved to Drive.
   Future<void> _backupToDrive(BuildContext context, Store store) async {
     final messenger = ScaffoldMessenger.of(context);
+    final dlMsg = context.tr('drive_downloaded');
+    final doneMsg = context.tr('drive_backup_done');
     final name = 'june_scheduler_backup_${_driveStamp()}.json';
     final status = await DriveService.saveToDrive(
       store.exportBackup(),
@@ -378,9 +378,7 @@ class SettingsScreen extends StatelessWidget {
       name: name,
     );
     store.addLog('Drive backup', name);
-    final msg = status == 'drive_downloaded'
-        ? context.tr('drive_downloaded')
-        : context.tr('drive_backup_done');
+    final msg = status == 'drive_downloaded' ? dlMsg : doneMsg;
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -388,6 +386,8 @@ class SettingsScreen extends StatelessWidget {
   /// mobile, then opens the Drive folder).
   Future<void> _uploadToDrive(BuildContext context, Store store) async {
     final messenger = ScaffoldMessenger.of(context);
+    final dlMsg = context.tr('drive_downloaded');
+    final doneMsg = context.tr('drive_upload_done');
     final name = 'june_scheduler_upload_${_driveStamp()}.json';
     final status = await DriveService.saveToDrive(
       store.exportBackup(),
@@ -395,9 +395,7 @@ class SettingsScreen extends StatelessWidget {
       name: name,
     );
     store.addLog('Drive upload', name);
-    final msg = status == 'drive_downloaded'
-        ? context.tr('drive_downloaded')
-        : context.tr('drive_upload_done');
+    final msg = status == 'drive_downloaded' ? dlMsg : doneMsg;
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 

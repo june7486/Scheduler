@@ -169,6 +169,7 @@ class L10n {
     'drive_shared': '드라이브 저장 화면을 열었습니다. 폴더를 선택하세요.',
     'drive_opened': '드라이브 업로드 페이지를 열었습니다.',
     'drive_failed': '드라이브를 열 수 없습니다.',
+    'drive_downloaded': '백업 파일을 내려받았습니다. 드라이브 폴더에 올려주세요.',
 
     // Home
     'signed_in': '로그인: {id}',
@@ -467,6 +468,7 @@ class L10n {
     'drive_shared': 'Drive save sheet opened. Pick your folder.',
     'drive_opened': 'Drive upload page opened.',
     'drive_failed': 'Could not open Google Drive.',
+    'drive_downloaded': 'Backup downloaded. Upload it to your Drive folder.',
 
     'signed_in': 'Signed in: {id}',
     'master_viewing_all': 'Master · viewing ALL users',
