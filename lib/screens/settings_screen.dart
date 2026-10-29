@@ -909,6 +909,24 @@ class _SyncPanel extends StatelessWidget {
                 ),
               ],
             ),
+            if (store.syncEnabled && svc.pendingCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_upload_outlined, size: 12, color: p.teal),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        context.tr('sync_pending_n', args: {
+                          'n': '${svc.pendingCount}',
+                        }),
+                        style: TextStyle(fontSize: 10.5, color: p.teal),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (svc.state == SyncState.offline && svc.message.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
@@ -939,6 +957,13 @@ class _SyncPanel extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  context.tr('sync_server_copy'),
+                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   context.tr('sync_e2e'),
                   style: TextStyle(fontSize: 10.5, color: p.inkSoft),

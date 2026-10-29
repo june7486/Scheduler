@@ -446,24 +446,30 @@ class Store extends ChangeNotifier {
   Future<void> deleteCategory(String catId) async {
     final cat = categoryById(catId);
     final ownerId = _scopeId;
-    final c = categoryById(catId);
-    await _cats.delete(_catKey(ownerId, catId));
+
+    // Soft delete the tab itself so the removal reaches other devices.
+    final tomb = <String, dynamic>{
+      'id': catId,
+      'ownerId': ownerId,
+      'label': cat?.label ?? catId,
+      'emoji': cat?.emoji ?? '',
+      'colorValue': cat?.colorValue ?? 0,
+      'order': cat?.order ?? 0,
+    };
+    stamp(tomb);
+    tomb['deletedAt'] = DateTime.now().millisecondsSinceEpoch;
+    await _cats.put(_catKey(ownerId, catId), tomb);
+    await _markPending('categories', _catKey(ownerId, catId));
+
+    // Re-point the tasks that used this tab.
     for (final t in tasksForCategory(catId, includeCompleted: true)) {
-      // Reassign the primary category if it was this one, and drop the extra
-      // membership so no task points at the deleted tab.
       if (t.categoryId == catId) t.categoryId = 'other';
       if (t.categoryIds.contains(catId)) {
         t.categoryIds = [...t.categoryIds]..remove(catId);
       }
-      await _tasks.put(t.id, t.toMap());
+      await _putTask(t);
     }
-    if (cat != null) {
-      final m = cat.toMap();
-      stamp(m);
-      m['deletedAt'] = DateTime.now().millisecondsSinceEpoch;
-      await _cats.put(_catKey(cat.ownerId, cat.id), m);
-    }
-    addLog('Delete tab', c?.label ?? catId);
+    addLog('Delete tab', cat?.label ?? catId);
     notifyListeners();
   }
 
@@ -593,6 +599,7 @@ class Store extends ChangeNotifier {
     stamp(m);
     m['deletedAt'] = DateTime.now().millisecondsSinceEpoch;
     await _tasks.put(t.id, m);
+    await _markPending('tasks', t.id);
     addLog('Delete task', t.title);
     notifyListeners();
   }
@@ -714,6 +721,7 @@ class Store extends ChangeNotifier {
     stamp(m);
     t.updatedAt = m['updatedAt'] as int;
     await _tasks.put(t.id, m);
+    await _markPending('tasks', t.id);
   }
 
   /// Persists a category, stamped as changed now.
@@ -724,6 +732,7 @@ class Store extends ChangeNotifier {
     stamp(m);
     c.updatedAt = m['updatedAt'] as int;
     await _cats.put(_catKey(oid, c.id), m);
+    await _markPending('categories', _catKey(oid, c.id));
   }
 
   /// Persists a voice note, stamped as changed now so it reaches other devices.
@@ -732,6 +741,156 @@ class Store extends ChangeNotifier {
     final m = v.toMap();
     stamp(m);
     await _voices.put(v.id, m);
+    await _markPending('voices', v.id);
+  }
+
+  // ---------------- Server-authoritative sync ----------------
+  //
+  // The server document is the source of truth. Local Hive only holds
+  // (a) a cache of the server state and (b) a small outbox of changes that
+  // could not be uploaded yet. Nothing is considered "saved" until the server
+  // acknowledged it.
+
+  static const _pendingKey = '__sync_pending__';
+
+  /// Box keys (`entity/boxKey`) waiting to be uploaded.
+  Set<String> get pendingKeys {
+    final raw = _users.get(_pendingKey);
+    if (raw is List) return raw.map((e) => '$e').toSet();
+    return <String>{};
+  }
+
+  int get pendingCount => pendingKeys.length;
+
+  Future<void> _markPending(String entity, String boxKey) async {
+    if (!syncEnabled) return;
+    final set = pendingKeys..add('$entity/$boxKey');
+    await _users.put(_pendingKey, set.toList());
+  }
+
+  Future<void> clearPending(Iterable<String> keys) async {
+    final set = pendingKeys..removeAll(keys);
+    await _users.put(_pendingKey, set.toList());
+  }
+
+  Future<void> clearAllPending() async => _users.put(_pendingKey, <String>[]);
+
+  /// Snapshot of ONLY the records that still need uploading.
+  Map<String, Map<String, dynamic>> pendingSnapshot(String ownerId) {
+    final out = <String, Map<String, dynamic>>{};
+    final pending = pendingKeys;
+    if (pending.isEmpty) return out;
+    for (final e in _syncBoxes.entries) {
+      for (final k in e.value.keys) {
+        final full = '${e.key}/$k';
+        if (!pending.contains(full)) continue;
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        final m = Map<String, dynamic>.from(raw);
+        m.remove('_rev');
+        m.remove('_updatedAt');
+        out[full] = m;
+      }
+    }
+    return out;
+  }
+
+  /// Applies a whole server snapshot in one pass.
+  /// Returns true when anything local changed.
+  bool applyServerSnapshot(Map serverEntities) {
+    var changed = false;
+    for (final e in serverEntities.entries) {
+      final key = '${e.key}';
+      final slash = key.indexOf('/');
+      if (slash <= 0) continue;
+      final entity = key.substring(0, slash);
+      final boxKey = key.substring(slash + 1);
+      final raw = e.value;
+      if (raw is! Map) continue;
+      final box = _syncBoxes[entity];
+      if (box == null) continue;
+
+      final remote = Map<String, dynamic>.from(raw);
+      final pending = pendingKeys.contains(key);
+      final local = box.get(boxKey);
+
+      if (local is Map && !pending) {
+        final a = Map<String, dynamic>.from(local);
+        a.remove('_rev');
+        a.remove('_updatedAt');
+        if (_shallowEquals(a, remote)) continue;
+      }
+      box.put(boxKey, remote);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /// Marks every record of [ownerId] as needing an upload (workspace creation).
+  Future<void> queueAllForUpload(String ownerId) async {
+    final keys = <String>[];
+    for (final e in _syncBoxes.entries) {
+      for (final k in e.value.keys) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        keys.add('${e.key}/$k');
+      }
+    }
+    await _users.put(_pendingKey, keys);
+  }
+
+  /// Applies one record straight from the server (server wins).
+  /// A `null` [remote] means the server no longer has it -> drop locally.
+  Future<bool> applyServerRecord(
+    String entity,
+    String boxKey,
+    Map<String, dynamic>? remote,
+  ) async {
+    final box = _syncBoxes[entity];
+    if (box == null) return false;
+    final pending = pendingKeys.contains('$entity/$boxKey');
+    final local = box.get(boxKey);
+
+    if (remote == null) {
+      // Server deleted it. Keep a local edit that has not been uploaded yet.
+      if (pending) return false;
+      if (local == null) return false;
+      await box.delete(boxKey);
+      return true;
+    }
+
+    if (local is Map && !pending) {
+      final a = Map<String, dynamic>.from(local);
+      a.remove('_rev');
+      a.remove('_updatedAt');
+      if (_shallowEquals(a, remote)) return false;
+    }
+    await box.put(boxKey, remote);
+    return true;
+  }
+
+  /// Drops local records of [ownerId] that the server no longer has.
+  /// Pending (unsent) edits are always kept.
+  Future<bool> pruneMissing(
+    String ownerId,
+    Set<String> serverKeys,
+  ) async {
+    final pending = pendingKeys;
+    var changed = false;
+    for (final e in _syncBoxes.entries) {
+      for (final k in e.value.keys.toList()) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        final full = '${e.key}/$k';
+        if (serverKeys.contains(full)) continue;
+        if (pending.contains(full)) continue;
+        await e.value.delete(k);
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   /// Applies a record coming from the sync server (last-writer-wins).

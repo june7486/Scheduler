@@ -177,7 +177,10 @@ class L10n {
     'sync_done': '동기화 완료',
     'sync_copied': '코드를 복사했습니다 — 다른 기기에 입력하세요',
     'sync_records': '건',
-    'sync_e2e': '종단간 암호화 · 계정 불필요',
+    'sync_e2e': '서버 저장 · 종단간 암호화 · 계정 불필요',
+    'sync_pending': '서버 전송 대기',
+    'sync_pending_n': '서버 전송 대기 {n}건 — 연결되면 자동 전송',
+    'sync_server_copy': '서버가 원본입니다. 이 기기에는 읽기용 사본만 둡니다.',
 
     // Google Drive
     'drive_grp': '구글 드라이브 (업로드·백업)',
@@ -513,7 +516,10 @@ class L10n {
     'sync_done': 'Synced',
     'sync_copied': 'Copied — enter it on your other device',
     'sync_records': 'records',
-    'sync_e2e': 'End-to-end encrypted · no account needed',
+    'sync_e2e': 'Stored on server · end-to-end encrypted · no account',
+    'sync_pending': 'Waiting to upload',
+    'sync_pending_n': '{n} change(s) queued — uploads when online',
+    'sync_server_copy': 'The server holds the original; this device keeps a read cache.',
 
     // Google Drive
     'drive_grp': 'Google Drive (upload · backup)',

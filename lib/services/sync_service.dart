@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'online_hook_stub.dart'
+    if (dart.library.js_interop) 'online_hook_web.dart' as online;
 import 'store.dart';
 import 'sync_relay.dart';
 
@@ -9,19 +13,21 @@ enum SyncState { off, idle, syncing, offline, error }
 
 /// Cross-device synchronisation for June's Scheduler.
 ///
-/// Design
-/// ------
-/// * Records (tasks / categories / voice notes) sync individually and merge
-///   with **last-writer-wins** on `updatedAt` (epoch ms).
-/// * Deletions become **tombstones** (`deletedAt`) instead of hard deletes, so
-///   a removal on one device also removes the row elsewhere.
-/// * Local writes are debounced (700 ms) and pushed; every device also polls
-///   every 2 s, so all devices converge within a couple of seconds.
-/// * Offline edits are never lost: a record whose local `updatedAt` is newer
-///   than the server copy is kept and re-uploaded.
-/// * Transport is pluggable ([SyncRelay]). With no configuration the app uses
-///   an end-to-end encrypted ntfy.sh topic derived from the sync code, so sync
-///   works with no account and no server to host.
+/// **Server is the source of truth.**
+/// --------------------------------
+/// The workspace document on the relay is the real storage. This device keeps
+/// only a read cache plus a small *outbox* (`Store.pendingKeys`) of changes
+/// that have not been acknowledged by the server yet. Nothing counts as saved
+/// until the server accepted it.
+///
+/// Behaviour:
+/// * Local edit -> goes into the outbox -> uploaded on the next cycle.
+/// * Merge is last-writer-wins on `updatedAt`, so a device that was offline for
+///   a week cannot resurrect stale rows over newer ones.
+/// * Records the server does not have are pruned locally (server wins), except
+///   for outbox entries, which are still on their way up.
+/// * When the connection drops the outbox stays intact; a periodic retry (and
+///   the browser `online` event) flushes it as soon as the network returns.
 class SyncService {
   SyncService(this._store);
 
@@ -31,9 +37,10 @@ class SyncService {
   bool _busy = false;
   bool _stopped = true;
 
-  /// Set when a local write happened while a request was in flight; the write
-  /// is retried as soon as the current request finishes.
+  /// A local write landed while a request was in flight; it is guaranteed to
+  /// be in the outbox, so the next tick will pick it up.
   bool _dirty = false;
+  bool get hasQueuedWrite => _dirty;
 
   SyncState _state = SyncState.off;
   SyncState get state => _state;
@@ -44,22 +51,22 @@ class SyncService {
   DateTime? _lastSync;
   DateTime? get lastSync => _lastSync;
 
-  int _pendingLocal = 0;
-  int get pendingLocal => _pendingLocal;
+  /// Failed upload attempts in a row, used for backoff.
+  int _failures = 0;
+  int get failures => _failures;
 
-  /// Server revision this device last saw.
-  int _rev = 0;
-
-  /// Number of records last exchanged — shown in Settings so the user can see
-  /// that something is really happening.
+  /// Records uploaded on the last successful cycle.
   int _lastCount = 0;
   int get lastCount => _lastCount;
 
-  /// Poll interval. Short enough to feel live across devices.
-  static const pollInterval = Duration(seconds: 2);
+  /// Engine tick. Each tick pulls the server, then flushes the outbox.
+  static const pollInterval = Duration(seconds: 3);
 
-  /// Debounce applied to local writes before pushing.
-  static const writeDebounce = Duration(milliseconds: 700);
+  /// Backoff when the server is unreachable (capped).
+  static const _maxBackoff = Duration(seconds: 60);
+
+  /// Debounce applied to local writes before a push attempt.
+  static const writeDebounce = Duration(milliseconds: 800);
 
   bool get isActive => !_stopped && _store.syncEnabled;
 
@@ -73,6 +80,9 @@ class SyncService {
   /// Kept because the setup dialog references it.
   static const defaultBaseUrl = NtfyRelay.defaultBaseUrl;
 
+  /// Changes waiting to be uploaded.
+  int get pendingCount => _store.pendingCount;
+
   SyncRelay? _relay;
 
   SyncRelay? get _current {
@@ -85,7 +95,7 @@ class SyncService {
 
   // ---------------- Lifecycle ----------------
 
-  /// Starts polling/pushing for the signed-in user. Safe to call repeatedly.
+  /// Starts the periodic cycle. Safe to call repeatedly.
   Future<void> start() async {
     if (!_store.syncEnabled) {
       _stopped = true;
@@ -95,19 +105,38 @@ class SyncService {
       return;
     }
     _stopped = false;
+    _failures = 0;
     resetRelay();
+    _installOnlineListener();
+    _armPoll();
+    await tick(manual: true);
+  }
+
+  /// Fires as soon as the device regains network access, so a queued change
+  /// goes up immediately instead of waiting for the next poll.
+  void _installOnlineListener() {
+    if (!kIsWeb || _onlineHooked) return;
+    _onlineHooked = true;
+    try {
+      online.hookOnline(() => unawaited(retryNow()));
+    } catch (_) {
+      // Non-web / unsupported browser: the periodic retry still covers us.
+    }
+  }
+
+  bool _onlineHooked = false;
+
+  void _armPoll() {
     _poll?.cancel();
-    _poll = Timer.periodic(pollInterval, (_) {
-      if (_busy) return;
-      if (_dirty) {
-        // A write came in mid-flight; flush it before pulling.
-        _dirty = false;
-        unawaited(push(silent: true));
-      } else {
-        unawaited(pull(silent: true));
-      }
-    });
-    await pull();
+    final backoff = _failures == 0
+        ? pollInterval
+        : Duration(
+            seconds: (pollInterval.inSeconds * (1 << _failures)).clamp(
+              pollInterval.inSeconds,
+              _maxBackoff.inSeconds,
+            ),
+          );
+    _poll = Timer.periodic(backoff, (_) => unawaited(tick()));
   }
 
   void stop() {
@@ -119,7 +148,7 @@ class SyncService {
     _setState(SyncState.off, '');
   }
 
-  /// Called by [Store] whenever local data changed: schedules a push.
+  /// Called by [Store] whenever local data changed.
   void markDirty() {
     if (!isActive) return;
     if (_busy) {
@@ -127,7 +156,14 @@ class SyncService {
       return;
     }
     _debounce?.cancel();
-    _debounce = Timer(writeDebounce, () => unawaited(push(silent: true)));
+    _debounce = Timer(writeDebounce, () => unawaited(tick()));
+  }
+
+  /// Flushes the outbox immediately — used when the network comes back.
+  Future<void> retryNow() async {
+    if (!isActive) return;
+    _failures = 0;
+    await tick(manual: true);
   }
 
   void _setState(SyncState s, String msg) {
@@ -136,174 +172,117 @@ class SyncService {
     _store.onSyncStatusChanged();
   }
 
-  // ---------------- Sync cycle ----------------
+  // ---------------- The cycle ----------------
 
-  /// Reads the workspace and merges anything newer than the local copy.
-  Future<void> pull({bool silent = false}) async {
+  /// Pull the server document, then upload anything still in the outbox.
+  Future<void> tick({bool manual = false}) async {
     final relay = _current;
     if (relay == null || _busy) return;
     _busy = true;
-    if (!silent) _setState(SyncState.syncing, '');
+    if (manual) _setState(SyncState.syncing, '');
+
     try {
+      // 1) Server -> local (server wins, outbox entries are protected).
       final remote = await relay.read();
-      _rev = (remote['rev'] as num?)?.toInt() ?? 0;
-      final changed = await _applyRemote(remote);
-      _pendingLocal = _countPending();
-      _lastSync = DateTime.now();
-      _setState(SyncState.idle, '');
-      if (!changed) _store.onSyncStatusChanged();
+      final serverEntities = (remote['entities'] as Map?) ?? const {};
+      await _applyServerState(serverEntities);
 
-      // Merge forward: if this device holds records the workspace does not have
-      // (or holds newer copies), publish them. Without this a late-joining
-      // device's rows could be dropped whenever the other device overwrote the
-      // document while its upload was still in flight.
-      if (_hasLocalOnly(_store.currentUserId, remote)) {
-        _busy = false;
-        await push(silent: true);
+      // 2) Local outbox -> server.
+      final owner = _store.currentUserId;
+      final outbox = _store.pendingSnapshot(owner);
+      if (outbox.isNotEmpty && owner.isNotEmpty) {
+        await relay.write({'rev': 0, 'entities': outbox});
+        await _store.clearPending(outbox.keys);
+        _lastCount = outbox.length;
+      } else {
+        _lastCount = serverEntities.length;
       }
-    } catch (e) {
-      _setState(SyncState.offline, _friendly(e));
-      if (!silent) rethrow;
-    } finally {
-      _busy = false;
-    }
-  }
 
-  /// True when local data is missing from, or newer than, the remote snapshot.
-  bool _hasLocalOnly(String ownerId, Map remote) {
-    final remoteEntities = (remote['entities'] as Map?) ?? const {};
-    final local = _store.syncSnapshot(ownerId);
-    if (local.isEmpty) return false;
-    for (final e in local.entries) {
-      final mine = e.value;
-      final theirs = remoteEntities[e.key];
-      final mineStamp = (mine['updatedAt'] as num?)?.toInt() ?? 0;
-      if (theirs is! Map) return true;
-      final theirStamp = (theirs['updatedAt'] as num?)?.toInt() ?? 0;
-      if (mineStamp > theirStamp) return true;
-    }
-    return false;
-  }
-
-  /// Uploads local records newer than the server's copy.
-  Future<void> push({bool silent = false}) async {
-    if (!isActive) return;
-    final relay = _current;
-    if (relay == null || _busy) return;
-    final owner = _store.currentUserId;
-    if (owner.isEmpty) return;
-    _busy = true;
-    if (!silent) _setState(SyncState.syncing, '');
-    try {
-      final entities = _store.syncSnapshot(owner);
-      _lastCount = entities.length;
-      await relay.write({'rev': _rev, 'entities': entities});
-      _pendingLocal = 0;
+      _failures = 0;
+      _dirty = false;
       _lastSync = DateTime.now();
       _setState(SyncState.idle, '');
-      // Read straight back so this device also sees whatever the other one
-      // had already published (including rows it wrote while we were offline).
-      final echo = await relay.read();
-      _rev = (echo['rev'] as num?)?.toInt() ?? _rev;
-      await _applyRemote(echo);
+      _store.onSyncStatusChanged();
     } catch (e) {
+      _failures = (_failures + 1).clamp(1, 6);
       _dirty = true;
       _setState(SyncState.offline, _friendly(e));
-      if (!silent) rethrow;
+      _armPoll();
     } finally {
       _busy = false;
     }
   }
 
-  /// Merges a workspace payload into the local boxes.
-  ///
-  /// Awaited (not fire-and-forget) so the caller only reports success once the
-  /// records are on disk, and so the UI is notified exactly once.
-  Future<bool> _applyRemote(Map remote) async {
-    final entities = remote['entities'];
-    if (entities is! Map) return false;
+  /// Pull-only, kept for the "sync now" button.
+  Future<void> pull({bool silent = false}) => tick(manual: !silent);
 
+  /// Push-only; the outbox is flushed by [tick], so this just runs a cycle.
+  Future<void> push({bool silent = false}) => tick(manual: !silent);
+
+  /// Writes the server snapshot into the boxes and drops vanished records.
+  Future<void> _applyServerState(Map serverEntities) async {
     var changed = false;
+    final keys = <String>{};
+    for (final e in serverEntities.entries) {
+      final key = '${e.key}';
+      keys.add(key);
+    }
     _store.beginRemoteApply();
     try {
-      for (final e in entities.entries) {
-        final key = '${e.key}';
-        final slash = key.indexOf('/');
-        if (slash <= 0) continue;
-        final entity = key.substring(0, slash);
-        final boxKey = key.substring(slash + 1);
-        final value = e.value;
-        if (value is! Map) continue;
-        final didChange = await _store.applyRemoteEntity(
-          entity,
-          boxKey,
-          Map<String, dynamic>.from(value),
-        );
-        if (didChange) changed = true;
-      }
+      changed = _store.applyServerSnapshot(serverEntities);
+      final pruned = await _store.pruneMissing(_store.currentUserId, keys);
+      if (pruned) changed = true;
     } finally {
       _store.endRemoteApply(changed);
     }
-    return changed;
-  }
-
-  int _countPending() {
-    final owner = _store.currentUserId;
-    if (owner.isEmpty) return 0;
-    final localMax = _store.syncMaxUpdatedAt(owner);
-    final seen = _store.syncMaxUpdatedAtCache;
-    return localMax > seen ? 1 : 0;
   }
 
   String _friendly(Object e) {
     final s = '$e';
-    if (s.contains('XMLHttpRequest') || s.contains('Failed to fetch')) {
-      return 'network unreachable';
+    if (s.contains('SocketException') ||
+        s.contains('XMLHttpRequest') ||
+        s.contains('Failed to fetch') ||
+        s.contains('ClientException')) {
+      return 'offline';
     }
     if (s.contains('TimeoutException')) return 'timeout';
-    return s.length > 90 ? '${s.substring(0, 90)}…' : s;
+    return s.length > 80 ? '${s.substring(0, 80)}…' : s;
   }
 
   // ---------------- Setup helpers ----------------
 
-  /// Creates a brand-new workspace code and turns sync on.
-  ///
-  /// Everything already on this device is uploaded so the second device starts
-  /// from a complete copy instead of an empty screen.
+  /// Creates a brand-new workspace and uploads everything on this device.
   Future<String> createWorkspace() async {
     final newCode = _randomCode();
     resetRelay();
-    _rev = 0;
     await _store.setSyncConfig(
       code: newCode,
       enabled: true,
       ownerId: _store.currentUserId,
     );
-    await _store.setSyncStamp(0);
-    await _store.reStampAll(_store.currentUserId);
-    _stopped = false;
     _relay = makeRelay(baseUrl, newCode);
-    await push();
-    await start();
+    // Everything currently on the device becomes the initial server content.
+    await _store.queueAllForUpload(_store.currentUserId);
+    _stopped = false;
+    _failures = 0;
+    await tick(manual: true);
+    _armPoll();
     return newCode;
   }
 
-  /// Joins an existing workspace by code.
+  /// Joins an existing workspace.
   ///
-  /// Pulls first so the incoming rows land, then re-stamps and pushes the local
-  /// records so the other device receives them too (true two-way merge).
+  /// The server copy replaces the local cache, but anything this device edited
+  /// while offline is uploaded on top instead of being lost.
   Future<void> joinWorkspace(String newCode) async {
     final clean = newCode.trim().toUpperCase();
     resetRelay();
-    _rev = 0;
     await _store.setSyncConfig(code: clean, enabled: true);
-    await _store.setSyncStamp(0);
-    _stopped = false;
     _relay = makeRelay(baseUrl, clean);
-    await pull();
-    await _store.reStampAll(_store.currentUserId);
-    await push();
-    await start();
+    _stopped = false;
+    _failures = 0;
+    await tick(manual: true);
+    _armPoll();
   }
 
   static String _randomCode() {
@@ -322,11 +301,11 @@ class SyncService {
       case SyncState.off:
         return ko ? '동기화 꺼짐' : 'Sync off';
       case SyncState.idle:
-        return ko ? '연결됨 · 최신 상태' : 'Connected · up to date';
+        return ko ? '서버와 동일' : 'In sync with server';
       case SyncState.syncing:
         return ko ? '동기화 중…' : 'Syncing…';
       case SyncState.offline:
-        return ko ? '연결 안 됨 (오프라인)' : 'Offline';
+        return ko ? '서버 연결 안 됨 — 재시도 중' : 'Server unreachable — retrying';
       case SyncState.error:
         return ko ? '오류' : 'Error';
     }
