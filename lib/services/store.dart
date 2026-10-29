@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
+import 'sync_service.dart';
 
 /// Central application state & persistence layer.
 ///
@@ -37,6 +38,22 @@ class Store extends ChangeNotifier {
 
   bool _ready = false;
   bool get isReady => _ready;
+
+  /// Cross-device sync engine (created on first use).
+  SyncService? _sync;
+  SyncService get sync => _sync ??= SyncService(this);
+
+  /// Suppresses the auto-push while the app itself is applying remote data.
+  bool _applyingRemote = false;
+
+  void onSyncStatusChanged() => notifyListeners();
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    // Any local mutation should be pushed to the other devices.
+    if (_ready && !_applyingRemote) sync.markDirty();
+  }
 
   String _currentUserId = '';
   bool _masterViewingAll = false;
@@ -358,7 +375,7 @@ class Store extends ChangeNotifier {
 
   List<Category> categoriesFor(String ownerId) {
     final list = _cats.values
-        .where((e) => e['ownerId'] == ownerId)
+        .where((e) => e['ownerId'] == ownerId && e['deletedAt'] == null)
         .map((e) => Category.fromMap(e))
         .toList();
     list.sort((a, b) => a.order.compareTo(b.order));
@@ -374,13 +391,12 @@ class Store extends ChangeNotifier {
   Category? categoryById(String catId, {String? ownerId}) {
     final oid = ownerId ?? _scopeId;
     final raw = _cats.get(_catKey(oid, catId));
-    return raw == null ? null : Category.fromMap(raw);
+    if (raw == null || raw['deletedAt'] != null) return null;
+    return Category.fromMap(raw);
   }
 
   Future<void> saveCategory(Category c) async {
-    final oid = c.ownerId.isEmpty ? _scopeId : c.ownerId;
-    c.ownerId = oid;
-    await _cats.put(_catKey(oid, c.id), c.toMap());
+    await _putCat(c);
     notifyListeners();
   }
 
@@ -396,6 +412,7 @@ class Store extends ChangeNotifier {
     await _cats.put(_catKey(ownerId, id), {
       'id': id,
       'ownerId': ownerId,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
       'label': label,
       'emoji': emoji,
       'colorValue': color,
@@ -408,6 +425,7 @@ class Store extends ChangeNotifier {
   }
 
   Future<void> deleteCategory(String catId) async {
+    final cat = categoryById(catId);
     final ownerId = _scopeId;
     final c = categoryById(catId);
     await _cats.delete(_catKey(ownerId, catId));
@@ -420,6 +438,12 @@ class Store extends ChangeNotifier {
       }
       await _tasks.put(t.id, t.toMap());
     }
+    if (cat != null) {
+      final m = cat.toMap();
+      stamp(m);
+      m['deletedAt'] = DateTime.now().millisecondsSinceEpoch;
+      await _cats.put(_catKey(cat.ownerId, cat.id), m);
+    }
     addLog('Delete tab', c?.label ?? catId);
     notifyListeners();
   }
@@ -427,8 +451,7 @@ class Store extends ChangeNotifier {
   Future<void> reorderCategories(List<Category> ordered) async {
     for (var i = 0; i < ordered.length; i++) {
       ordered[i].order = i;
-      final oid = ordered[i].ownerId.isEmpty ? _scopeId : ordered[i].ownerId;
-      await _cats.put(_catKey(oid, ordered[i].id), ordered[i].toMap());
+      await _putCat(ordered[i]);
     }
     notifyListeners();
   }
@@ -436,7 +459,7 @@ class Store extends ChangeNotifier {
   // ---------------- Tasks ----------------
   List<Task> tasksForOwner(String ownerId) {
     final list = _tasks.values
-        .where((e) => e['ownerId'] == ownerId)
+        .where((e) => e['ownerId'] == ownerId && e['deletedAt'] == null)
         .map((e) => Task.fromMap(e))
         .toList();
     _sortTasks(list);
@@ -455,17 +478,23 @@ class Store extends ChangeNotifier {
   /// Tasks for the current scope (own data, or all users if master-viewing-all).
   List<Task> get tasks {
     if (isMaster && _masterViewingAll) {
-      final list = _tasks.values.map((e) => Task.fromMap(e)).toList();
+      final list = _tasks.values
+          .where((e) => e['deletedAt'] == null)
+          .map((e) => Task.fromMap(e))
+          .toList();
       _sortTasks(list);
       return list;
     }
     return tasksForOwner(_scopeId);
   }
 
-  List<Task> allTasksRaw() =>
-      _tasks.values.map((e) => Task.fromMap(e)).toList();
+  List<Task> allTasksRaw() => _tasks.values
+      .where((e) => e['deletedAt'] == null)
+      .map((e) => Task.fromMap(e))
+      .toList();
 
-  int allTaskTotal() => _tasks.length;
+  int allTaskTotal() =>
+      _tasks.values.where((e) => e['deletedAt'] == null).length;
 
   List<Task> tasksForCategory(
     String categoryId, {
@@ -503,7 +532,7 @@ class Store extends ChangeNotifier {
 
   Future<void> saveTask(Task t) async {
     if (t.ownerId.isEmpty) t.ownerId = _scopeId;
-    await _tasks.put(t.id, t.toMap());
+    await _putTask(t);
     notifyListeners();
   }
 
@@ -525,7 +554,7 @@ class Store extends ChangeNotifier {
       categoryId: categoryId,
       order: maxOrder,
     );
-    await _tasks.put(t.id, t.toMap());
+    await _putTask(t);
     addLog('Add task', title);
     notifyListeners();
     return t;
@@ -534,20 +563,24 @@ class Store extends ChangeNotifier {
   Future<void> toggleComplete(Task t) async {
     t.completed = !t.completed;
     t.completedAt = t.completed ? DateTime.now() : null;
-    await _tasks.put(t.id, t.toMap());
+    await _putTask(t);
     addLog(t.completed ? 'Complete task' : 'Reopen task', t.title);
     notifyListeners();
   }
 
   Future<void> deleteTask(Task t) async {
-    await _tasks.delete(t.id);
+    // Soft delete: keep a tombstone so the removal also reaches other devices.
+    final m = t.toMap();
+    stamp(m);
+    m['deletedAt'] = DateTime.now().millisecondsSinceEpoch;
+    await _tasks.put(t.id, m);
     addLog('Delete task', t.title);
     notifyListeners();
   }
 
   Future<void> moveTask(Task t, String newCategoryId) async {
     t.categoryId = newCategoryId;
-    await _tasks.put(t.id, t.toMap());
+    await _putTask(t);
     final label = categoryById(newCategoryId)?.label ?? newCategoryId;
     addLog('Move task', '${t.title} → $label');
     notifyListeners();
@@ -569,13 +602,189 @@ class Store extends ChangeNotifier {
       extra.add(categoryId);
     }
     t.categoryIds = extra;
-    await _tasks.put(t.id, t.toMap());
+    await _putTask(t);
     notifyListeners();
   }
 
+  // ---------------- Sync support ----------------
+  /// Entity boxes that participate in cross-device sync, with the box's
+  /// storage-key builder. Tasks/voices are keyed by their own id; categories
+  /// and logs are keyed by `ownerId::id`.
+  Map<String, Box> get _syncBoxes => {
+    'tasks': _tasks,
+    'categories': _cats,
+    'voices': _voices,
+  };
+
+  /// Every syncable record of [ownerId] as `{boxKey: map}`, including
+  /// soft-deleted tombstones so deletions propagate. Server bookkeeping fields
+  /// (`_rev`, `_updatedAt`) are stripped.
+  Map<String, Map<String, dynamic>> syncSnapshot(String ownerId) {
+    final out = <String, Map<String, dynamic>>{};
+    for (final e in _syncBoxes.entries) {
+      final prefix = '${e.key}/';
+      for (final k in e.value.keys) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        final m = Map<String, dynamic>.from(raw);
+        m.remove('_rev');
+        m.remove('_updatedAt');
+        out['$prefix$k'] = m;
+      }
+    }
+    return out;
+  }
+
+  /// Timestamps of everything that changed since the last upload, per entity.
+  Map<String, int> syncUpdatedAt(String ownerId) {
+    final out = <String, int>{};
+    for (final e in _syncBoxes.entries) {
+      final prefix = '${e.key}/';
+      for (final k in e.value.keys) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        out['$prefix$k'] = (raw['updatedAt'] as num?)?.toInt() ?? 0;
+      }
+    }
+    return out;
+  }
+
+  /// Highest `updatedAt` currently stored for [ownerId] (0 when none).
+  int syncMaxUpdatedAt(String ownerId) {
+    var max = 0;
+    for (final v in syncUpdatedAt(ownerId).values) {
+      if (v > max) max = v;
+    }
+    return max;
+  }
+
+  /// Marks an entity map as touched now. Call before persisting a change.
+  static int stamp(Map<String, dynamic> m) {
+    final t = DateTime.now().millisecondsSinceEpoch;
+    m['updatedAt'] = t;
+    return t;
+  }
+
+  /// Persists a task, stamping it as changed now (so it wins last-writer-wins
+  /// against stale copies on other devices).
+  Future<void> _putTask(Task t) async {
+    final m = t.toMap();
+    stamp(m);
+    t.updatedAt = m['updatedAt'] as int;
+    await _tasks.put(t.id, m);
+  }
+
+  /// Persists a category, stamped as changed now.
+  Future<void> _putCat(Category c) async {
+    final oid = c.ownerId.isEmpty ? _scopeId : c.ownerId;
+    c.ownerId = oid;
+    final m = c.toMap();
+    stamp(m);
+    c.updatedAt = m['updatedAt'] as int;
+    await _cats.put(_catKey(oid, c.id), m);
+  }
+
+  /// Persists a voice note, stamped as changed now.
+  Future<void> _putVoice(VoiceNote v) async {
+    if (v.ownerId.isEmpty) v.ownerId = _scopeId;
+    await _voices.put(v.id, v.toMap());
+  }
+
+  /// Applies a record coming from the sync server (last-writer-wins).
+  ///
+  /// Returns true when the local copy changed. A missing/deleted record is
+  /// kept as a tombstone (not erased) so the deletion keeps propagating.
+  Future<bool> applyRemoteEntity(
+    String entity,
+    String boxKey,
+    Map<String, dynamic> remote,
+  ) async {
+    final box = _syncBoxes[entity];
+    if (box == null) return false;
+    final local = box.get(boxKey);
+    final remoteStamp =
+        (remote['updatedAt'] as num?)?.toInt() ?? 0;
+    final localStamp = local is Map
+        ? ((local['updatedAt'] as num?)?.toInt() ?? 0)
+        : -1;
+    // Local wins when it is strictly newer (offline edits are preserved).
+    if (localStamp > remoteStamp) return false;
+
+    final incoming = <String, dynamic>{};
+    for (final e in remote.entries) {
+      if (e.key == '_rev' || e.key == '_updatedAt') continue;
+      incoming['${e.key}'] = e.value;
+    }
+    incoming['updatedAt'] = remoteStamp;
+    incoming['deletedAt'] = (incoming['deletedAt'] as num?)?.toInt();
+    final id = '${incoming['id'] ?? ''}';
+    if (id.isEmpty) return false;
+
+    final same = local is Map &&
+        _shallowEquals(Map<String, dynamic>.from(local), incoming);
+    if (same) return false;
+
+    await box.put(boxKey, incoming);
+    return true;
+  }
+
+  static bool _shallowEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k)) return false;
+      final va = a[k];
+      final vb = b[k];
+      if (va is List && vb is List) {
+        if (va.length != vb.length) return false;
+        for (var i = 0; i < va.length; i++) {
+          if ('${va[i]}' != '${vb[i]}') return false;
+        }
+        continue;
+      }
+      if ('$va' != '$vb') return false;
+    }
+    return true;
+  }
+
+  /// Re-reads all boxes from disk after a sync pull changed them.
+  void onRemoteApplied() => notifyListeners();
+
+  // ---------------- Sync metadata (per device) ----------------
+  String get syncCode => (_users.get('__sync_code__') as String?) ?? '';
+
+  bool get syncEnabled =>
+      ((_users.get('__sync_on__') as bool?) ?? false) && syncCode.isNotEmpty;
+
+  String get syncUrl => (_users.get('__sync_url__') as String?) ?? '';
+
+  /// Which user owns the shared workspace; remembered so login always targets
+  /// the same cloud document.
+  String get syncOwnerId => (_users.get('__sync_owner__') as String?) ?? '';
+
+  Future<void> setSyncConfig({
+    String? code,
+    String? url,
+    bool? enabled,
+    String? ownerId,
+  }) async {
+    if (code != null) await _users.put('__sync_code__', code);
+    if (url != null) await _users.put('__sync_url__', url);
+    if (enabled != null) await _users.put('__sync_on__', enabled);
+    if (ownerId != null) await _users.put('__sync_owner__', ownerId);
+    notifyListeners();
+  }
+
+  int get syncMaxUpdatedAtCache =>
+      (_users.get('__sync_stamp__') as num?)?.toInt() ?? 0;
+
+  Future<void> setSyncStamp(int ms) async {
+    await _users.put('__sync_stamp__', ms);
+  }
+
   /// Seed the recurring bills (rent & warehouse) for the current user.
-  Future<void> seedRecurringBillsIfEmpty() async {
-    final ownerId = _scopeId;
+  Future<void> seedRecurringBillsIfEmpty() async {    final ownerId = _scopeId;
     final mine = tasksForOwner(ownerId);
     final ko = language == 'ko';
     if (mine.any((t) => t.recurrence == 'monthly' && t.recurrenceDay == 12)) {
@@ -601,8 +810,8 @@ class Store extends ChangeNotifier {
       recurrenceDay: 12,
       amount: 30000,
     );
-    await _tasks.put(rent.id, rent.toMap());
-    await _tasks.put(warehouse.id, warehouse.toMap());
+    await _putTask(rent);
+    await _putTask(warehouse);
     notifyListeners();
   }
 
@@ -623,7 +832,7 @@ class Store extends ChangeNotifier {
         categoryId: 'daily',
         recurrence: 'daily',
       );
-      await _tasks.put(t.id, t.toMap());
+      await _putTask(t);
     }
     notifyListeners();
   }
@@ -667,7 +876,7 @@ class Store extends ChangeNotifier {
   // ---------------- Voice notes ----------------
   List<VoiceNote> get voiceNotes {
     final list = _voices.values
-        .where((e) => e['ownerId'] == _scopeId)
+        .where((e) => e['ownerId'] == _scopeId && e['deletedAt'] == null)
         .map((e) => VoiceNote.fromMap(e))
         .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -675,8 +884,7 @@ class Store extends ChangeNotifier {
   }
 
   Future<void> saveVoiceNote(VoiceNote v) async {
-    if (v.ownerId.isEmpty) v.ownerId = _scopeId;
-    await _voices.put(v.id, v.toMap());
+    await _putVoice(v);
     notifyListeners();
   }
 

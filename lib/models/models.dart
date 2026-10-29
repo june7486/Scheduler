@@ -108,6 +108,15 @@ class Task {
   /// Long-term flag (long-term category behaviour).
   bool longTerm;
 
+  /// Last local modification time, in epoch milliseconds. Used by the sync
+  /// engine to decide which copy of a record is newer. 0 = never stamped.
+  int updatedAt;
+
+  /// Soft-delete marker (epoch ms). Non-null means "deleted", which lets a
+  /// deletion propagate to other devices instead of the record coming back
+  /// from a stale copy.
+  int? deletedAt;
+
   Task({
     required this.id,
     required this.title,
@@ -126,6 +135,8 @@ class Task {
     this.relatedTo = '',
     this.pinned = false,
     this.longTerm = false,
+    this.updatedAt = 0,
+    this.deletedAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() => {
@@ -146,6 +157,8 @@ class Task {
     'relatedTo': relatedTo,
     'pinned': pinned,
     'longTerm': longTerm,
+    'updatedAt': updatedAt,
+    'deletedAt': deletedAt,
   };
 
   factory Task.fromMap(Map<dynamic, dynamic> map) => Task(
@@ -174,6 +187,8 @@ class Task {
     relatedTo: (map['relatedTo'] ?? '') as String,
     pinned: (map['pinned'] ?? false) as bool,
     longTerm: (map['longTerm'] ?? false) as bool,
+    updatedAt: (map['updatedAt'] as num?)?.toInt() ?? 0,
+    deletedAt: (map['deletedAt'] as num?)?.toInt(),
   );
 }
 
@@ -194,6 +209,12 @@ class Category {
   /// keeps its own label instead of following the UI language.
   bool isCustomLabel;
 
+  /// Last local modification time (epoch ms) — sync metadata.
+  int updatedAt;
+
+  /// Soft-delete marker (epoch ms) — sync metadata.
+  int? deletedAt;
+
   Category({
     required this.id,
     this.ownerId = '',
@@ -204,6 +225,8 @@ class Category {
     this.enabled = true,
     this.showInTopTabs = true,
     this.isCustomLabel = false,
+    this.updatedAt = 0,
+    this.deletedAt,
   });
 
   Map<String, dynamic> toMap() => {
@@ -216,6 +239,8 @@ class Category {
     'enabled': enabled,
     'showInTopTabs': showInTopTabs,
     'isCustomLabel': isCustomLabel,
+    'updatedAt': updatedAt,
+    'deletedAt': deletedAt,
   };
 
   factory Category.fromMap(Map<dynamic, dynamic> map) => Category(
@@ -228,6 +253,8 @@ class Category {
     enabled: (map['enabled'] ?? true) as bool,
     showInTopTabs: (map['showInTopTabs'] ?? true) as bool,
     isCustomLabel: (map['isCustomLabel'] ?? false) as bool,
+    updatedAt: (map['updatedAt'] as num?)?.toInt() ?? 0,
+    deletedAt: (map['deletedAt'] as num?)?.toInt(),
   );
 }
 

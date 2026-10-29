@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +13,7 @@ import '../services/drive_service.dart';
 import '../services/file_pick_stub.dart'
     if (dart.library.js_interop) '../services/file_pick_web.dart' as picker;
 import '../services/session_service.dart';
+import '../services/sync_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_panels.dart';
@@ -184,6 +187,8 @@ class SettingsScreen extends StatelessWidget {
               subtitle: context.tr('open_calendar_hint'),
               onTap: () => CalendarService.openCalendar(),
             ),
+            _Group(context.tr('sync_grp')),
+            _SyncPanel(store: store),
             _Group(context.tr('drive_grp')),
             _Tile(
               icon: Icons.add_to_drive_outlined,
@@ -817,6 +822,296 @@ class _Tile extends StatelessWidget {
         color: p.inkSoft,
       ),
       onTap: onTap,
+    );
+  }
+}
+
+/// Cross-device sync controls: status, workspace code, manual sync, on/off.
+class _SyncPanel extends StatelessWidget {
+  final Store store;
+  const _SyncPanel({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final ko = store.language == 'ko';
+    final svc = store.sync;
+    final on = store.syncEnabled;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: p.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: p.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  on ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                  size: 18,
+                  color: on ? p.indigo : p.inkSoft,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    ko ? '기기 간 자동 동기화' : 'Sync across devices',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: on,
+                  activeThumbColor: p.indigo,
+                  onChanged: (v) async {
+                    if (v) {
+                      await svc.start();
+                      if (!store.syncEnabled) {
+                        // Nothing configured yet → open the setup dialog.
+                        await _setup(context, ko: ko);
+                      }
+                    } else {
+                      await store.setSyncConfig(enabled: false);
+                      svc.stop();
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              on
+                  ? svc.statusLabel(ko: ko)
+                  : (ko
+                        ? '꺼져 있음 — PC와 휴대폰 내용이 서로 다릅니다'
+                        : 'Off — each device keeps its own data'),
+              style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+            ),
+            if (on) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    ko ? '동기화 코드' : 'Sync code',
+                    style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+                  ),
+                  const SizedBox(width: 8),
+                  SelectableText(
+                    store.syncCode,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                      color: p.ink,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _chipBtn(
+                    icon: Icons.sync,
+                    label: ko ? '지금 동기화' : 'Sync now',
+                    onTap: () async {
+                      try {
+                        await svc.pull();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(ko ? '동기화 완료' : 'Synced'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('$e')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  _chipBtn(
+                    icon: Icons.copy_outlined,
+                    label: ko ? '코드 복사' : 'Copy code',
+                    onTap: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: store.syncCode),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ko
+                                  ? '코드를 복사했습니다 — 다른 기기에 입력하세요'
+                                  : 'Copied — enter it on your other device',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _chipBtn(
+                    icon: Icons.refresh,
+                    label: ko ? '새로 시작' : 'New code',
+                    onTap: () async {
+                      final oldCode = store.syncCode;
+                      if (oldCode.isNotEmpty) {
+                        await Clipboard.setData(ClipboardData(text: oldCode));
+                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ko
+                                ? '새 코드를 발급했습니다. 이전 코드($oldCode)는 복사해 두었습니다.'
+                                : 'New code issued. Old code ($oldCode) copied.',
+                          ),
+                          duration: const Duration(seconds: 5),
+                        ),
+                      );
+                      await svc.createWorkspace();
+                    },
+                  ),
+                  _chipBtn(
+                    icon: Icons.login,
+                    label: ko ? '코드로 연결' : 'Join by code',
+                    onTap: () => _setup(context, ko: ko),
+                  ),
+                ],
+              ),
+              if (svc.lastSync != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${ko ? '마지막 동기화' : 'Last sync'} · '
+                  '${_hhmmss(svc.lastSync!)}',
+                  style: TextStyle(fontSize: 11, color: p.inkSoft),
+                ),
+              ],
+            ] else ...[
+              const SizedBox(height: 10),
+              _chipBtn(
+                icon: Icons.power_settings_new,
+                label: ko ? '동기화 켜기' : 'Turn on sync',
+                onTap: () => _setup(context, ko: ko),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _hhmmss(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:'
+      '${d.minute.toString().padLeft(2, '0')}:'
+      '${d.second.toString().padLeft(2, '0')}';
+
+  Widget _chipBtn({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: p.indigo.withValues(alpha: 0.55)),
+          color: p.indigo.withValues(alpha: 0.08),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: p.indigo),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: p.indigo,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Asks for an existing code (join) or offers to create a new workspace.
+  Future<void> _setup(BuildContext context, {required bool ko}) async {
+    final ctrl = TextEditingController(text: store.syncCode);
+    final urlCtrl = TextEditingController(text: store.syncUrl);
+    final svc = store.sync;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ko ? '자동 동기화 연결' : 'Connect auto-sync'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ko
+                    ? 'PC에서 만든 코드를 휴대폰에 입력하면 두 기기가 같은 내용을 봅니다.'
+                    : 'Enter the code from your PC so both devices show the same data.',
+                style: TextStyle(fontSize: 12, color: p.inkSoft),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: ctrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: ko ? '동기화 코드' : 'Sync code',
+                  hintText: 'ABCD2345XY',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: urlCtrl,
+                decoration: InputDecoration(
+                  labelText: ko ? '동기화 서버 (선택)' : 'Sync server (optional)',
+                  hintText: SyncService.defaultBaseUrl,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ko ? '취소' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await store.setSyncConfig(url: urlCtrl.text.trim());
+              final code = ctrl.text.trim();
+              Navigator.pop(ctx);
+              if (code.isEmpty) {
+                await svc.createWorkspace();
+              } else {
+                await svc.joinWorkspace(code);
+              }
+            },
+            child: Text(ko ? '연결' : 'Connect'),
+          ),
+        ],
+      ),
     );
   }
 }
