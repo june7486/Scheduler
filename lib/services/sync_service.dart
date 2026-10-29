@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 
 import 'online_hook_stub.dart'
     if (dart.library.js_interop) 'online_hook_web.dart' as online;
@@ -85,8 +85,12 @@ class SyncService {
 
   SyncRelay? _relay;
 
-  SyncRelay? get _current {
-    if (!isActive || code.isEmpty) return null;
+  /// The transport for the current workspace.
+  ///
+  /// Deliberately does NOT depend on [_stopped]: a manual "sync now" must work
+  /// even before the timer loop was armed.
+  SyncRelay? _relayFor(String code) {
+    if (code.isEmpty) return null;
     return _relay ??= makeRelay(baseUrl, code);
   }
 
@@ -176,8 +180,17 @@ class SyncService {
 
   /// Pull the server document, then upload anything still in the outbox.
   Future<void> tick({bool manual = false}) async {
-    final relay = _current;
-    if (relay == null || _busy) return;
+    if (_busy) return;
+    if (_store.currentUserId.isEmpty || _store.syncCode.isEmpty) {
+      // Nothing to talk to yet. Report it instead of silently "succeeding".
+      _setState(SyncState.offline, 'not signed in');
+      return;
+    }
+    final relay = _relayFor(_store.syncCode);
+    if (relay == null) {
+      _setState(SyncState.offline, 'not configured');
+      return;
+    }
     _busy = true;
     if (manual) _setState(SyncState.syncing, '');
 
@@ -201,11 +214,18 @@ class SyncService {
       _failures = 0;
       _dirty = false;
       _lastSync = DateTime.now();
-      _setState(SyncState.idle, '');
+      // Only claim success when nothing is still waiting to be uploaded.
+      final stillQueued = _store.pendingCount;
+      _setState(
+        stillQueued == 0 ? SyncState.idle : SyncState.syncing,
+        stillQueued == 0 ? '' : 'still uploading',
+      );
       _store.onSyncStatusChanged();
-    } catch (e) {
+    } catch (e, st) {
       _failures = (_failures + 1).clamp(1, 6);
       _dirty = true;
+      debugPrint('SYNCDBG ${e.runtimeType}: $e');
+      debugPrint('SYNCDBG at ${st.toString().split('\n').take(4).join(' | ')}');
       _setState(SyncState.offline, _friendly(e));
       _armPoll();
     } finally {

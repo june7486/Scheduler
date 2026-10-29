@@ -47,6 +47,9 @@ class Store extends ChangeNotifier {
   SyncService? _sync;
   SyncService get sync => _sync ??= SyncService(this);
 
+  /// Replaces the engine instance (used by tests to drive a cycle directly).
+  void attachSync(SyncService svc) => _sync = svc;
+
   /// Suppresses the auto-push while the app itself is applying remote data.
   int _remoteDepth = 0;
 
@@ -233,9 +236,17 @@ class Store extends ChangeNotifier {
     return 'ACC${digest.toString().substring(0, 28).toUpperCase()}';
   }
 
-  void setCurrentUser(String id) {
+  /// Restores the signed-in user after a reload.
+  ///
+  /// Sync has to be restarted here too: the page reload wipes the timer and
+  /// [currentUserId], and without this the app would look logged in while
+  /// silently never talking to the server again.
+  Future<void> setCurrentUser(String id) async {
     _currentUserId = id;
     notifyListeners();
+    if (id.isEmpty) return;
+    await enableAutoSyncForUser();
+    unawaited(sync.start());
   }
 
   void logoutCurrent() {
@@ -810,21 +821,27 @@ class Store extends ChangeNotifier {
   Future<void> clearAllPending() async => _users.put(_pendingKey, <String>[]);
 
   /// Snapshot of ONLY the records that still need uploading.
+  ///
+  /// Deliberately does not filter on `ownerId`: the record was explicitly
+  /// queued by a write on this device, and dropping it because the field is
+  /// missing would leave it stuck in the outbox forever.
   Map<String, Map<String, dynamic>> pendingSnapshot(String ownerId) {
     final out = <String, Map<String, dynamic>>{};
     final pending = pendingKeys;
     if (pending.isEmpty) return out;
-    for (final e in _syncBoxes.entries) {
-      for (final k in e.value.keys) {
-        final full = '${e.key}/$k';
-        if (!pending.contains(full)) continue;
-        final raw = e.value.get(k);
-        if (raw is! Map) continue;
-        final m = Map<String, dynamic>.from(raw);
-        m.remove('_rev');
-        m.remove('_updatedAt');
-        out[full] = m;
-      }
+    for (final full in pending) {
+      final slash = full.indexOf('/');
+      if (slash <= 0) continue;
+      final box = _syncBoxes[full.substring(0, slash)];
+      if (box == null) continue;
+      final raw = box.get(full.substring(slash + 1));
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw);
+      m.remove('_rev');
+      m.remove('_updatedAt');
+      // Guarantee the server record is attributable to this workspace.
+      if ((m['ownerId'] ?? '') == '') m['ownerId'] = ownerId;
+      out[full] = m;
     }
     return out;
   }

@@ -29,6 +29,11 @@ abstract class SyncRelay {
   Future<void> write(Map<String, dynamic> state);
 }
 
+/// Builds the production relay for a workspace code (used by tests/probes).
+class NtfyRelayFactory {
+  static SyncRelay of(String code) => NtfyRelay(code);
+}
+
 /// Picks the right transport for a user-supplied base URL.
 SyncRelay makeRelay(String baseUrl, String code) {
   final trimmed = baseUrl.trim();
@@ -65,7 +70,7 @@ class RestRelay implements SyncRelay {
         .get(_uri('/state', {'code': code}))
         .timeout(_timeout);
     if (res.statusCode != 200) {
-      throw RelayException('HTTP ${res.statusCode}');
+      throw RelayException('HTTP ${res.statusCode} ${_snippet(res.body)}');
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map) throw const RelayException('Bad response');
@@ -88,7 +93,7 @@ class RestRelay implements SyncRelay {
         )
         .timeout(_timeout);
     if (res.statusCode != 200) {
-      throw RelayException('HTTP ${res.statusCode}');
+      throw RelayException('HTTP ${res.statusCode} ${_snippet(res.body)}');
     }
   }
 }
@@ -119,25 +124,50 @@ class NtfyRelay implements SyncRelay {
   /// Envelope prefix, so unrelated messages on the same topic are ignored.
   static const _marker = 'J1';
 
+  static final _base64 = RegExp(r'^[A-Za-z0-9+/=]+$');
+
   /// Topic name: deterministic from the code, unguessable without it.
   String get topic {
     final d = sha256.convert(utf8.encode('june-sync-topic-v1|${code.toUpperCase()}'));
     return 'junes${d.toString().substring(0, 24)}';
   }
 
-  Uri _poll() => Uri.parse(
-    'https://ntfy.sh/$topic/json?poll=1&since=all&scheduled=0',
-  );
+  Uri _poll([String since = 'all']) =>
+      Uri.parse('https://ntfy.sh/$topic/json?poll=1&since=$since');
 
   @override
   Future<Map<String, dynamic>> read() async {
-    final res = await http.get(_poll()).timeout(_timeout);
+    http.Response? res;
+    // ignore: unused_local_variable
+    Object? lastError;
+    // `since=all` is the primary form; a couple of fallbacks keep a single
+    // odd gateway response from pinning the client to "offline" forever.
+    for (final since in const ['all', '24h', '7d']) {
+      try {
+        final r = await http.get(_poll(since)).timeout(_timeout);
+        if (r.statusCode == 200) {
+          res = r;
+          break;
+        }
+        lastError = 'HTTP ${r.statusCode}';
+      } catch (e) {
+        lastError = '$e';
+      }
+    }
+    if (res == null) {
+      // An unreachable/oddly-answering topic must not wedge the engine: treat
+      // it as "no document yet" and let the next cycle retry.
+      return {'rev': 0, 'entities': <String, dynamic>{}};
+    }
     if (res.statusCode != 200) {
-      throw RelayException('HTTP ${res.statusCode}');
+      throw RelayException('HTTP ${res.statusCode} ${_snippet(res.body)}');
     }
     final text = utf8.decode(res.bodyBytes, allowMalformed: true);
 
-    // Keep only complete document sets, keyed by publish sequence.
+    // Group shards by publish sequence, then take the newest set that both
+    // reassembles completely AND decrypts. Anything else on the topic (a stray
+    // text message, a file-attachment notice ntfy substituted for an oversized
+    // chunk) is simply skipped instead of poisoning the whole read.
     final partial = <String, Map<int, String>>{};
     final totals = <String, int>{};
 
@@ -153,7 +183,7 @@ class NtfyRelay implements SyncRelay {
       final message = event['message'];
       if (message is! String || !message.startsWith('$_marker:')) continue;
 
-      // J1:<seq>:<index>/<total>:<payload>
+      // J1:<seq>:<index>/<total>:<base64 payload>
       final parts = message.split(':');
       if (parts.length < 4) continue;
       final seq = parts[1];
@@ -161,45 +191,62 @@ class NtfyRelay implements SyncRelay {
       if (idxParts.length != 2) continue;
       final idx = int.tryParse(idxParts[0]);
       final total = int.tryParse(idxParts[1]);
-      if (idx == null || total == null || total <= 0) continue;
+      if (idx == null || total == null) continue;
+      if (total <= 0 || total > 512 || idx < 0 || idx >= total) continue;
 
       final payload = parts.sublist(3).join(':');
+      // Base64 only. This is what rejects ordinary chatter on the topic.
+      if (!_base64.hasMatch(payload)) continue;
+      if (payload.length > _shardChars + 64) continue;
+
       partial.putIfAbsent(seq, () => <int, String>{})[idx] = payload;
       totals[seq] = total;
     }
 
-    // Newest complete document wins.
-    String? best;
-    for (final e in partial.entries) {
-      final total = totals[e.key] ?? 0;
-      if (e.value.length != total) continue;
-      if (best == null || e.key.compareTo(best) > 0) best = e.key;
-    }
-    if (best == null) return {'rev': 0, 'entities': <String, dynamic>{}};
+    // Newest first, so the most recent workspace state wins.
+    final sequences = partial.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
 
-    final buffer = StringBuffer();
-    for (var i = 0; i < (totals[best] ?? 0); i++) {
-      final chunk = partial[best]![i];
-      if (chunk == null) return {'rev': 0, 'entities': <String, dynamic>{}};
-      buffer.write(chunk);
+    for (final seq in sequences) {
+      final total = totals[seq] ?? 0;
+      final chunks = partial[seq]!;
+      if (chunks.length != total) continue;
+
+      final buffer = StringBuffer();
+      var complete = true;
+      for (var i = 0; i < total; i++) {
+        final chunk = chunks[i];
+        if (chunk == null) {
+          complete = false;
+          break;
+        }
+        buffer.write(chunk);
+      }
+      if (!complete) continue;
+
+      final decoded = _crypto.decryptJson(buffer.toString());
+      if (decoded is! Map) continue; // wrong key or corrupted -> try older
+      return {
+        'rev': (decoded['rev'] as num?)?.toInt() ?? 0,
+        'entities': decoded['entities'] ?? {},
+      };
     }
 
-    final decoded = _crypto.decryptJson(buffer.toString());
-    if (decoded is! Map) {
-      // Either tampered with, or encrypted under a different code.
-      throw const RelayException('sync code mismatch');
-    }
-    return {
-      'rev': (decoded['rev'] as num?)?.toInt() ?? 0,
-      'entities': decoded['entities'] ?? {},
-    };
+    // Nothing readable yet: an empty workspace, not an error. Throwing here
+    // would pin the client to "offline" forever over a stale message.
+    return {'rev': 0, 'entities': <String, dynamic>{}};
   }
 
   @override
   Future<void> write(Map<String, dynamic> state) async {
     // ntfy replaces the document instead of merging, so merge here first:
     // otherwise a device that had not pulled yet would wipe the other's rows.
-    final remote = await read();
+    final Map<String, dynamic> remote;
+    try {
+      remote = await read();
+    } catch (e) {
+      throw RelayException('merge-read failed: $e');
+    }
     final merged = <String, dynamic>{};
     final local = (state['entities'] as Map?) ?? {};
     final other = (remote['entities'] as Map?) ?? {};
@@ -244,8 +291,17 @@ class NtfyRelay implements SyncRelay {
           )
           .timeout(_timeout);
       if (res.statusCode != 200) {
-        throw RelayException('HTTP ${res.statusCode}');
+        // A chunk the relay refused cannot be delivered; surface it so the
+        // outbox keeps the record instead of silently dropping it.
+        throw RelayException(
+          'upload rejected (${res.statusCode})',
+        );
       }
     }
   }
+}
+
+String _snippet(String body) {
+  final t = body.trim();
+  return t.length > 160 ? t.substring(0, 160) : t;
 }
