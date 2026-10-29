@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/firebase_options.dart';
 import 'services/session_service.dart';
 import 'services/store.dart';
 import 'theme/app_theme.dart';
@@ -12,6 +13,12 @@ import 'widgets/skin_lang_bar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Cloud storage first: the sync engine needs Firebase ready before the store
+  // restores a session. A missing configuration is not fatal — the app still
+  // runs and stores data locally, Settings just says so.
+  await initFirebase();
+
   final store = Store();
   await store.init();
   // Sync the static language used by the L10n helper.

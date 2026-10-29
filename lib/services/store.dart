@@ -7,7 +7,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
-import 'sync_service.dart';
+import 'cloud/cloud_backend.dart';
+import 'cloud/firestore_backend.dart';
+import 'cloud/sync_engine.dart';
 
 /// Central application state & persistence layer.
 ///
@@ -43,9 +45,30 @@ class Store extends ChangeNotifier {
   bool _ready = false;
   bool get isReady => _ready;
 
-  /// Cross-device sync engine (created on first use).
+  /// Cloud storage provider. Swappable: Firestore today, anything that
+  /// implements [CloudBackend] tomorrow.
+  ///
+  /// Created lazily, never in the constructor: constructing it touches
+  /// `FirebaseFirestore.instance`, which throws when Firebase was not
+  /// initialised (missing config, failed init). One eager field would take the
+  /// whole app down instead of degrading to local-only storage.
+  CloudBackend? _backendOverride;
+  CloudBackend get backend => _backendOverride ??= FirestoreBackend();
+
+  /// Replaces the storage provider (tests, or a future self-hosted server).
+  void useBackend(CloudBackend backend) {
+    final wasStarted = _sync != null;
+    _sync?.stop();
+    _backendOverride = backend;
+    _sync = null;
+    // If an engine had already been created (login fires start() eagerly), give
+    // the caller a live engine on the new backend instead of a dead one.
+    if (wasStarted) unawaited(sync.start());
+  }
+
+  /// Cross-device sync engine. Built on first use for the same reason.
   SyncService? _sync;
-  SyncService get sync => _sync ??= SyncService(this);
+  SyncService get sync => _sync ??= SyncService(this, backend);
 
   /// Replaces the engine instance (used by tests to drive a cycle directly).
   void attachSync(SyncService svc) => _sync = svc;
@@ -220,17 +243,26 @@ class Store extends ChangeNotifier {
   Future<void> enableAutoSyncForUser() async {
     final uid = _currentUserId;
     if (uid.isEmpty) return;
-    final code = syncCode;
-    if (code.isEmpty || syncOwnerId != uid) {
-      // First run on this device (or the account changed): derive the key.
-      await setSyncConfig(
-        code: workspaceCodeFor(uid),
-        enabled: true,
-        ownerId: uid,
-      );
-    } else if (_users.get('__sync_on__') != true) {
-      await setSyncConfig(enabled: true);
+    // Saying the same thing every launch is cheap; only write when it differs
+    // so we do not churn the metadata box (and notify on every reload).
+    if (_users.get('__sync_code__') != workspaceCodeFor(uid) ||
+        _users.get('__sync_owner__') != uid ||
+        _users.get('__sync_on__') != true) {
+      await _users.put('__sync_code__', workspaceCodeFor(uid));
+      await _users.put('__sync_owner__', uid);
+      await _users.put('__sync_on__', true);
     }
+  }
+
+  /// The Firestore document id for this account.
+  ///
+  /// Derived from the user id so every device that signs in lands on the same
+  /// document — no code to copy, no server to choose. Prefixed and hashed so
+  /// the id is opaque (it is the path, not a secret).
+  String get workspaceId {
+    final uid = _currentUserId;
+    if (uid.isEmpty) return '';
+    return workspaceCodeFor(uid);
   }
 
   /// Deterministic, non-guessable workspace key for an account id.
@@ -854,6 +886,15 @@ class Store extends ChangeNotifier {
     return out;
   }
 
+  /// The raw local record for a queued `entity/boxKey`, or null.
+  Map<String, dynamic>? pendingRecord(String fullKey) {
+    final slash = fullKey.indexOf('/');
+    if (slash <= 0) return null;
+    final box = _syncBoxes[fullKey.substring(0, slash)];
+    final raw = box?.get(fullKey.substring(slash + 1));
+    return raw is Map ? Map<String, dynamic>.from(raw) : null;
+  }
+
   /// Applies a whole server snapshot in one pass.
   /// Returns true when anything local changed.
   bool applyServerSnapshot(Map serverEntities) {
@@ -941,9 +982,13 @@ class Store extends ChangeNotifier {
       for (final k in e.value.keys.toList()) {
         final raw = e.value.get(k);
         if (raw is! Map) continue;
+        // Only records belonging to the signed-in account. Categories/logs are
+        // keyed `owner::id`, so the owner field is what separates accounts.
         if ((raw['ownerId'] ?? '') != ownerId) continue;
         final full = '${e.key}/$k';
         if (serverKeys.contains(full)) continue;
+        // A record that is queued but not yet on the server is *new*, not
+        // deleted. Sending it is the right move; dropping it loses data.
         if (pending.contains(full)) continue;
         await e.value.delete(k);
         changed = true;

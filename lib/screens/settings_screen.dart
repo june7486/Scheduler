@@ -12,7 +12,7 @@ import '../services/drive_service.dart';
 import '../services/file_pick_stub.dart'
     if (dart.library.js_interop) '../services/file_pick_web.dart' as picker;
 import '../services/session_service.dart';
-import '../services/sync_service.dart';
+import '../services/cloud/sync_engine.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_panels.dart';
@@ -826,7 +826,7 @@ class _Tile extends StatelessWidget {
 }
 
 /// Cloud storage status. Everything is automatic — no codes, no toggles:
-/// signing in binds the device to the account's server document.
+/// signing in binds the device to that account's server document.
 class _SyncPanel extends StatelessWidget {
   final Store store;
   const _SyncPanel({required this.store});
@@ -834,8 +834,10 @@ class _SyncPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svc = store.sync;
-    final online = svc.state == SyncState.idle || svc.state == SyncState.syncing;
-    final syncing = svc.state == SyncState.syncing;
+    final ko = context.l10n.lang == AppLang.ko;
+    final live = svc.state == SyncState.idle || svc.state == SyncState.syncing;
+    final syncing = svc.state == SyncState.syncing || svc.pendingCount > 0;
+    final notConfigured = svc.state == SyncState.notConfigured;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
@@ -852,9 +854,17 @@ class _SyncPanel extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  online ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined,
+                  notConfigured
+                      ? Icons.cloud_off_outlined
+                      : live
+                          ? Icons.cloud_done_outlined
+                          : Icons.cloud_queue_outlined,
                   size: 18,
-                  color: online ? p.teal : p.inkSoft,
+                  color: notConfigured
+                      ? p.danger
+                      : live
+                          ? p.teal
+                          : p.inkSoft,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -867,7 +877,7 @@ class _SyncPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (syncing)
+                if (syncing && !notConfigured)
                   SizedBox(
                     width: 12,
                     height: 12,
@@ -881,19 +891,24 @@ class _SyncPanel extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: (online ? p.teal : p.inkSoft)
+                      color: (notConfigured
+                              ? p.danger
+                              : live
+                                  ? p.teal
+                                  : p.inkSoft)
                           .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      online
-                          ? context.tr('sync_live')
-                          : svc.statusLabel(
-                              ko: context.l10n.lang == AppLang.ko),
+                      live ? context.tr('sync_live') : svc.statusLabel(ko: ko),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: online ? p.teal : p.inkSoft,
+                        color: notConfigured
+                            ? p.danger
+                            : live
+                                ? p.teal
+                                : p.inkSoft,
                       ),
                     ),
                   ),
@@ -909,7 +924,17 @@ class _SyncPanel extends StatelessWidget {
               context.tr('sync_auto_note'),
               style: TextStyle(fontSize: 11, color: p.inkSoft, height: 1.35),
             ),
-            if (store.syncEnabled && svc.pendingCount > 0)
+            if (notConfigured)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  ko
+                      ? 'Firebase 프로젝트를 연결하면 모든 기기에서 같은 자료를 봅니다.'
+                      : 'Connect a Firebase project to share one dataset across devices.',
+                  style: TextStyle(fontSize: 10.5, color: p.danger, height: 1.35),
+                ),
+              ),
+            if (store.syncEnabled && svc.pendingCount > 0 && !notConfigured)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Row(
@@ -926,7 +951,7 @@ class _SyncPanel extends StatelessWidget {
                   ],
                 ),
               ),
-            if (svc.lastSync != null)
+            if (svc.lastSync != null && !notConfigured)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
@@ -941,6 +966,28 @@ class _SyncPanel extends StatelessWidget {
                 child: Text(
                   context.tr('sync_offline_retry'),
                   style: TextStyle(fontSize: 10.5, color: p.danger),
+                ),
+              ),
+            if (!notConfigured && store.syncEnabled)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => svc.syncNow(),
+                    icon: const Icon(Icons.refresh, size: 14),
+                    label: Text(
+                      ko ? '지금 동기화' : 'Sync now',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: p.teal,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      minimumSize: const Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                 ),
               ),
           ],
