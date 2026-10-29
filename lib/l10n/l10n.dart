@@ -180,7 +180,11 @@ class L10n {
     'sync_e2e': '서버 저장 · 종단간 암호화 · 계정 불필요',
     'sync_pending': '서버 전송 대기',
     'sync_pending_n': '서버 전송 대기 {n}건 — 연결되면 자동 전송',
-    'sync_server_copy': '서버가 원본입니다. 이 기기에는 읽기용 사본만 둡니다.',
+    'sync_server_copy': '모든 자료는 서버에 저장됩니다. 이 기기는 화면 표시용 사본만 가집니다.',
+    'sync_auto_note': '로그인하면 자동으로 연결됩니다. 따로 설정할 것이 없습니다.',
+    'sync_stored_on_server': '서버 저장됨',
+    'sync_live': '실시간 동기화 중',
+    'sync_offline_retry': '네트워크가 연결되면 자동으로 다시 저장합니다.',
 
     // Google Drive
     'drive_grp': '구글 드라이브 (업로드·백업)',
@@ -519,7 +523,11 @@ class L10n {
     'sync_e2e': 'Stored on server · end-to-end encrypted · no account',
     'sync_pending': 'Waiting to upload',
     'sync_pending_n': '{n} change(s) queued — uploads when online',
-    'sync_server_copy': 'The server holds the original; this device keeps a read cache.',
+    'sync_server_copy': 'Everything is stored on the server. This device only keeps a display cache.',
+    'sync_auto_note': 'Connects automatically when you sign in — nothing to set up.',
+    'sync_stored_on_server': 'Stored on server',
+    'sync_live': 'Live sync on',
+    'sync_offline_retry': 'Will save again automatically when the network returns.',
 
     // Google Drive
     'drive_grp': 'Google Drive (upload · backup)',

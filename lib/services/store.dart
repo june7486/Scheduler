@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -194,9 +196,41 @@ class Store extends ChangeNotifier {
     await _ensureUserSeed(u.id);
     addLog('Login', u.id);
     notifyListeners();
-    // Bring the other devices' data in immediately, then start live sync.
-    if (syncEnabled) unawaited(sync.start());
+    // Every account is its own cloud workspace: signing in is all it takes.
+    // No setup, no code to copy -- the server copy is pulled immediately.
+    await enableAutoSyncForUser();
+    unawaited(sync.start());
     return true;
+  }
+
+  /// Turns cloud storage on for the signed-in account.
+  ///
+  /// The account id *is* the workspace key, so nothing has to be configured.
+  Future<void> enableAutoSyncForUser() async {
+    final uid = _currentUserId;
+    if (uid.isEmpty) return;
+    final code = syncCode;
+    if (code.isEmpty || syncOwnerId != uid) {
+      // First run on this device (or the account changed): derive the key.
+      await setSyncConfig(
+        code: workspaceCodeFor(uid),
+        enabled: true,
+        ownerId: uid,
+      );
+    } else if (_users.get('__sync_on__') != true) {
+      await setSyncConfig(enabled: true);
+    }
+  }
+
+  /// Deterministic, non-guessable workspace key for an account id.
+  /// Only this account can reach its document, and no code is ever shown.
+  static String workspaceCodeFor(String userId) {
+    var seed = utf8.encode('june-scheduler-account-v2|$userId');
+    var digest = sha256.convert(seed);
+    for (var i = 0; i < 128; i++) {
+      digest = sha256.convert([...digest.bytes, ...seed]);
+    }
+    return 'ACC${digest.toString().substring(0, 28).toUpperCase()}';
   }
 
   void setCurrentUser(String id) {

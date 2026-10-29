@@ -60,13 +60,13 @@ class SyncService {
   int get lastCount => _lastCount;
 
   /// Engine tick. Each tick pulls the server, then flushes the outbox.
-  static const pollInterval = Duration(seconds: 3);
+  static const pollInterval = Duration(seconds: 2);
 
   /// Backoff when the server is unreachable (capped).
   static const _maxBackoff = Duration(seconds: 60);
 
   /// Debounce applied to local writes before a push attempt.
-  static const writeDebounce = Duration(milliseconds: 800);
+  static const writeDebounce = Duration(milliseconds: 500);
 
   bool get isActive => !_stopped && _store.syncEnabled;
 

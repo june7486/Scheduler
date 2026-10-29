@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -826,7 +825,8 @@ class _Tile extends StatelessWidget {
   }
 }
 
-/// Cross-device sync controls: status, workspace code, manual sync, on/off.
+/// Cloud storage status. Everything is automatic — no codes, no toggles:
+/// signing in binds the device to the account's server document.
 class _SyncPanel extends StatelessWidget {
   final Store store;
   const _SyncPanel({required this.store});
@@ -834,8 +834,8 @@ class _SyncPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svc = store.sync;
-    final on = store.syncEnabled;
-    final busy = svc.state == SyncState.syncing;
+    final online = svc.state == SyncState.idle || svc.state == SyncState.syncing;
+    final syncing = svc.state == SyncState.syncing;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
@@ -852,14 +852,14 @@ class _SyncPanel extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  on ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                  online ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined,
                   size: 18,
-                  color: on ? p.indigo : p.inkSoft,
+                  color: online ? p.teal : p.inkSoft,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.tr('sync_on'),
+                    context.tr('sync_grp'),
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
@@ -867,187 +867,82 @@ class _SyncPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                Switch(
-                  value: on,
-                  activeThumbColor: p.indigo,
-                  onChanged: (v) async {
-                    if (v) {
-                      if (store.syncCode.isEmpty) {
-                        await _setup(context);
-                      } else {
-                        await svc.start();
-                      }
-                    } else {
-                      await store.setSyncConfig(enabled: false);
-                      svc.stop();
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                if (busy)
+                if (syncing)
                   SizedBox(
-                    width: 10,
-                    height: 10,
+                    width: 12,
+                    height: 12,
                     child: CircularProgressIndicator(
-                      strokeWidth: 1.6,
-                      color: p.indigo,
+                      strokeWidth: 1.8,
+                      color: p.teal,
+                    ),
+                  )
+                else
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (online ? p.teal : p.inkSoft)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      online
+                          ? context.tr('sync_live')
+                          : svc.statusLabel(
+                              ko: context.l10n.lang == AppLang.ko),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: online ? p.teal : p.inkSoft,
+                      ),
                     ),
                   ),
-                if (busy) const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    on
-                        ? '${svc.statusLabel(ko: context.l10n.lang == AppLang.ko)}'
-                              '${svc.lastCount > 0 ? ' · ${svc.lastCount}${context.tr('sync_records')}' : ''}'
-                        : context.tr('sync_off'),
-                    style: TextStyle(fontSize: 11.5, color: p.inkSoft),
-                  ),
-                ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.tr('sync_server_copy'),
+              style: TextStyle(fontSize: 11.5, color: p.inkSoft, height: 1.35),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              context.tr('sync_auto_note'),
+              style: TextStyle(fontSize: 11, color: p.inkSoft, height: 1.35),
             ),
             if (store.syncEnabled && svc.pendingCount > 0)
               Padding(
-                padding: const EdgeInsets.only(top: 3),
+                padding: const EdgeInsets.only(top: 6),
                 child: Row(
                   children: [
                     Icon(Icons.cloud_upload_outlined, size: 12, color: p.teal),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        context.tr('sync_pending_n', args: {
-                          'n': '${svc.pendingCount}',
-                        }),
+                        context.tr('sync_pending_n',
+                            args: {'n': '${svc.pendingCount}'}),
                         style: TextStyle(fontSize: 10.5, color: p.teal),
                       ),
                     ),
                   ],
                 ),
               ),
-            if (svc.state == SyncState.offline && svc.message.isNotEmpty)
+            if (svc.lastSync != null)
               Padding(
-                padding: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  svc.message,
+                  '${context.tr('sync_last')} · ${_hhmmss(svc.lastSync!)}'
+                  ' · ${context.tr('sync_stored_on_server')}',
+                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+                ),
+              ),
+            if (svc.state == SyncState.offline)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  context.tr('sync_offline_retry'),
                   style: TextStyle(fontSize: 10.5, color: p.danger),
                 ),
               ),
-            if (on) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    context.tr('sync_code'),
-                    style: TextStyle(fontSize: 11.5, color: p.inkSoft),
-                  ),
-                  const SizedBox(width: 8),
-                  SelectableText(
-                    store.syncCode,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.6,
-                      color: p.ink,
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: Text(
-                  context.tr('sync_server_copy'),
-                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  context.tr('sync_e2e'),
-                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _chipBtn(
-                    icon: Icons.sync,
-                    label: context.tr('sync_now'),
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final doneMsg = context.tr('sync_done');
-                      try {
-                        await svc.pull();
-                        await svc.push();
-                        messenger.showSnackBar(
-                          SnackBar(content: Text(doneMsg)),
-                        );
-                      } catch (e) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('$e')),
-                        );
-                      }
-                    },
-                  ),
-                  _chipBtn(
-                    icon: Icons.copy_outlined,
-                    label: context.tr('sync_copy'),
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final copiedMsg = context.tr('sync_copied');
-                      await Clipboard.setData(
-                        ClipboardData(text: store.syncCode),
-                      );
-                      messenger.showSnackBar(
-                        SnackBar(content: Text(copiedMsg)),
-                      );
-                    },
-                  ),
-                  _chipBtn(
-                    icon: Icons.refresh,
-                    label: context.tr('sync_new'),
-                    onTap: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final copiedMsg = context.tr('sync_copied');
-                      final oldCode = store.syncCode;
-                      if (oldCode.isNotEmpty) {
-                        await Clipboard.setData(ClipboardData(text: oldCode));
-                      }
-                      await svc.createWorkspace();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(copiedMsg),
-                          duration: const Duration(seconds: 4),
-                        ),
-                      );
-                    },
-                  ),
-                  _chipBtn(
-                    icon: Icons.login,
-                    label: context.tr('sync_join'),
-                    onTap: () => _setup(context),
-                  ),
-                ],
-              ),
-              if (svc.lastSync != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${context.tr('sync_last')} · ${_hhmmss(svc.lastSync!)}',
-                  style: TextStyle(fontSize: 11, color: p.inkSoft),
-                ),
-              ],
-            ] else ...[
-              const SizedBox(height: 10),
-              _chipBtn(
-                icon: Icons.power_settings_new,
-                label: context.tr('sync_on'),
-                onTap: () => _setup(context),
-              ),
-            ],
           ],
         ),
       ),
@@ -1058,124 +953,4 @@ class _SyncPanel extends StatelessWidget {
       '${d.hour.toString().padLeft(2, '0')}:'
       '${d.minute.toString().padLeft(2, '0')}:'
       '${d.second.toString().padLeft(2, '0')}';
-
-  Widget _chipBtn({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: p.indigo.withValues(alpha: 0.55)),
-          color: p.indigo.withValues(alpha: 0.08),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: p.indigo),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: p.indigo,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Asks for an existing code (join) or offers to create a new workspace.
-  Future<void> _setup(BuildContext context) async {
-    final ctrl = TextEditingController(text: store.syncCode);
-    final urlCtrl = TextEditingController(text: store.syncUrl);
-    final svc = store.sync;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          var working = false;
-          return StatefulBuilder(
-            builder: (ctx, _) => AlertDialog(
-              title: Text(ctx.tr('sync_connect')),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      ctx.tr('sync_connect_hint'),
-                      style: TextStyle(fontSize: 12, color: p.inkSoft),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: ctrl,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: ctx.tr('sync_code'),
-                        hintText: 'ABCD2345XY',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: urlCtrl,
-                      decoration: InputDecoration(
-                        labelText: ctx.tr('sync_server'),
-                        hintText: ctx.tr('sync_server_hint'),
-                      ),
-                    ),
-                    if (working)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 12),
-                        child: LinearProgressIndicator(minHeight: 2),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: working ? null : () => Navigator.pop(ctx),
-                  child: Text(ctx.tr('sync_cancel')),
-                ),
-                TextButton(
-                  onPressed: working
-                      ? null
-                      : () async {
-                          setLocal(() => working = true);
-                          final code = ctrl.text.trim();
-                          await store.setSyncConfig(url: urlCtrl.text.trim());
-                          try {
-                            if (code.isEmpty) {
-                              await svc.createWorkspace();
-                            } else {
-                              await svc.joinWorkspace(code);
-                            }
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          } catch (e) {
-                            setLocal(() => working = false);
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text('$e')),
-                              );
-                            }
-                          }
-                        },
-                  child: Text(ctx.tr('sync_connect_btn')),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
 }
