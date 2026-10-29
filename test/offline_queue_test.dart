@@ -16,7 +16,7 @@ void main() {
     Future<Map> waitFor(NtfyRelay r, bool Function(Map) ok) async {
       Map ents = {};
       for (var i = 0; i < 25; i++) {
-        ents = (await r.read())['entities'] as Map;
+        ents = (await r.read()).entities;
         if (ok(ents)) break;
         await Future.delayed(const Duration(seconds: 2));
       }
@@ -79,7 +79,7 @@ void main() {
 
     Map ents = {};
     for (var i = 0; i < 25; i++) {
-      ents = (await relay.read())['entities'] as Map;
+      ents = (await relay.read()).entities;
       final rec = ents['tasks/x'];
       if (rec is Map && rec['deletedAt'] != null) break;
       await Future.delayed(const Duration(seconds: 2));

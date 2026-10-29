@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
+import 'event_source_stub.dart'
+    if (dart.library.js_interop) 'event_source_web.dart' as sse;
 import 'sync_crypto.dart';
 
 /// Raised for any transport problem; the engine turns this into "offline".
@@ -22,11 +25,69 @@ class RelayException implements Exception {
 ///  * [NtfyRelay]  — the zero-setup fallback on ntfy.sh, so cross-device sync
 ///    works out of the box with no account and no server to run.
 abstract class SyncRelay {
-  /// Current workspace state: `{rev, entities:{key: record}}`.
-  Future<Map<String, dynamic>> read();
+  /// Current workspace state.
+  ///
+  /// [RelayDoc.authoritative] tells the engine whether an empty answer means
+  /// "the workspace really is empty" or "we could not find any document".
+  Future<RelayDoc> read();
 
   /// Publishes the full state. Existing records are merged, never dropped.
   Future<void> write(Map<String, dynamic> state);
+
+  /// Live change notifications, if the transport supports them.
+  ///
+  /// Emits whenever *somebody else* published a new document, so the engine can
+  /// reconcile immediately instead of polling. Returns `null` when the
+  /// transport has no push channel (a REST relay); the engine then falls back
+  /// to its slow safety-net timer.
+  RelayWatch? watch(RelayWatchHandlers handlers) => null;
+
+  /// Releases any stream / long-lived connection.
+  void dispose() {}
+}
+
+/// Result of [SyncRelay.read].
+///
+/// [authoritative] is false when the relay had **no readable document at all**
+/// (brand-new workspace, expired retention, or every shard unreadable). In that
+/// case the engine must NOT prune local records: an empty answer means "we do
+/// not know", not "everything was deleted".
+class RelayDoc {
+  const RelayDoc(this.entities, {this.authoritative = true});
+
+  final Map<String, dynamic> entities;
+  final bool authoritative;
+
+  /// Convenience so `doc['entities']` still reads like the old map API.
+  Object? operator [](String key) {
+    switch (key) {
+      case 'entities':
+        return entities;
+      case 'rev':
+        return authoritative ? 1 : 0;
+    }
+    return null;
+  }
+
+  static const unknown = RelayDoc(<String, dynamic>{}, authoritative: false);
+}
+
+/// A live connection to the relay's change feed.
+abstract class RelayWatch {
+  void close();
+}
+
+/// Callbacks the engine attaches to a [RelayWatch].
+class RelayWatchHandlers {
+  const RelayWatchHandlers({
+    required this.onOpen,
+    required this.onChange,
+    required this.onError,
+  });
+
+  final void Function() onOpen;
+  final void Function() onChange;
+  final void Function(String reason) onError;
 }
 
 /// Builds the production relay for a workspace code (used by tests/probes).
@@ -48,7 +109,7 @@ SyncRelay makeRelay(String baseUrl, String code) {
 // REST relay (Cloudflare Worker / self-hosted python reference server)
 // ---------------------------------------------------------------------------
 
-class RestRelay implements SyncRelay {
+class RestRelay extends SyncRelay {
   RestRelay(this.baseUrl, this.code);
 
   final String baseUrl;
@@ -65,16 +126,21 @@ class RestRelay implements SyncRelay {
   }
 
   @override
-  Future<Map<String, dynamic>> read() async {
+  Future<RelayDoc> read() async {
     final res = await http
         .get(_uri('/state', {'code': code}))
         .timeout(_timeout);
+    if (res.statusCode == 404) return RelayDoc.unknown;
     if (res.statusCode != 200) {
       throw RelayException('HTTP ${res.statusCode} ${_snippet(res.body)}');
     }
     final body = jsonDecode(utf8.decode(res.bodyBytes));
     if (body is! Map) throw const RelayException('Bad response');
-    return {'rev': (body['rev'] as num?)?.toInt() ?? 0, 'entities': body['entities'] ?? {}};
+    final entities = (body['entities'] as Map?) ?? const {};
+    return RelayDoc(
+      Map<String, dynamic>.from(entities),
+      authoritative: body['exists'] != false,
+    );
   }
 
   @override
@@ -105,7 +171,15 @@ class RestRelay implements SyncRelay {
 /// Publishes the workspace as an encrypted, chunked document on a topic derived
 /// from the sync code. Anyone without the code cannot find the topic (it is a
 /// SHA-256 prefix) and cannot decrypt the payload (AES-256-CBC).
-class NtfyRelay implements SyncRelay {
+///
+/// ### Why there is no polling loop
+/// ntfy.sh rate-limits anonymous callers to roughly one request every five
+/// seconds, with a burst allowance. A client that polls every second burns
+/// through the allowance in under a minute and then gets `HTTP 429` — which
+/// looks exactly like "the server is down". Instead this relay keeps **one**
+/// long-lived Server-Sent-Events connection (`/topic/sse`) and only fetches the
+/// document when a message actually arrives.
+class NtfyRelay extends SyncRelay {
   NtfyRelay(this.code) : _crypto = SyncCrypto(code);
 
   /// Used as the built-in default so sync works with nothing configured.
@@ -135,13 +209,18 @@ class NtfyRelay implements SyncRelay {
   Uri _poll([String since = 'all']) =>
       Uri.parse('https://ntfy.sh/$topic/json?poll=1&since=$since');
 
+  /// Reassembly cache: ntfy holds only a handful of documents, so re-decrypting
+  /// the same sequence on every read is wasted CPU. Keyed by sequence id.
+  final Map<String, Map<String, dynamic>> _decoded = <String, Map<String, dynamic>>{};
+
+  /// The newest sequence successfully decoded, if any.
+  String? lastSeq;
+
   @override
-  Future<Map<String, dynamic>> read() async {
+  Future<RelayDoc> read() async {
     http.Response? res;
-    // ignore: unused_local_variable
-    Object? lastError;
-    // `since=all` is the primary form; a couple of fallbacks keep a single
-    // odd gateway response from pinning the client to "offline" forever.
+    // `since=all` is the primary form; the fallbacks keep a single odd gateway
+    // response from pinning the client to "offline" forever.
     for (final since in const ['all', '24h', '7d']) {
       try {
         final r = await http.get(_poll(since)).timeout(_timeout);
@@ -149,19 +228,14 @@ class NtfyRelay implements SyncRelay {
           res = r;
           break;
         }
-        lastError = 'HTTP ${r.statusCode}';
-      } catch (e) {
-        lastError = '$e';
+      } catch (_) {
+        // try the next variant
       }
     }
-    if (res == null) {
-      // An unreachable/oddly-answering topic must not wedge the engine: treat
-      // it as "no document yet" and let the next cycle retry.
-      return {'rev': 0, 'entities': <String, dynamic>{}};
-    }
-    if (res.statusCode != 200) {
-      throw RelayException('HTTP ${res.statusCode} ${_snippet(res.body)}');
-    }
+    // Nothing answered: report "unknown" instead of "empty", so a network blip
+    // can never make the engine delete the local cache.
+    if (res == null) return RelayDoc.unknown;
+
     final text = utf8.decode(res.bodyBytes, allowMalformed: true);
 
     // Group shards by publish sequence, then take the newest set that both
@@ -204,10 +278,15 @@ class NtfyRelay implements SyncRelay {
     }
 
     // Newest first, so the most recent workspace state wins.
-    final sequences = partial.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final sequences = partial.keys.toList()..sort((a, b) => b.compareTo(a));
 
     for (final seq in sequences) {
+      final cached = _decoded[seq];
+      if (cached != null) {
+        lastSeq = seq;
+        return RelayDoc(cached);
+      }
+
       final total = totals[seq] ?? 0;
       final chunks = partial[seq]!;
       if (chunks.length != total) continue;
@@ -226,22 +305,38 @@ class NtfyRelay implements SyncRelay {
 
       final decoded = _crypto.decryptJson(buffer.toString());
       if (decoded is! Map) continue; // wrong key or corrupted -> try older
-      return {
-        'rev': (decoded['rev'] as num?)?.toInt() ?? 0,
-        'entities': decoded['entities'] ?? {},
-      };
+
+      final entities = <String, dynamic>{};
+      final raw = decoded['entities'];
+      if (raw is Map) {
+        for (final e in raw.entries) {
+          if (e.value is Map) {
+            entities[e.key.toString()] = Map<String, dynamic>.from(e.value as Map);
+          }
+        }
+      }
+      // Keep only the few newest entries to bound memory.
+      _decoded[seq] = entities;
+      if (_decoded.length > 4) {
+        final oldest = _decoded.keys.toList()..sort();
+        while (_decoded.length > 4) {
+          _decoded.remove(oldest.removeAt(0));
+        }
+      }
+      lastSeq = seq;
+      return RelayDoc(entities);
     }
 
-    // Nothing readable yet: an empty workspace, not an error. Throwing here
-    // would pin the client to "offline" forever over a stale message.
-    return {'rev': 0, 'entities': <String, dynamic>{}};
+    // Nothing readable: a brand-new workspace, or the old document aged out.
+    // Either way this is NOT proof that records were deleted.
+    return RelayDoc.unknown;
   }
 
   @override
   Future<void> write(Map<String, dynamic> state) async {
     // ntfy replaces the document instead of merging, so merge here first:
     // otherwise a device that had not pulled yet would wipe the other's rows.
-    final Map<String, dynamic> remote;
+    final RelayDoc remote;
     try {
       remote = await read();
     } catch (e) {
@@ -249,11 +344,10 @@ class NtfyRelay implements SyncRelay {
     }
     final merged = <String, dynamic>{};
     final local = (state['entities'] as Map?) ?? {};
-    final other = (remote['entities'] as Map?) ?? {};
 
-    for (final e in other.entries) {
+    for (final e in remote.entities.entries) {
       final rec = e.value;
-      if (rec is Map) merged['${e.key}'] = Map<String, dynamic>.from(rec);
+      if (rec is Map) merged[e.key.toString()] = Map<String, dynamic>.from(rec);
     }
     for (final e in local.entries) {
       final rec = e.value;
@@ -293,11 +387,100 @@ class NtfyRelay implements SyncRelay {
       if (res.statusCode != 200) {
         // A chunk the relay refused cannot be delivered; surface it so the
         // outbox keeps the record instead of silently dropping it.
-        throw RelayException(
-          'upload rejected (${res.statusCode})',
-        );
+        throw RelayException('upload rejected (${res.statusCode})');
       }
     }
+
+    // Our own document is now the newest one; remember it so the next read is
+    // a cache hit and the change feed does not echo it back as "remote news".
+    _decoded[seq] = merged;
+    lastSeq = seq;
+  }
+
+  NtfyWatch? _watch;
+
+  @override
+  RelayWatch? watch(RelayWatchHandlers handlers) {
+    // No EventSource outside the browser. That is NOT a failure: plain HTTPS
+    // reads still work, so return "no push channel" and let the engine's
+    // safety-net timer do the work instead of scaring the user with
+    // "server unreachable".
+    if (!kIsWeb) return null;
+    _watch ??= NtfyWatch(topic, handlers);
+    return _watch;
+  }
+
+  @override
+  void dispose() {
+    _watch?.close();
+    _watch = null;
+  }
+}
+
+/// One self-healing SSE connection to `https://ntfy.sh/<topic>/sse`.
+///
+/// The stream itself carries no document, only "something changed here" — the
+/// payload is still fetched with a single `GET ?poll=1&since=all`. That keeps
+/// the request count at one per change instead of one per second.
+class NtfyWatch implements RelayWatch {
+  NtfyWatch(this.topic, this.handlers) {
+    // Connect on the next microtask so the caller can finish wiring things up.
+    scheduleMicrotask(_connect);
+  }
+
+  final String topic;
+  final RelayWatchHandlers handlers;
+
+  sse.EventSourceHandle? _handle;
+  Timer? _retry;
+  int _attempt = 0;
+  bool _closed = false;
+  bool _everOpen = false;
+
+  String get _url => 'https://ntfy.sh/$topic/sse?since=all';
+
+  bool get isLive => _everOpen && _handle != null;
+
+  void _connect() {
+    if (_closed) return;
+    _handle = sse.openEventSource(
+      _url,
+      onOpen: () {
+        _attempt = 0;
+        _everOpen = true;
+        handlers.onOpen();
+      },
+      onMessage: (data) {
+        // Keepalives and the initial "open" frame are not content changes.
+        if (data.contains('"event":"keepalive"')) return;
+        if (data.contains('"event":"open"')) return;
+        handlers.onChange();
+      },
+      onError: () {
+        if (_closed) return;
+        _handle?.close();
+        _handle = null;
+        if (!_everOpen) handlers.onError('stream unavailable');
+        _scheduleReconnect();
+      },
+    );
+  }
+
+  void _scheduleReconnect() {
+    if (_closed) return;
+    _retry?.cancel();
+    _attempt = (_attempt + 1).clamp(1, 8);
+    final delay = Duration(seconds: (1 << _attempt).clamp(2, 60));
+    _retry = Timer(delay, _connect);
+  }
+
+  @override
+  void close() {
+    _closed = true;
+    _retry?.cancel();
+    _retry = null;
+    _handle?.close();
+    _handle = null;
   }
 }
 

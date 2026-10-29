@@ -14,6 +14,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    // flutter_test installs an HttpOverrides that answers EVERY request with
+    // 400 ("no network will actually be made"). These tests must reach the
+    // real relay, so drop it.
+    HttpOverrides.global = null;
     final dir = Directory.systemTemp.createTempSync('hive_path_');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -23,6 +27,7 @@ void main() {
   });
 
   test('REAL PATH: login -> edit -> server actually holds the record', () async {
+    HttpOverrides.global = null;
     final store = Store();
     await store.init();
     expect(await store.authenticate(Store.testId, Store.testPw), isTrue);
@@ -43,6 +48,12 @@ void main() {
     print('SNAPSHOT: ${snap.length} ${snap.keys}');
 
     await svc.tick(manual: true);
+    // The engine may still be busy with the login cycle; it schedules a
+    // follow-up pass automatically. Wait for convergence like the UI does.
+    for (var i = 0; i < 40 && store.pendingCount > 0; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      await svc.tick();
+    }
     print('TICK2: state=${svc.state} msg="${svc.message}" '
         'pending=${store.pendingCount}');
 
@@ -60,6 +71,7 @@ void main() {
 
   test('REAL PATH: after a reload the session restores and sync keeps working',
       () async {
+    HttpOverrides.global = null;
     final store = Store();
     await store.init(); // fresh page load
     await store.setCurrentUser(Store.testId);
@@ -94,7 +106,7 @@ class NtfyRelayProbe {
   Future<Map> entities() async {
     final relay = _build();
     final st = await relay.read();
-    return st['entities'] as Map;
+    return st.entities;
   }
 
   dynamic _build() {

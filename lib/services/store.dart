@@ -73,7 +73,15 @@ class Store extends ChangeNotifier {
     super.notifyListeners();
     // Any local mutation should be pushed to the other devices — but never
     // while we are the ones applying a pulled change (that would ping-pong).
-    if (_ready && _remoteDepth == 0) sync.markDirty();
+    //
+    // Only schedule an upload when the outbox is actually non-empty. Delaying
+    // here is not a shortcut, it is the fix for a request storm: widgets call
+    // back into the store during build (logging, seeding), each call notifies,
+    // and an unconditional markDirty() turned that into endless ticks — 270+
+    // `HTTP 429` responses in one session. The outbox is the single source of
+    // truth for "something needs uploading", so trusting it is both correct
+    // and quiet.
+    if (_ready && _remoteDepth == 0 && pendingCount > 0) sync.markDirty();
   }
 
   String _currentUserId = '';
