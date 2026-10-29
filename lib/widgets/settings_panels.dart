@@ -170,8 +170,15 @@ class ManageTabsScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              c.label = label.text.trim().isEmpty ? c.label : label.text.trim();
-              c.emoji = emoji.text.trim();
+              final newLabel = label.text.trim();
+              if (newLabel.isNotEmpty && newLabel != c.label) {
+                c.label = newLabel;
+                // Remember that this is the user's own name so it survives
+                // language switches and app updates.
+                c.isCustomLabel = true;
+              }
+              final newEmoji = emoji.text.trim();
+              if (newEmoji.isNotEmpty) c.emoji = newEmoji;
               store.saveCategory(c);
               Navigator.pop(context);
             },

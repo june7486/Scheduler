@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/l10n.dart';
 import '../services/calendar_service.dart';
 import '../services/drive_service.dart';
+import '../services/file_pick_stub.dart'
+    if (dart.library.js_interop) '../services/file_pick_web.dart' as picker;
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -112,6 +114,12 @@ class SettingsScreen extends StatelessWidget {
               title: context.tr('restore'),
               subtitle: context.tr('restore_hint'),
               onTap: () => _restore(context, store),
+            ),
+            _Tile(
+              icon: Icons.file_open_outlined,
+              title: context.tr('restore_file'),
+              subtitle: context.tr('restore_file_hint'),
+              onTap: () => _restoreFromFile(context, store),
             ),
             _Tile(
               icon: Icons.cleaning_services_outlined,
@@ -502,6 +510,27 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Restores a backup JSON chosen from the device (web: file picker).
+  Future<void> _restoreFromFile(BuildContext context, Store store) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final okMsg = context.tr('restore_done');
+    final cancelMsg = context.tr('restore_cancelled');
+    final badMsg = context.tr('invalid_backup', args: {'err': 'JSON'});
+
+    final text = await picker.pickTextFile();
+    if (text == null) {
+      messenger.showSnackBar(SnackBar(content: Text(cancelMsg)));
+      return;
+    }
+    try {
+      final data = jsonDecode(text) as Map<String, dynamic>;
+      await store.importBackup(data);
+      messenger.showSnackBar(SnackBar(content: Text(okMsg)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(badMsg)));
+    }
   }
 
   String _themeLabel(BuildContext context, Store store) {

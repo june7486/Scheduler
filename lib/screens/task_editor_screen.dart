@@ -134,7 +134,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                       border: Border.all(color: sel ? col : p.line),
                     ),
                     child: Text(
-                      '${c.emoji} ${c.label}',
+                      '${c.emoji} ${catLabel(c)}',
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: sel ? FontWeight.w700 : FontWeight.w500,

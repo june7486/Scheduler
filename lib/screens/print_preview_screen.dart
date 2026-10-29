@@ -127,7 +127,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                         final col = Color(c.colorValue);
                         return FilterChip(
                           label: Text(
-                            '${c.emoji} ${c.label}',
+                            '${c.emoji} ${catLabel(c)}',
                             style: TextStyle(
                               fontSize: 11,
                               color: sel ? ct(col) : p.inkSoft,
@@ -472,7 +472,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
               ),
               if (cat != null)
                 Text(
-                  '  ${cat.label}',
+                  '  ${catLabel(cat)}',
                   style: base.copyWith(
                     fontSize: _fontSize - 3,
                     color: Colors.grey,
@@ -516,7 +516,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
               ),
               if (cat != null)
                 Text(
-                  cat.label,
+                  catLabel(cat),
                   style: base.copyWith(
                     fontSize: _fontSize - 3,
                     color: Colors.grey,
@@ -684,7 +684,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
               ),
               if (cat != null)
                 pw.Text(
-                  ' ${cat.label}',
+                  ' ${catLabel(cat)}',
                   style: pw.TextStyle(
                     fontSize: _fontSize - 3,
                     color: PdfColors.grey600,

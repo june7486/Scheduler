@@ -28,14 +28,71 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedTaskId;
   bool _completedExpanded = true;
 
+  // Controllers so the ‹ › / ▲ ▼ arrows can scroll the top tab bar and the
+  // right category rail.
+  final ScrollController _tabScroll = ScrollController();
+  final ScrollController _railScroll = ScrollController();
+  bool _tabCanLeft = false;
+  bool _tabCanRight = false;
+  bool _railCanUp = false;
+  bool _railCanDown = false;
+
   @override
   void initState() {
     super.initState();
+    _tabScroll.addListener(_syncTabArrows);
+    _railScroll.addListener(_syncRailArrows);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final store = context.read<Store>();
       await store.seedRecurringBillsIfEmpty();
       await store.seedDailyRoutinesIfEmpty();
+      _syncTabArrows();
+      _syncRailArrows();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabScroll.dispose();
+    _railScroll.dispose();
+    super.dispose();
+  }
+
+  void _syncTabArrows() {
+    if (!mounted || !_tabScroll.hasClients) return;
+    final pos = _tabScroll.position;
+    final l = pos.pixels > 1;
+    final r = pos.pixels < pos.maxScrollExtent - 1;
+    if (l != _tabCanLeft || r != _tabCanRight) {
+      setState(() {
+        _tabCanLeft = l;
+        _tabCanRight = r;
+      });
+    }
+  }
+
+  void _syncRailArrows() {
+    if (!mounted || !_railScroll.hasClients) return;
+    final pos = _railScroll.position;
+    final u = pos.pixels > 1;
+    final d = pos.pixels < pos.maxScrollExtent - 1;
+    if (u != _railCanUp || d != _railCanDown) {
+      setState(() {
+        _railCanUp = u;
+        _railCanDown = d;
+      });
+    }
+  }
+
+  /// Smoothly nudges a scroll view by roughly one row/column.
+  void _nudge(ScrollController c, double delta) {
+    if (!c.hasClients) return;
+    final max = c.position.maxScrollExtent;
+    c.animateTo(
+      (c.offset + delta).clamp(0.0, max),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -161,47 +218,96 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- Top filter tabs ----------------
   Widget _topTabBar(List<Category> topCats) {
     return Container(
-      height: 42,
+      height: 44,
       color: p.card,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
         children: [
-          _addTabChip(),
-          const SizedBox(width: 2),
-          _topChip('all', '📋', context.tr('all')),
-          for (final c in topCats)
-            _topChip(c.id, c.emoji, catLabel(c), color: Color(c.colorValue)),
+          // ‹ — scroll the tab strip left
+          _scrollArrow(
+            icon: Icons.chevron_left,
+            enabled: _tabCanLeft,
+            tooltip: context.tr('scroll_left'),
+            onTap: () => _nudge(_tabScroll, -140),
+          ),
+          Expanded(
+            child: ListView(
+              controller: _tabScroll,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              children: [
+                _topChip('all', '📋', context.tr('all')),
+                for (final c in topCats)
+                  _topChip(
+                    c.id,
+                    c.emoji,
+                    catLabel(c),
+                    color: Color(c.colorValue),
+                  ),
+              ],
+            ),
+          ),
+          // › — scroll the tab strip right
+          _scrollArrow(
+            icon: Icons.chevron_right,
+            enabled: _tabCanRight,
+            tooltip: context.tr('scroll_right'),
+            onTap: () => _nudge(_tabScroll, 140),
+          ),
+          // ＋ 항목추가 — new tab/menu right where the tabs live
+          _addItemButton(),
         ],
       ),
     );
   }
 
-  /// Left-most "+ 메뉴 추가" chip on the top tab bar.
-  Widget _addTabChip() {
+  /// Small ‹ › arrow used by the horizontal tab strip.
+  Widget _scrollArrow({
+    required IconData icon,
+    required bool enabled,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: SizedBox(
+          width: 22,
+          height: 44,
+          child: Icon(
+            icon,
+            size: 20,
+            color: enabled ? p.indigo : p.inkSoft.withValues(alpha: 0.28),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The "항목추가" (add item / tab) button pinned at the right of the tab bar.
+  Widget _addItemButton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
-      child: GestureDetector(
+      padding: const EdgeInsets.only(right: 8, left: 2),
+      child: InkWell(
         onTap: () => _addTabDialog(context, context.read<Store>()),
+        borderRadius: BorderRadius.circular(9),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
-            color: p.indigo.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: p.indigo.withValues(alpha: 0.45)),
+            color: p.indigo,
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add, size: 15, color: p.indigo),
+              Icon(Icons.add, size: 14, color: p.onAccent),
               const SizedBox(width: 3),
               Text(
-                context.tr('add_menu'),
+                context.tr('add_item'),
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: p.indigo,
+                  color: p.onAccent,
                 ),
               ),
             ],
@@ -520,8 +626,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const Divider(height: 1),
+          // ▲ — scroll the category rail up
+          _railArrow(
+            icon: Icons.keyboard_arrow_up,
+            enabled: _railCanUp,
+            tooltip: context.tr('scroll_up'),
+            onTap: () => _nudge(_railScroll, -110),
+          ),
           Expanded(
             child: ListView.builder(
+              controller: _railScroll,
               padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: cats.length,
               itemBuilder: (_, i) {
@@ -599,6 +713,13 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          // ▼ — scroll the category rail down
+          _railArrow(
+            icon: Icons.keyboard_arrow_down,
+            enabled: _railCanDown,
+            tooltip: context.tr('scroll_down'),
+            onTap: () => _nudge(_railScroll, 110),
+          ),
           // Bottom of the left rail: add a new menu/tab.
           const Divider(height: 1),
           InkWell(
@@ -641,6 +762,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Task _emptyTask() => Task(id: '_', title: '', categoryId: '');
+
+  /// Small ▲ ▼ arrow used by the vertical category rail.
+  Widget _railArrow({
+    required IconData icon,
+    required bool enabled,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: SizedBox(
+          height: 22,
+          width: double.infinity,
+          child: Icon(
+            icon,
+            size: 18,
+            color: enabled ? p.indigo : p.inkSoft.withValues(alpha: 0.28),
+          ),
+        ),
+      ),
+    );
+  }
 
   void _railTap(Store store, Category c) {
     if (_selectedTaskId != null) {

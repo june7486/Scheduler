@@ -262,6 +262,9 @@ class L10n {
     'backup_hint': '할일, 탭, 설정, 음성메모를 JSON으로 내보냅니다',
     'restore': '백업 복원',
     'restore_hint': '백업 JSON을 붙여넣어 복원합니다',
+    'restore_file': '파일에서 복원',
+    'restore_file_hint': '내려받은 백업 JSON 파일을 선택해 복원합니다',
+    'restore_cancelled': '복원이 취소되었습니다.',
     'clear_cache_hint': '로그와 캐시된 버전 정보를 지웁니다',
     'reset_all': '전체 내용 초기화',
     'reset_hint': '모든 할일을 삭제하고 기본 탭을 복원합니다',
@@ -299,6 +302,12 @@ class L10n {
     'manage_tabs_title': '탭 관리',
     'add_tab': '탭 추가',
     'add_menu': '메뉴 추가',
+    'add_item': '항목추가',
+    'add_item_hint': '새 탭(항목)을 추가합니다',
+    'scroll_left': '탭 왼쪽으로',
+    'scroll_right': '탭 오른쪽으로',
+    'scroll_up': '위로',
+    'scroll_down': '아래로',
     'tab_name': '탭 이름',
     'emoji_hint': '이모지 (예: 🎂)',
     'top_tab_on': '상단 탭: 켜짐',
@@ -563,6 +572,9 @@ class L10n {
     'backup_hint': 'Export tasks, tabs, settings & voice notes as JSON',
     'restore': 'Restore from backup',
     'restore_hint': 'Paste a backup JSON to restore',
+    'restore_file': 'Restore from file',
+    'restore_file_hint': 'Pick a downloaded backup JSON file to restore',
+    'restore_cancelled': 'Restore cancelled.',
     'clear_cache_hint': 'Clears logs and cached version info',
     'reset_all': 'Reset all content',
     'reset_hint': 'Delete every task and restore default tabs',
@@ -599,6 +611,12 @@ class L10n {
     'manage_tabs_title': 'Manage Tabs',
     'add_tab': 'Add tab',
     'add_menu': 'Add menu',
+    'add_item': 'Add',
+    'add_item_hint': 'Add a new tab (item)',
+    'scroll_left': 'Scroll tabs left',
+    'scroll_right': 'Scroll tabs right',
+    'scroll_up': 'Up',
+    'scroll_down': 'Down',
     'tab_name': 'Tab name',
     'emoji_hint': 'Emoji (e.g. 🎂)',
     'top_tab_on': 'Top tab: on',
@@ -687,14 +705,37 @@ extension L10nX on BuildContext {
 String tr(String key, {Map<String, String>? args}) =>
     L10n(L10n.currentLang).t(key, args: args);
 
-/// Resolves a category's display name.
-/// Built-in categories (known ids) follow the active language; user-created
-/// categories keep their custom label.
-String catName(String id, String fallback) =>
-    (L10n.currentLang == AppLang.ko ? L10n.categoryKo : L10n.categoryEn)[id] ??
-    fallback;
+/// Default (localised) name for a built-in category id, or null if [id] is not
+/// a built-in.
+String? catDefault(String id) =>
+    (L10n.currentLang == AppLang.ko ? L10n.categoryKo : L10n.categoryEn)[id];
 
-/// Localised label for a [Category] (built-ins follow the active language).
-String catLabel(Category c) => catName(c.id, c.label);
+/// Resolves a category's display name.
+///
+/// A name the user typed ALWAYS wins. Built-in categories follow the active
+/// language only while they still carry their default name — as soon as the
+/// user renames one, the stored label differs from every built-in default and
+/// is used as-is. (Previously the localised default silently overrode renames.)
+String catName(String id, String stored) {
+  final def = catDefault(id);
+  final s = stored.trim();
+  if (s.isEmpty) return def ?? id;
+  if (def == null) return s; // user-created category → keep its label
+  if (s == def) return s;
+  // The label may still be the default of the *other* language (e.g. stored as
+  // 'To-Do' while the UI is Korean) — that counts as "not renamed" too.
+  final other = (L10n.currentLang == AppLang.ko
+      ? L10n.categoryEn
+      : L10n.categoryKo)[id];
+  if (other != null && s == other) return def;
+  return s; // ← the user's own name
+}
+
+/// Localised label for a [Category] (user's custom name takes precedence).
+String catLabel(Category c) {
+  final s = c.label.trim();
+  if (c.isCustomLabel && s.isNotEmpty) return s;
+  return catName(c.id, c.label);
+}
 
 

@@ -190,6 +190,10 @@ class Category {
   /// Whether this category participates in the top filter tab row.
   bool showInTopTabs;
 
+  /// True once the user renamed this (built-in) category. A renamed category
+  /// keeps its own label instead of following the UI language.
+  bool isCustomLabel;
+
   Category({
     required this.id,
     this.ownerId = '',
@@ -199,6 +203,7 @@ class Category {
     this.order = 0,
     this.enabled = true,
     this.showInTopTabs = true,
+    this.isCustomLabel = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -210,6 +215,7 @@ class Category {
     'order': order,
     'enabled': enabled,
     'showInTopTabs': showInTopTabs,
+    'isCustomLabel': isCustomLabel,
   };
 
   factory Category.fromMap(Map<dynamic, dynamic> map) => Category(
@@ -221,6 +227,7 @@ class Category {
     order: (map['order'] ?? 0) as int,
     enabled: (map['enabled'] ?? true) as bool,
     showInTopTabs: (map['showInTopTabs'] ?? true) as bool,
+    isCustomLabel: (map['isCustomLabel'] ?? false) as bool,
   );
 }
 
