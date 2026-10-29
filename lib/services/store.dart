@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -44,15 +46,29 @@ class Store extends ChangeNotifier {
   SyncService get sync => _sync ??= SyncService(this);
 
   /// Suppresses the auto-push while the app itself is applying remote data.
-  bool _applyingRemote = false;
+  int _remoteDepth = 0;
 
-  void onSyncStatusChanged() => notifyListeners();
+  /// Called by [SyncService] when its state changes. Must bypass the
+  /// auto-push override below, otherwise notifyListeners() -> markDirty() ->
+  /// _setState() -> onSyncStatusChanged() recurses forever and blows the stack.
+  void onSyncStatusChanged() => super.notifyListeners();
+
+  /// Wraps a batch of remote writes so they do not bounce back to the server.
+  void beginRemoteApply() => _remoteDepth++;
+
+  /// Ends a remote-apply batch and rebuilds the UI exactly once, only when
+  /// something actually changed.
+  void endRemoteApply(bool changed) {
+    if (_remoteDepth > 0) _remoteDepth--;
+    if (changed && _remoteDepth == 0) super.notifyListeners();
+  }
 
   @override
   void notifyListeners() {
     super.notifyListeners();
-    // Any local mutation should be pushed to the other devices.
-    if (_ready && !_applyingRemote) sync.markDirty();
+    // Any local mutation should be pushed to the other devices — but never
+    // while we are the ones applying a pulled change (that would ping-pong).
+    if (_ready && _remoteDepth == 0) sync.markDirty();
   }
 
   String _currentUserId = '';
@@ -178,6 +194,8 @@ class Store extends ChangeNotifier {
     await _ensureUserSeed(u.id);
     addLog('Login', u.id);
     notifyListeners();
+    // Bring the other devices' data in immediately, then start live sync.
+    if (syncEnabled) unawaited(sync.start());
     return true;
   }
 
@@ -187,6 +205,7 @@ class Store extends ChangeNotifier {
   }
 
   void logoutCurrent() {
+    sync.stop();
     _currentUserId = '';
     _masterViewingAll = false;
     notifyListeners();
@@ -616,6 +635,27 @@ class Store extends ChangeNotifier {
     'voices': _voices,
   };
 
+  /// Re-stamps every record of [ownerId] as modified now.
+  ///
+  /// Used when a second device adopts an existing workspace: without this its
+  /// older copies would lose last-writer-wins against the server and the two
+  /// devices would keep showing different data.
+  Future<void> reStampAll(String ownerId) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var i = 0;
+    for (final e in _syncBoxes.entries) {
+      for (final k in e.value.keys.toList()) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        final m = Map<String, dynamic>.from(raw);
+        // Keep a strict ordering inside one batch so nothing ties.
+        m['updatedAt'] = now + (i++);
+        await e.value.put(k, m);
+      }
+    }
+  }
+
   /// Every syncable record of [ownerId] as `{boxKey: map}`, including
   /// soft-deleted tombstones so deletions propagate. Server bookkeeping fields
   /// (`_rev`, `_updatedAt`) are stripped.
@@ -686,10 +726,12 @@ class Store extends ChangeNotifier {
     await _cats.put(_catKey(oid, c.id), m);
   }
 
-  /// Persists a voice note, stamped as changed now.
+  /// Persists a voice note, stamped as changed now so it reaches other devices.
   Future<void> _putVoice(VoiceNote v) async {
     if (v.ownerId.isEmpty) v.ownerId = _scopeId;
-    await _voices.put(v.id, v.toMap());
+    final m = v.toMap();
+    stamp(m);
+    await _voices.put(v.id, m);
   }
 
   /// Applies a record coming from the sync server (last-writer-wins).
@@ -715,11 +757,11 @@ class Store extends ChangeNotifier {
     final incoming = <String, dynamic>{};
     for (final e in remote.entries) {
       if (e.key == '_rev' || e.key == '_updatedAt') continue;
-      incoming['${e.key}'] = e.value;
+      incoming[e.key.toString()] = e.value;
     }
     incoming['updatedAt'] = remoteStamp;
     incoming['deletedAt'] = (incoming['deletedAt'] as num?)?.toInt();
-    final id = '${incoming['id'] ?? ''}';
+    final id = incoming['id']?.toString() ?? '';
     if (id.isEmpty) return false;
 
     final same = local is Map &&

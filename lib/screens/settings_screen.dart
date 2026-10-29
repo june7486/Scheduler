@@ -833,9 +833,9 @@ class _SyncPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ko = store.language == 'ko';
     final svc = store.sync;
     final on = store.syncEnabled;
+    final busy = svc.state == SyncState.syncing;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
@@ -859,7 +859,7 @@ class _SyncPanel extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    ko ? '기기 간 자동 동기화' : 'Sync across devices',
+                    context.tr('sync_on'),
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
@@ -872,10 +872,10 @@ class _SyncPanel extends StatelessWidget {
                   activeThumbColor: p.indigo,
                   onChanged: (v) async {
                     if (v) {
-                      await svc.start();
-                      if (!store.syncEnabled) {
-                        // Nothing configured yet → open the setup dialog.
-                        await _setup(context, ko: ko);
+                      if (store.syncCode.isEmpty) {
+                        await _setup(context);
+                      } else {
+                        await svc.start();
                       }
                     } else {
                       await store.setSyncConfig(enabled: false);
@@ -885,21 +885,44 @@ class _SyncPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              on
-                  ? svc.statusLabel(ko: ko)
-                  : (ko
-                        ? '꺼져 있음 — PC와 휴대폰 내용이 서로 다릅니다'
-                        : 'Off — each device keeps its own data'),
-              style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                if (busy)
+                  SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.6,
+                      color: p.indigo,
+                    ),
+                  ),
+                if (busy) const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    on
+                        ? '${svc.statusLabel(ko: context.l10n.lang == AppLang.ko)}'
+                              '${svc.lastCount > 0 ? ' · ${svc.lastCount}${context.tr('sync_records')}' : ''}'
+                        : context.tr('sync_off'),
+                    style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+                  ),
+                ),
+              ],
             ),
+            if (svc.state == SyncState.offline && svc.message.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  svc.message,
+                  style: TextStyle(fontSize: 10.5, color: p.danger),
+                ),
+              ),
             if (on) ...[
               const SizedBox(height: 10),
               Row(
                 children: [
                   Text(
-                    ko ? '동기화 코드' : 'Sync code',
+                    context.tr('sync_code'),
                     style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                   ),
                   const SizedBox(width: 8),
@@ -914,6 +937,13 @@ class _SyncPanel extends StatelessWidget {
                   ),
                 ],
               ),
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  context.tr('sync_e2e'),
+                  style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+                ),
+              ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -921,80 +951,67 @@ class _SyncPanel extends StatelessWidget {
                 children: [
                   _chipBtn(
                     icon: Icons.sync,
-                    label: ko ? '지금 동기화' : 'Sync now',
+                    label: context.tr('sync_now'),
                     onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final doneMsg = context.tr('sync_done');
                       try {
                         await svc.pull();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(ko ? '동기화 완료' : 'Synced'),
-                            ),
-                          );
-                        }
+                        await svc.push();
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(doneMsg)),
+                        );
                       } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('$e')),
-                          );
-                        }
-                      }
-                    },
-                  ),
-                  _chipBtn(
-                    icon: Icons.copy_outlined,
-                    label: ko ? '코드 복사' : 'Copy code',
-                    onTap: () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: store.syncCode),
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              ko
-                                  ? '코드를 복사했습니다 — 다른 기기에 입력하세요'
-                                  : 'Copied — enter it on your other device',
-                            ),
-                          ),
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('$e')),
                         );
                       }
                     },
                   ),
                   _chipBtn(
-                    icon: Icons.refresh,
-                    label: ko ? '새로 시작' : 'New code',
+                    icon: Icons.copy_outlined,
+                    label: context.tr('sync_copy'),
                     onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final copiedMsg = context.tr('sync_copied');
+                      await Clipboard.setData(
+                        ClipboardData(text: store.syncCode),
+                      );
+                      messenger.showSnackBar(
+                        SnackBar(content: Text(copiedMsg)),
+                      );
+                    },
+                  ),
+                  _chipBtn(
+                    icon: Icons.refresh,
+                    label: context.tr('sync_new'),
+                    onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final copiedMsg = context.tr('sync_copied');
                       final oldCode = store.syncCode;
                       if (oldCode.isNotEmpty) {
                         await Clipboard.setData(ClipboardData(text: oldCode));
                       }
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      await svc.createWorkspace();
+                      messenger.showSnackBar(
                         SnackBar(
-                          content: Text(
-                            ko
-                                ? '새 코드를 발급했습니다. 이전 코드($oldCode)는 복사해 두었습니다.'
-                                : 'New code issued. Old code ($oldCode) copied.',
-                          ),
-                          duration: const Duration(seconds: 5),
+                          content: Text(copiedMsg),
+                          duration: const Duration(seconds: 4),
                         ),
                       );
-                      await svc.createWorkspace();
                     },
                   ),
                   _chipBtn(
                     icon: Icons.login,
-                    label: ko ? '코드로 연결' : 'Join by code',
-                    onTap: () => _setup(context, ko: ko),
+                    label: context.tr('sync_join'),
+                    onTap: () => _setup(context),
                   ),
                 ],
               ),
               if (svc.lastSync != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '${ko ? '마지막 동기화' : 'Last sync'} · '
-                  '${_hhmmss(svc.lastSync!)}',
+                  '${context.tr('sync_last')} · ${_hhmmss(svc.lastSync!)}',
                   style: TextStyle(fontSize: 11, color: p.inkSoft),
                 ),
               ],
@@ -1002,8 +1019,8 @@ class _SyncPanel extends StatelessWidget {
               const SizedBox(height: 10),
               _chipBtn(
                 icon: Icons.power_settings_new,
-                label: ko ? '동기화 켜기' : 'Turn on sync',
-                onTap: () => _setup(context, ko: ko),
+                label: context.tr('sync_on'),
+                onTap: () => _setup(context),
               ),
             ],
           ],
@@ -1052,65 +1069,87 @@ class _SyncPanel extends StatelessWidget {
   }
 
   /// Asks for an existing code (join) or offers to create a new workspace.
-  Future<void> _setup(BuildContext context, {required bool ko}) async {
+  Future<void> _setup(BuildContext context) async {
     final ctrl = TextEditingController(text: store.syncCode);
     final urlCtrl = TextEditingController(text: store.syncUrl);
     final svc = store.sync;
 
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ko ? '자동 동기화 연결' : 'Connect auto-sync'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                ko
-                    ? 'PC에서 만든 코드를 휴대폰에 입력하면 두 기기가 같은 내용을 봅니다.'
-                    : 'Enter the code from your PC so both devices show the same data.',
-                style: TextStyle(fontSize: 12, color: p.inkSoft),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: ctrl,
-                textCapitalization: TextCapitalization.characters,
-                decoration: InputDecoration(
-                  labelText: ko ? '동기화 코드' : 'Sync code',
-                  hintText: 'ABCD2345XY',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          var working = false;
+          return StatefulBuilder(
+            builder: (ctx, _) => AlertDialog(
+              title: Text(ctx.tr('sync_connect')),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ctx.tr('sync_connect_hint'),
+                      style: TextStyle(fontSize: 12, color: p.inkSoft),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: ctrl,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        labelText: ctx.tr('sync_code'),
+                        hintText: 'ABCD2345XY',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: urlCtrl,
+                      decoration: InputDecoration(
+                        labelText: ctx.tr('sync_server'),
+                        hintText: ctx.tr('sync_server_hint'),
+                      ),
+                    ),
+                    if (working)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: urlCtrl,
-                decoration: InputDecoration(
-                  labelText: ko ? '동기화 서버 (선택)' : 'Sync server (optional)',
-                  hintText: SyncService.defaultBaseUrl,
+              actions: [
+                TextButton(
+                  onPressed: working ? null : () => Navigator.pop(ctx),
+                  child: Text(ctx.tr('sync_cancel')),
                 ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(ko ? '취소' : 'Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              await store.setSyncConfig(url: urlCtrl.text.trim());
-              final code = ctrl.text.trim();
-              Navigator.pop(ctx);
-              if (code.isEmpty) {
-                await svc.createWorkspace();
-              } else {
-                await svc.joinWorkspace(code);
-              }
-            },
-            child: Text(ko ? '연결' : 'Connect'),
-          ),
-        ],
+                TextButton(
+                  onPressed: working
+                      ? null
+                      : () async {
+                          setLocal(() => working = true);
+                          final code = ctrl.text.trim();
+                          await store.setSyncConfig(url: urlCtrl.text.trim());
+                          try {
+                            if (code.isEmpty) {
+                              await svc.createWorkspace();
+                            } else {
+                              await svc.joinWorkspace(code);
+                            }
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          } catch (e) {
+                            setLocal(() => working = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('$e')),
+                              );
+                            }
+                          }
+                        },
+                  child: Text(ctx.tr('sync_connect_btn')),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

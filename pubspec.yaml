@@ -38,6 +38,8 @@ dependencies:
   # Voice note
   record: ^5.2.0
   permission_handler: ^11.3.1
+  encrypt: ^5.0.3
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
