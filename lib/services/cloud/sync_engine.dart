@@ -42,6 +42,7 @@ class SyncService {
   Timer? _retry;
 
   bool _busy = false;
+  bool _dirty = false;
   bool _stopped = true;
 
   SyncState _state = SyncState.off;
@@ -151,8 +152,10 @@ class SyncService {
   void markDirty() {
     if (_stopped || !_store.syncEnabled) return;
     if (_busy) {
-      // A flush is already in flight; the snapshot that follows will pick up
-      // whatever we just queued, so nothing is lost by ignoring this call.
+      // A flush is already in flight. Remember that more work arrived so the
+      // in-flight cycle starts another one when it finishes — dropping this
+      // call would silently swallow an edit made during a slow upload.
+      _dirty = true;
       return;
     }
     _pushTimer?.cancel();
@@ -170,7 +173,11 @@ class SyncService {
       _setState(SyncState.notConfigured, 'firebase not configured');
       return;
     }
-    if (_busy) return;
+    if (_busy) {
+      // Let the running cycle know it has more work once it finishes.
+      _dirty = true;
+      return;
+    }
     final id = workspaceId;
     if (id.isEmpty) {
       _setState(SyncState.offline, 'not signed in');
@@ -201,11 +208,19 @@ class SyncService {
         _scheduleRetry();
         return;
       }
-      // Confirmation comes from the snapshot, not from the HTTP result: the
-      // outbox is emptied in [_onRemote] only for records the server echoed
-      // back. That closes the "reported saved but never stored" hole.
+      // Confirmation comes from the server's answer, not from the HTTP result
+      // alone: the outbox is emptied in [_onRemote] only for records the server
+      // echoed back. That closes the "reported saved but never stored" hole.
+      //
+      // Read back immediately instead of waiting for the push channel to fire.
+      // Firestore's snapshot would arrive on its own, but a polling backend
+      // (NAS) would only confirm on its next tick — up to two seconds of the
+      // pending badge sitting there after a successful upload, which reads as
+      // "it did not work". An extra read costs nothing and makes the panel
+      // honest the instant the write lands.
       _failures = 0;
-      _setState(SyncState.syncing, '');
+      final confirm = await _backend.read(id);
+      await _onRemote(confirm);
     } catch (e) {
       _failures = (_failures + 1).clamp(1, 8);
       debugPrint('CLOUDDBG upload failed: $e');
@@ -213,6 +228,13 @@ class SyncService {
       _scheduleRetry();
     } finally {
       _busy = false;
+      // Edits that arrived while this cycle was running must not be dropped:
+      // run one more pass if anything is still queued.
+      if (!_stopped && _dirty) {
+        _dirty = false;
+        if (_store.pendingCount > 0) _pushTimer?.cancel();
+        _pushTimer = Timer(pushDebounce, () => unawaited(flush()));
+      }
     }
   }
 

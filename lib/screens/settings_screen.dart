@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -188,6 +189,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Group(context.tr('sync_grp')),
             _SyncPanel(store: store),
+            const _NasPanel(),
             _Group(context.tr('drive_grp')),
             _Tile(
               icon: Icons.add_to_drive_outlined,
@@ -1000,4 +1002,333 @@ class _SyncPanel extends StatelessWidget {
       '${d.hour.toString().padLeft(2, '0')}:'
       '${d.minute.toString().padLeft(2, '0')}:'
       '${d.second.toString().padLeft(2, '0')}';
+}
+
+/// Points the app at a sync server the user runs themselves (`server/nas/`).
+///
+/// Deliberately plain: one address, one optional key, two buttons. Leaving the
+/// address empty returns the app to the hosted cloud, so the panel can never
+/// trap a user in a half-configured state.
+class _NasPanel extends StatefulWidget {
+  const _NasPanel();
+
+  @override
+  State<_NasPanel> createState() => _NasPanelState();
+}
+
+class _NasPanelState extends State<_NasPanel> {
+  late final TextEditingController _url =
+      TextEditingController(text: context.read<Store>().nasUrl);
+  late final TextEditingController _key =
+      TextEditingController(text: context.read<Store>().nasSecret);
+
+  bool _busy = false;
+  bool _expanded = false;
+  String _note = '';
+  bool _noteOk = false;
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _key.dispose();
+    super.dispose();
+  }
+
+  Future<void> _test() async {
+    final store = context.read<Store>();
+    setState(() {
+      _busy = true;
+      _note = '';
+    });
+    final ok = await store.pingNas(
+      url: _url.text,
+      secret: _key.text,
+    );
+    if (!mounted) return;
+    final ko = context.l10n.lang == AppLang.ko;
+    setState(() {
+      _busy = false;
+      _noteOk = ok;
+      _note = ok
+          ? context.tr('nas_ok')
+          : (ko ? 'NAS에 연결하지 못했습니다 — 주소와 키를 확인하세요' : context.tr('nas_fail'));
+    });
+  }
+
+  Future<void> _save() async {
+    final store = context.read<Store>();
+    setState(() {
+      _busy = true;
+      _note = '';
+    });
+    await store.useNasBackend(url: _url.text, secret: _key.text);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _noteOk = true;
+      _note = context.tr('nas_saved');
+    });
+    // A fresh engine is live now; nudge it once so the panel shows the truth.
+    unawaited(store.sync.syncNow());
+  }
+
+  Future<void> _clear() async {
+    final store = context.read<Store>();
+    setState(() => _busy = true);
+    await store.useNasBackend(url: '', secret: '');
+    if (!mounted) return;
+    _url.text = '';
+    _key.text = '';
+    setState(() {
+      _busy = false;
+      _noteOk = true;
+      _note = context.tr('nas_cleared');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.ac;
+    final store = context.watch<Store>();
+    final ko = context.l10n.lang == AppLang.ko;
+    final active = store.usingNas;
+
+    // The one real trap of a self-hosted backend: a browser refuses to let an
+    // HTTPS page call an http:// address (mixed content). It looks like "the
+    // NAS is broken" and no amount of retrying fixes it, so say it plainly
+    // before the user types it in.
+    final mixedBlocked = kIsWeb &&
+        Uri.base.scheme == 'https' &&
+        _url.text.trim().toLowerCase().startsWith('http://');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: p.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: p.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Row(
+                children: [
+                  Icon(Icons.dns_outlined,
+                      size: 18, color: active ? p.teal : p.inkSoft),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.tr('nas_grp'),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (active ? p.teal : p.inkSoft)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      active ? context.tr('nas_active') : context.tr('nas_cloud'),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: active ? p.teal : p.inkSoft,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18, color: p.inkSoft),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.tr('nas_guide'),
+              style: TextStyle(fontSize: 11, color: p.inkSoft, height: 1.35),
+            ),
+            if (_expanded) ...[
+              const SizedBox(height: 10),
+              _NasField(
+                controller: _url,
+                label: context.tr('nas_title'),
+                hint: context.tr('nas_hint'),
+                enabled: !_busy,
+                keyboard: TextInputType.url,
+              ),
+              const SizedBox(height: 8),
+              _NasField(
+                controller: _key,
+                label: context.tr('nas_key'),
+                hint: context.tr('nas_key_hint'),
+                enabled: !_busy,
+                obscure: true,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _save,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.8),
+                          )
+                        : const Icon(Icons.save_outlined, size: 15),
+                    label: Text(
+                      context.tr('nas_save'),
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: p.teal,
+                      foregroundColor: p.onAccent,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _busy ? null : _test,
+                    style: TextButton.styleFrom(
+                      foregroundColor: p.inkSoft,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      context.tr('nas_test'),
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (active)
+                    TextButton(
+                      onPressed: _busy ? null : _clear,
+                      style: TextButton.styleFrom(
+                        foregroundColor: p.danger,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        ko ? '해제' : 'Clear',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                ],
+              ),
+              if (_note.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    _note,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: _noteOk ? p.teal : p.danger,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              if (mixedBlocked)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    ko
+                        ? '이 사이트는 https입니다. 브라우저는 https 페이지에서 '
+                            'http:// 주소로 접속하는 것을 막습니다. '
+                            'NAS를 https(역프록시·인증서)로 열거나, 안드로이드 앱에서 사용하세요.'
+                        : 'This site is https. Browsers block an https page from '
+                            'calling http://. Serve the NAS over https '
+                            '(reverse proxy + certificate) or use the Android app.',
+                    style: TextStyle(fontSize: 10.5, color: p.danger, height: 1.35),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NasField extends StatelessWidget {
+  const _NasField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.enabled,
+    this.obscure = false,
+    this.keyboard,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final bool enabled;
+  final bool obscure;
+  final TextInputType? keyboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.ac;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: p.inkSoft,
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          enabled: enabled,
+          obscureText: obscure,
+          keyboardType: keyboard,
+          autocorrect: false,
+          style: TextStyle(fontSize: 12.5, color: p.ink),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: hint,
+            hintStyle: TextStyle(fontSize: 11.5, color: p.inkSoft),
+            filled: true,
+            fillColor: p.soft,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: p.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: p.line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: p.teal),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

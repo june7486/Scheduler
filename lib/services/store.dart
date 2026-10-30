@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import 'cloud/cloud_backend.dart';
 import 'cloud/firestore_backend.dart';
+import 'cloud/nas_backend.dart';
 import 'cloud/sync_engine.dart';
 
 /// Central application state & persistence layer.
@@ -53,7 +54,22 @@ class Store extends ChangeNotifier {
   /// initialised (missing config, failed init). One eager field would take the
   /// whole app down instead of degrading to local-only storage.
   CloudBackend? _backendOverride;
-  CloudBackend get backend => _backendOverride ??= FirestoreBackend();
+  CloudBackend get backend =>
+      _backendOverride ??= (_nasUrl.isEmpty ? FirestoreBackend() : _nas());
+
+  /// Builds the NAS client from the saved URL + key. Cheap, but not cached: the
+  /// URL can change from Settings, and a stale cached client would keep talking
+  /// to the old address.
+  NasBackend _nas() => NasBackend(baseUrl: _nasUrl, secret: _nasKey);
+
+  String get _nasUrl => (_users.get('__sync_url__') as String?) ?? '';
+  String get _nasKey => (_users.get('__sync_secret__') as String?) ?? '';
+
+  /// Saved NAS address (empty ⇒ the app uses the hosted cloud).
+  String get nasUrl => _nasUrl;
+
+  /// Saved shared key for the NAS server (empty when none was set).
+  String get nasSecret => _nasKey;
 
   /// Replaces the storage provider (tests, or a future self-hosted server).
   void useBackend(CloudBackend backend) {
@@ -65,6 +81,30 @@ class Store extends ChangeNotifier {
     // the caller a live engine on the new backend instead of a dead one.
     if (wasStarted) unawaited(sync.start());
   }
+
+  /// Points every future read/write at a NAS (or any server speaking the
+  /// `server/nas/server.js` protocol) and remembers it for next launch.
+  ///
+  /// An empty [url] means "go back to the cloud default", which is why the
+  /// stored key is cleared as well — half a configuration is worse than none.
+  Future<void> useNasBackend({required String url, String secret = ''}) async {
+    final clean = url.trim();
+    await _users.put('__sync_url__', clean);
+    await _users.put('__sync_secret__', secret.trim());
+    _backendOverride = clean.isEmpty ? null : _nas();
+    final wasStarted = _sync != null;
+    _sync?.stop();
+    _sync = null;
+    if (wasStarted) unawaited(sync.start());
+    notifyListeners();
+  }
+
+  /// Quick "can we reach it?" probe for the Settings screen.
+  Future<bool> pingNas({required String url, String secret = ''}) =>
+      NasBackend(baseUrl: url, secret: secret).ping();
+
+  bool get usingNas => _nasUrl.isNotEmpty;
+
 
   /// Cross-device sync engine. Built on first use for the same reason.
   SyncService? _sync;
