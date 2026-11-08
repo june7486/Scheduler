@@ -1,25 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// The decorative treatment painted *behind* the app content for a skin.
-enum SkinDeco {
-  /// Flat solid canvas (default).
-  plain,
+import 'design_language.dart';
 
-  /// Ruled notebook paper with a red margin line.
-  ruled,
-
-  /// Graph / grid paper.
-  grid,
-
-  /// Soft diagonal two-tone gradient.
-  gradient,
-}
+export 'design_language.dart';
 
 /// A resolved colour palette for one skin at one brightness (light or dark).
 ///
+/// A palette is **only colour**. Geometry, depth, and spacing belong to the
+/// design language ([AppDesign]) and are deliberately not stored here: that is
+/// what lets four very different structures reuse the same six colourways.
+///
 /// [indigo] is the primary accent, the rest stay low-key. Each palette also
-/// carries its skin [id] + [emoji] and its background [deco] so the whole look
-/// travels together.
+/// carries its skin [id] + [emoji] so the picker can render it standalone.
 class AppPalette {
   final String id;
   final String emoji;
@@ -36,7 +28,6 @@ class AppPalette {
   final Color paper; // print-like surface
   final Color tracker; // bar-graph track
   final Color onAccent; // text/icon on top of the accent colour
-  final SkinDeco deco;
 
   const AppPalette({
     required this.id,
@@ -54,7 +45,6 @@ class AppPalette {
     required this.paper,
     required this.tracker,
     required this.onAccent,
-    this.deco = SkinDeco.plain,
   });
 
   /// A soft tint of a category colour that stays visible on the surface.
@@ -117,7 +107,6 @@ class AppSkins {
       paper: Color(0xFFFFFDF7),
       tracker: Color(0xFFE8E2D2),
       onAccent: Color(0xFFFFFFFF),
-      deco: SkinDeco.ruled,
     ),
 
     // 3) Midnight — deep indigo / violet, gradient canvas.
@@ -137,7 +126,6 @@ class AppSkins {
       paper: Color(0xFFF6F7FE),
       tracker: Color(0xFFE1E4F6),
       onAccent: Color(0xFFFFFFFF),
-      deco: SkinDeco.gradient,
     ),
 
     // 4) Ocean — cool teal / blue.
@@ -157,7 +145,6 @@ class AppSkins {
       paper: Color(0xFFF3F9FA),
       tracker: Color(0xFFD8E8EA),
       onAccent: Color(0xFFFFFFFF),
-      deco: SkinDeco.gradient,
     ),
 
     // 5) Sunset — warm coral / amber.
@@ -177,7 +164,6 @@ class AppSkins {
       paper: Color(0xFFFFF6EF),
       tracker: Color(0xFFF2DFD1),
       onAccent: Color(0xFFFFFFFF),
-      deco: SkinDeco.gradient,
     ),
 
     // 6) Forest — deep calm green.
@@ -235,7 +221,6 @@ class AppSkins {
       paper: Color(0xFF232219),
       tracker: Color(0xFF302E27),
       onAccent: Color(0xFF14140F),
-      deco: SkinDeco.ruled,
     ),
 
     'midnight': AppPalette(
@@ -254,7 +239,6 @@ class AppSkins {
       paper: Color(0xFF191C30),
       tracker: Color(0xFF232744),
       onAccent: Color(0xFF0B0D18),
-      deco: SkinDeco.gradient,
     ),
 
     'ocean': AppPalette(
@@ -273,7 +257,6 @@ class AppSkins {
       paper: Color(0xFF102229),
       tracker: Color(0xFF1B373D),
       onAccent: Color(0xFF06232A),
-      deco: SkinDeco.gradient,
     ),
 
     'sunset': AppPalette(
@@ -292,7 +275,6 @@ class AppSkins {
       paper: Color(0xFF291713),
       tracker: Color(0xFF3A231D),
       onAccent: Color(0xFF241009),
-      deco: SkinDeco.gradient,
     ),
 
     'forest': AppPalette(
@@ -333,10 +315,26 @@ class AppSkins {
 // sync with the selected skin + the effective brightness.
 
 String _skinId = AppSkins.defaultId;
+String _designId = AppDesigns.defaultId;
 Brightness _brightness = Brightness.light;
 bool _handwriting = true;
 String _fontKey = 'system'; // see AppFonts.ids
 double _fontScale = 1.0;
+
+/// The active design language (structure) — the "theme" in the new sense.
+AppDesign get design => AppDesigns.of(_designId);
+
+/// The active colourway (the palette chosen inside that design).
+String get currentSkinId => _skinId;
+
+/// The active design id.
+String get currentDesignId => _designId;
+
+/// Convenience: the geometry currently in effect.
+SurfaceSpec get sx => design.surface;
+
+/// Whether the current design wants the hand-writing look by default.
+bool get designPrefersHandwriting => design.prefersHandwriting;
 
 /// The catalogue of selectable app fonts.
 ///
@@ -405,7 +403,6 @@ class AppFonts {
 /// The palette currently in effect.
 AppPalette get p => AppSkins.forId(_skinId, _brightness);
 Brightness get globalBrightness => _brightness;
-String get currentSkinId => _skinId;
 
 /// The user's font choice (see [Store.fontKey]).
 String get currentFontKey => _fontKey;
@@ -417,7 +414,8 @@ double get fontScale => _fontScale;
 /// whenever a hand-writing font is selected (pen / gaegu), or the legacy
 /// "auto + handwriting" toggle is on.
 bool get handwritingOn =>
-    AppFonts.isHand(_fontKey) || (_fontKey == 'auto' && _handwriting);
+    AppFonts.isHand(_fontKey) ||
+    (_fontKey == 'auto' && (_handwriting || design.prefersHandwriting));
 
 /// The currently selected font definition.
 AppFont get currentFont => AppFonts.of(_fontKey);
@@ -442,11 +440,17 @@ double get handwritingBoost => handwritingOn ? 1.22 : 1.0;
 
 /// The effective text-scale actually applied to the whole app — the user's
 /// slider value, plus the hand-writing legibility boost.
-double get effectiveFontScale => _fontScale * handwritingBoost;
+double get effectiveFontScale =>
+    _fontScale * handwritingBoost * design.typeScale;
 
-/// Selects the active skin (called by the app root from the store).
+/// Selects the active skin (colourway). Called by the app root from the store.
 void setSkin(String id) {
   _skinId = AppSkins.ids.contains(id) ? id : AppSkins.defaultId;
+}
+
+/// Selects the active design language (structure). Called by the app root.
+void setDesign(String id) {
+  _designId = AppDesigns.contains(id) ? id : AppDesigns.defaultId;
 }
 
 /// User preference for the hand-writing look on non-notebook skins.
@@ -484,15 +488,33 @@ extension AppColorsX on BuildContext {
 }
 
 class AppTheme {
+  /// Builds the Material theme for [skinId] (colourway) inside the active
+  /// [AppDesign] (structure).
+  ///
+  /// Geometry comes from the design, colour from the palette. Nothing here
+  /// hard-codes a radius or a shadow: every surface decision is read from
+  /// `design.surface`, which is what makes one dataset look like four
+  /// different products.
   static ThemeData build(String skinId, Brightness brightness) {
     final p = AppSkins.forId(skinId, brightness);
+    final d = design;
+    final s = d.surface;
     final base = brightness == Brightness.dark
         ? ThemeData.dark(useMaterial3: true)
         : ThemeData.light(useMaterial3: true);
 
-    // Non-flat skins paint their own backdrop behind the app, so let the
-    // scaffold show through.
-    final transparentCanvas = p.deco != SkinDeco.plain;
+    // Designs with their own backdrop let the scaffold show through so the
+    // decoration is visible behind list content.
+    final transparentCanvas = d.deco != SkinDeco.plain;
+
+    final fontArgs = (
+      family: fontFamily,
+      fallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+    );
+
+    final border = s.borderWidth <= 0
+        ? BorderSide.none
+        : BorderSide(color: p.line, width: s.borderWidth);
 
     final theme = base.copyWith(
       scaffoldBackgroundColor:
@@ -505,81 +527,140 @@ class AppTheme {
         error: p.danger,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: p.card,
-        foregroundColor: p.ink,
-        elevation: 0,
+        backgroundColor: s.headerBand ? p.soft : p.card,
+        foregroundColor: s.headerAccentTitle ? p.indigo : p.ink,
+        elevation: s.elevation > 0.4 ? 1 : 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
+        shape: s.headerRule
+            ? Border(bottom: BorderSide(color: p.line, width: s.borderWidth))
+            : null,
         titleTextStyle: TextStyle(
-          color: p.ink,
-          fontSize: handwritingOn ? 21 : 17,
-          fontFamily: fontFamily,
-          fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
+          color: s.headerAccentTitle ? p.indigo : p.ink,
+          fontSize: (handwritingOn ? 21 : 17) * d.typeScale,
+          fontFamily: fontArgs.family,
+          fontFamilyFallback: fontArgs.fallback,
+          fontWeight: s.headerAccentTitle ? FontWeight.w800 : FontWeight.w600,
+          letterSpacing: s.tracking,
         ),
       ),
       cardTheme: CardThemeData(
         color: p.card,
-        elevation: 1,
-        shadowColor: brightness == Brightness.dark
-            ? const Color(0x33000000)
-            : const Color(0x14000000),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: s.elevation,
+        shadowColor: Colors.black.withValues(alpha: 0.16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(s.radius),
+          side: border,
+        ),
         margin: EdgeInsets.zero,
       ),
-      dividerTheme: DividerThemeData(color: p.line, thickness: 0.7, space: 1),
-      dialogTheme: DialogThemeData(backgroundColor: p.card),
-      bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.card),
+      dividerTheme: DividerThemeData(
+        color: p.line,
+        thickness: s.borderWidth <= 0 ? s.ruleWidth : s.borderWidth,
+        space: 1,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: p.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(s.radiusLarge),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: p.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(s.radiusLarge),
+          ),
+        ),
+      ),
       textTheme: base.textTheme.apply(
         bodyColor: p.ink,
         displayColor: p.ink,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+        fontFamily: fontArgs.family,
+        fontFamilyFallback: fontArgs.fallback,
       ),
       primaryTextTheme: base.primaryTextTheme.apply(
         bodyColor: p.ink,
         displayColor: p.ink,
-        fontFamily: fontFamily,
-        fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+        fontFamily: fontArgs.family,
+        fontFamilyFallback: fontArgs.fallback,
       ),
       iconTheme: IconThemeData(color: p.inkSoft),
-      listTileTheme: ListTileThemeData(iconColor: p.inkSoft, textColor: p.ink),
+      listTileTheme: ListTileThemeData(
+        iconColor: p.inkSoft,
+        textColor: p.ink,
+        shape: s.radius > 0
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(s.radiusSmall),
+              )
+            : const RoundedRectangleBorder(),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: s.solidChips ? p.soft : Colors.transparent,
+        side: border,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(
+            s.pillChips ? s.radiusSmall * 4 : s.radiusSmall,
+          ),
+        ),
+        labelStyle: TextStyle(
+          color: p.ink,
+          fontFamily: fontArgs.family,
+          fontFamilyFallback: fontArgs.fallback,
+          letterSpacing: s.tracking,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: p.soft,
         hintStyle: TextStyle(color: p.inkSoft),
-        contentPadding: const EdgeInsets.symmetric(
+        contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
-          vertical: 12,
+          vertical: s.headerHeight < 70 ? 10 : 12,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(s.radiusSmall),
+          borderSide: border,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(s.radiusSmall),
+          borderSide: border,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: p.indigo, width: 1.4),
+          borderRadius: BorderRadius.circular(s.radiusSmall),
+          borderSide: BorderSide(
+            color: p.indigo,
+            width: s.borderWidth <= 0 ? 2 : 1.4,
+          ),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: p.indigo,
           foregroundColor: p.onAccent,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          elevation: s.elevation > 0.3 ? s.elevation : 0,
+          padding: EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: s.headerHeight < 70 ? 10 : 12,
+          ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(s.radiusSmall),
           ),
           textStyle: TextStyle(
-            fontSize: handwritingOn ? 17 : 14,
-            fontFamily: fontFamily,
-            fontFamilyFallback: fontFamilyFallback.isEmpty ? null : fontFamilyFallback,
+            fontSize: (handwritingOn ? 17 : 14) * d.typeScale,
+            fontFamily: fontArgs.family,
+            fontFamilyFallback: fontArgs.fallback,
             fontWeight: FontWeight.w600,
+            letterSpacing: s.tracking * 0.5,
           ),
         ),
       ),
       checkboxTheme: CheckboxThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        shape: s.roundCheck
+            ? const CircleBorder()
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(s.radiusSmall),
+              ),
       ),
     );
 
