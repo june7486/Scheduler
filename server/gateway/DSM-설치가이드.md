@@ -132,30 +132,54 @@ chown -R scheduler:users /volume1/92_Scheduler/scheduler-sync
 
 ---
 
+## 4.5단계 — 한 번에 세팅하기 (권장)
+
+위 4·5단계를 손으로 하지 말고 아래 한 줄로 끝내세요. SSH 로 접속해서:
+
+```bash
+cd /volume1/92_Scheduler/scheduler-sync
+sudo ./setup-nas.sh
+```
+
+이 스크립트가 하는 일:
+
+1. `.env` 의 `DATA_DIR` 폴더를 만들고 권한을 맞춤
+2. `start.sh` 로 게이트웨이를 띄움 (나스에 흩어진 node 를 알아서 찾음)
+3. 뜬 다음 `/health` 로 **실제 응답까지** 확인
+4. 부팅 자동 시작과 프록시 설정 내용을 화면에 출력
+
+성공하면 이렇게 나옵니다:
+
+```
+✔ 응답: {"ok":true,"service":"june-nas-gateway","storage":"local","nas":true,...}
+게이트웨이가 살아 있습니다.
+```
+
+실패하면 원인과 다음에 할 일이 함께 나옵니다. **그 출력을 그대로 복사해서
+보내주세요.**
+
+> `sudo` 가 없거나 권한이 없으면 `./start.sh start` 만으로도 됩니다. 폴더 권한이
+> 이미 맞다면 결과는 같습니다.
+
+---
+
 ## 5단계 — 게이트웨이 실행 (DSM 부팅 시 자동 시작)
 
 DSM 에는 `systemd` 가 없습니다. **제어판 → 작업 스케줄러 → 생성 → 트리거된 작업 →
 사용자 정의 스크립트** 로 등록합니다.
 
+- **작업 이름**: `scheduler-sync`
 - **이벤트**: 부팅됨
 - **사용자**: root
 - **스크립트**:
 
 ```bash
-#!/bin/bash
-DIR=/volume1/92_Scheduler/scheduler-sync
-NODE=/volume1/@appstore/Node.js_v20/bin/node
-LOG=$DIR/gateway.log
-
-if pgrep -f "scheduler-sync/server.js" > /dev/null; then
-  echo "$(date) already running" >> "$LOG"; exit 0
-fi
-
-cd "$DIR" || exit 1
-set -a; . ./.env; set +a
-nohup "$NODE" server.js >> "$LOG" 2>&1 &
-echo "$(date) started pid=$!" >> "$LOG"
+/volume1/92_Scheduler/scheduler-sync/start.sh start
 ```
+
+> 4.5단계를 했다면 **이 한 줄만** 넣으면 됩니다. `start.sh` 가 node 탐색,
+> `.env` 로딩, 중복 실행 방지를 이미 처리합니다. 스크립트를 길게 직접 쓰면
+> node 경로가 패키지 업데이트 때 바뀌어 조용히 죽는 일이 생깁니다.
 
 저장한 뒤, 작업을 선택하고 **실행** 을 한 번 눌러 지금 바로 띄웁니다.
 
