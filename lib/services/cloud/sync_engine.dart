@@ -123,11 +123,10 @@ class SyncService {
     if (await _pullFirst()) return;
 
     // Nothing to adopt (brand-new workspace, or this device holds unsent work).
-    if (_store.pendingCount > 0) {
-      await flush(manual: true);
-    } else {
-      _setState(SyncState.syncing, '');
-    }
+    // Push unconditionally: [Store.adoptServerSnapshot] has just queued this
+    // account's baseline, and a guard here would leave those records stuck in
+    // the outbox. An empty outbox costs nothing — `flush()` short-circuits.
+    await flush();
   }
 
   /// Reads the server document and adopts it if that is the right move.
@@ -385,10 +384,12 @@ class SyncService {
       }
 
       _lastSync ??= DateTime.now();
-      if (_store.pendingCount == 0) {
-        await _store.queueAllForUpload(_store.currentUserId);
-        markDirty();
-      }
+      // Make the baseline durable: seed + queue, then push it. Using
+      // `pendingCount` here would skip the push whenever only an
+      // `accounts/<id>` row was queued, and the default tabs would stay local —
+      // where the next pruning pass deletes them.
+      await _store.ensureWorkspaceBaseline(_store.currentUserId);
+      markDirty();
       await _store.setCachedRev(_rev, _gen);
       _setState(SyncState.idle, '');
       return;

@@ -316,14 +316,24 @@ class Store extends ChangeNotifier {
   /// still answers instantly without touching the network.
   Future<bool> authenticate(String id, String pw) async {
     final trimmed = id.trim();
-    var u = userById(trimmed);
-    final localOk = u != null && u.enabled && u.password == pw;
 
-    if (!localOk) {
-      // Not known here (new device) or the password changed elsewhere.
-      final adopted = await _adoptAccountFromServer(trimmed, pw);
-      if (adopted == null) return false;
-      u = adopted;
+    // The registry is the authority when it is reachable. Checking it first is
+    // the whole point of central account management: a local row must not be
+    // able to accept a password the other devices would reject.
+    var u = await authenticateAgainstRegistry(trimmed, pw);
+
+    if (u == null) {
+      // Registry unreachable, or it does not know this id yet (an account made
+      // before the registry existed). Fall back to the device's own copy, then to
+      // the account's own workspace.
+      final local = userById(trimmed);
+      final localOk = local != null && local.enabled && local.password == pw;
+      if (localOk) {
+        u = local;
+      } else {
+        u = await _adoptAccountFromServer(trimmed, pw);
+        if (u == null) return false;
+      }
     }
 
     _currentUserId = u.id;
@@ -381,10 +391,14 @@ class Store extends ChangeNotifier {
 
   /// Makes the given account available on every device.
   ///
-  /// Called on login and whenever the password or display name changes. The
-  /// record travels as a normal entity (`accounts/<id>`) so it merges
-  /// last-writer-wins like everything else.
-  Future<void> publishAccount(String id) async {
+  /// Called on login and whenever the display name changes. The record travels
+  /// as a normal entity (`accounts/<id>`) so it merges last-writer-wins like
+  /// everything else.
+  ///
+  /// The password hash is deliberately **not** rewritten here — see
+  /// [publishAccountToRegistry] for why a routine sign-in must not be able to
+  /// overrule a password that was changed on another device.
+  Future<void> publishAccount(String id, {bool withPassword = false}) async {
     if (id.isEmpty) return;
     if (!syncEnabled) return;
     final u = userById(id);
@@ -392,6 +406,9 @@ class Store extends ChangeNotifier {
     u.updatedAt = DateTime.now().millisecondsSinceEpoch;
     await _users.put(id, u.toMap());
     await _markPending('accounts', id);
+    // Keep the central list in step. This is what makes a rename, a display-name
+    // change or a password change visible from every other device.
+    await publishAccountToRegistry(u, withPassword: withPassword);
   }
 
   /// Turns cloud storage on for the signed-in account.
@@ -433,6 +450,225 @@ class Store extends ChangeNotifier {
     return 'ACC${digest.toString().substring(0, 28).toUpperCase()}';
   }
 
+  // ---------------- account registry ----------------
+
+  /// One shared workspace that lists every account, so ids are managed centrally
+  /// instead of per device.
+  ///
+  /// ## Why a registry exists
+  /// Each account's own workspace is derived from its id
+  /// ([workspaceCodeFor]), which is enough to *find* an account you already know
+  /// the name of. It is not enough to *manage* accounts: without a shared list,
+  /// two devices can each create their own `june7486` with different passwords,
+  /// and nothing notices. Signing in then means "whichever copy this device
+  /// happens to hold", which is the opposite of one account.
+  ///
+  /// The registry is a fixed, well-known workspace holding
+  /// `accounts/<id>` records. Every device reads the same one.
+  ///
+  /// ## Passwords
+  /// Stored as `pwHash` — a salted SHA-256 of the id and password — never as
+  /// plaintext. The gateway's shared key ships inside the web bundle and is
+  /// therefore public, so anyone could fetch this document; a hash at least means
+  /// they do not walk away with working credentials. Records written by older
+  /// builds still carry a `password` field, and [verifyAccountPassword] still
+  /// accepts those so no existing account is locked out.
+  static const registryWorkspaceId = 'ACCREGISTRYJUNESCHEDULER0001';
+
+  /// Salted, iterated hash. The iteration count is not about resisting a GPU
+  /// farm (SHA-256 in Dart is not the tool for that) — it raises the cost of
+  /// turning one leaked registry into a list of usable passwords.
+  static String hashPassword(String id, String pw) {
+    final seed = utf8.encode('june-scheduler-pw-v1|${id.toLowerCase()}|$pw');
+    var digest = sha256.convert(seed);
+    for (var i = 0; i < 256; i++) {
+      digest = sha256.convert([...digest.bytes, ...seed]);
+    }
+    return digest.toString();
+  }
+
+  /// True when [record] describes an enabled account whose password is [pw].
+  static bool verifyAccountPassword(
+    Map<dynamic, dynamic> record,
+    String pw,
+  ) {
+    if (record['enabled'] == false) return false;
+    final id = '${record['id'] ?? ''}';
+    if (id.isEmpty) return false;
+    final hash = record['pwHash'];
+    if (hash is String && hash.isNotEmpty) {
+      return _constantTimeEquals(hash, hashPassword(id, pw));
+    }
+    // Legacy plaintext row (written before the registry existed).
+    final plain = record['password'];
+    return plain is String && plain == pw;
+  }
+
+  /// Compares without an early exit, so timing does not leak the prefix.
+  static bool _constantTimeEquals(String a, String b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    }
+    return diff == 0;
+  }
+
+  /// The registry document as a map of `id -> record`.
+  ///
+  /// Returns an empty map when the registry cannot be read — a missing list means
+  /// "no accounts known centrally", which callers must treat as "fall back", not
+  /// as "the account does not exist".
+  Future<Map<String, Map<String, dynamic>>> readAccountRegistry() async {
+    if (!_backendIsUsable) return const {};
+    try {
+      final doc = await backend.read(registryWorkspaceId);
+      final out = <String, Map<String, dynamic>>{};
+      for (final e in doc.entities.entries) {
+        if (!e.key.startsWith('accounts/')) continue;
+        final raw = e.value;
+        if (raw is! Map) continue;
+        out[e.key.substring('accounts/'.length)] =
+            Map<String, dynamic>.from(raw);
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Writes this account into the shared registry.
+  ///
+  /// Best effort: a failure here must never block a sign-in, because the account
+  /// still reaches its own workspace. It only means the central list is a little
+  /// stale until the next attempt.
+  ///
+  /// ## [withPassword] exists to stop a password revert
+  /// The registry is last-writer-wins on `updatedAt`, and every caller stamps
+  /// "now". So whoever writes last owns the password — including a device that
+  /// signed in **offline** with a password the user has since changed centrally.
+  /// Publishing from that session would quietly restore the old password for
+  /// every device, which is the per-device-account problem in disguise.
+  ///
+  /// Only the two situations where the local password is genuinely authoritative
+  /// pass `true`: creating an account, and a deliberate password change. A plain
+  /// sign-in refreshes everything else and leaves the hash alone.
+  Future<bool> publishAccountToRegistry(
+    User u, {
+    bool withPassword = false,
+  }) async {
+    if (!_backendIsUsable) return false;
+    try {
+      final existing = await backend.read(registryWorkspaceId);
+      final current = existing.entities['accounts/${u.id}'];
+      final record = <String, dynamic>{
+        'id': u.id,
+        'displayName': u.displayName,
+        'isMaster': u.isMaster,
+        'enabled': u.enabled,
+        'createdAt': u.createdAt.toIso8601String(),
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        // Deliberately no `password` field: nothing in the registry is plaintext.
+      };
+      final inherited = current is Map ? current['pwHash'] : null;
+      if (!withPassword && inherited is String && inherited.isNotEmpty) {
+        // Someone else already decided the password. Do not overrule them.
+        record['pwHash'] = inherited;
+      } else {
+        record['pwHash'] = hashPassword(u.id, u.password);
+      }
+      final res = await backend.write(
+        registryWorkspaceId,
+        CloudDoc(
+          entities: {'accounts/${u.id}': record},
+          rev: existing.rev,
+          gen: existing.gen,
+        ),
+      );
+      return res.ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Marks an account disabled in the shared registry.
+  ///
+  /// The row is kept, not removed: a tombstone is what lets every device see the
+  /// decision, and it keeps the id from being silently reused by someone else.
+  /// [verifyAccountPassword] already refuses a record with `enabled == false`, so
+  /// a retired account can no longer sign in anywhere — including on a device
+  /// that has never seen it before.
+  Future<bool> retireAccountInRegistry(String id) async {
+    if (!_backendIsUsable || id.isEmpty) return false;
+    try {
+      final existing = await backend.read(registryWorkspaceId);
+      final current = existing.entities['accounts/$id'];
+      final record = <String, dynamic>{
+        if (current is Map) ...Map<String, dynamic>.from(current),
+        'id': id,
+        'enabled': false,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      final res = await backend.write(
+        registryWorkspaceId,
+        CloudDoc(
+          entities: {'accounts/$id': record},
+          rev: existing.rev,
+          gen: existing.gen,
+        ),
+      );
+      return res.ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Looks an account up in the registry and, when the password matches, adopts
+  /// it locally so this device can sign in offline afterwards.
+  ///
+  /// This is what makes "one account, every device" true: the id is verified
+  /// against the *central* copy, so a device cannot accept a different password
+  /// just because it happens to hold an older local row.
+  Future<User?> authenticateAgainstRegistry(String id, String pw) async {
+    if (!_backendIsUsable) return null;
+    try {
+      final doc = await backend.read(registryWorkspaceId);
+      final raw = doc.entities['accounts/$id'];
+      if (raw is! Map) return null;
+      if (!verifyAccountPassword(raw, pw)) return null;
+
+      final adopted = User.fromMap(raw);
+      // The plaintext password has to exist locally for the offline path, and
+      // this is the only moment it is known — it is the one the user just typed.
+      adopted.password = pw;
+      await _users.put(adopted.id, adopted.toMap());
+      return adopted;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Does the registry already own this id, with a *different* password?
+  ///
+  /// Returns the display name when it does, so [addUser] can refuse instead of
+  /// silently creating a second, unreachable account with the same name.
+  Future<String?> registryConflict(String id, String pw) async {
+    if (!_backendIsUsable) return null;
+    try {
+      final doc = await backend.read(registryWorkspaceId);
+      final raw = doc.entities['accounts/$id'];
+      if (raw is! Map) return null;
+      // A retired row is not a conflict: the id is free to be claimed again by
+      // whoever wants it. Refusing here would make "delete" useless, because the
+      // id could never be reused.
+      if (raw['enabled'] == false) return null;
+      if (verifyAccountPassword(raw, pw)) return null; // same credentials: fine
+      return '${raw['displayName'] ?? id}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Restores the signed-in user after a reload.
   ///
   /// Sync has to be restarted here too: the page reload wipes the timer and
@@ -456,6 +692,8 @@ class Store extends ChangeNotifier {
 
   /// Creates a new (non-master) user. Returns null on success, or an error
   /// message describing why creation failed.
+  /// Creates a new (non-master) user. Returns null on success, or an error
+  /// message describing why creation failed.
   Future<String?> addUser(
     String id,
     String pw, {
@@ -468,9 +706,22 @@ class Store extends ChangeNotifier {
     }
     if (pw.length < 4) return 'Password must be at least 4 characters.';
     if (_users.containsKey(trimmed)) return 'That ID already exists.';
+
+    // Account ids are shared, not per device. Without this check a second device
+    // could create the same id with its own password and the two "accounts"
+    // would silently diverge — the exact failure this registry exists to stop.
+    final taken = await registryConflict(trimmed, pw);
+    if (taken != null) {
+      return 'That ID is already registered ($taken). '
+          'Sign in with its existing password.';
+    }
+
     final u = User(id: trimmed, password: pw, displayName: displayName);
     await _users.put(trimmed, u.toMap());
     await _seedCategories(trimmed);
+    // Register centrally so the id is claimed everywhere at once. Creation is
+    // authoritative for the password — this is the moment it is decided.
+    await publishAccountToRegistry(u, withPassword: true);
     addLog('Create user', trimmed);
     notifyListeners();
     return null;
@@ -478,6 +729,10 @@ class Store extends ChangeNotifier {
 
   Future<void> deleteUser(String id) async {
     if (id == masterId) return; // never delete the master
+    // Retire the account centrally *before* dropping the local row: otherwise a
+    // later sign-in on another device would just find the registry entry and
+    // adopt the account again, and "deleted" would only mean "deleted here".
+    await retireAccountInRegistry(id);
     await _users.delete(id);
     // Remove that user's data
     for (final k in _tasks.keys.toList()) {
@@ -1193,14 +1448,31 @@ class Store extends ChangeNotifier {
   /// Returns a short status on success (`adopted` / `reset` / `empty`), or null
   /// when the caller should continue with the normal push path.
   Future<String?> adoptServerSnapshot(CloudDoc doc) async {
-    if (!doc.exists && doc.gen <= cachedGen) return null; // never had one
+    final owner = currentUserId;
+
+    // No document, and this device never mirrored one: this account has not
+    // been created on the server yet. Seed the default tabs *and* queue
+    // everything — including those quietly seeded tabs — so the account is
+    // usable from the next device that signs in.
+    //
+    // Queuing is not optional here. A tab that is only in the local box is
+    // neither on the server nor pending, so the very next snapshot prunes it as
+    // "the server no longer has this" and a new account ends up with zero tabs.
+    // Returning null lets the caller continue with its push.
+    if (!doc.exists && doc.gen <= cachedGen) {
+      // A device that already holds unsent work is not a fresh account; that is
+      // business data and it only needs its own push. But an account with no
+      // queued *data* still needs its baseline made durable.
+      if (pendingDataCount == 0) await ensureWorkspaceBaseline(owner);
+      await setCachedRev(doc.rev, doc.gen);
+      return null;
+    }
 
     final resetElsewhere = !doc.exists && doc.gen > cachedGen;
 
     // Local work that never reached the server outranks a download.
     if (!resetElsewhere && pendingDataCount > 0) return null;
 
-    final owner = currentUserId;
     beginRemoteApply();
     try {
       // Drop what the server no longer has. Accounts and reserved keys are
@@ -1228,9 +1500,34 @@ class Store extends ChangeNotifier {
     return doc.exists ? 'adopted' : 'reset';
   }
 
+  /// Makes this account's baseline real: default tabs seeded, everything queued.
+  ///
+  /// Used when the server has no document for the workspace, which means the
+  /// account is being created. Both halves matter:
+  ///
+  /// * **Seeding** gives a brand-new account usable tabs instead of a blank
+  ///   screen.
+  /// * **Queuing** is what makes those tabs survive. A tab that exists only in
+  ///   the local box is neither on the server nor in the outbox, and the first
+  ///   server snapshot then treats it as "the server no longer has this" and
+  ///   prunes it. That is exactly how a new account used to lose its 14 default
+  ///   tabs the moment sync connected.
+  ///
+  /// Safe to call repeatedly — seeding checks for existing rows and
+  /// [queueAllForUpload] merges rather than replaces.
+  Future<void> ensureWorkspaceBaseline(String ownerId) async {
+    if (ownerId.isEmpty) return;
+    await _ensureUserSeed(ownerId);
+    await queueAllForUpload(ownerId);
+  }
+
   /// Marks every record of [ownerId] as needing an upload (workspace creation).
+  ///
+  /// **Merges** with the current outbox instead of replacing it: a record already
+  /// queued may have been deleted locally since, and rebuilding the list from the
+  /// boxes alone would silently drop whatever stayed queued.
   Future<void> queueAllForUpload(String ownerId) async {
-    final keys = <String>[];
+    final keys = pendingKeys;
     for (final e in _syncBoxes.entries) {
       for (final k in e.value.keys) {
         // Reserved metadata (sync config, cached rev, app version) is per
@@ -1243,7 +1540,7 @@ class Store extends ChangeNotifier {
         keys.add('${e.key}/$k');
       }
     }
-    await _users.put(_pendingKey, keys);
+    await _users.put(_pendingKey, keys.toList());
   }
 
   /// Applies one record straight from the server (server wins).
@@ -1711,8 +2008,9 @@ class Store extends ChangeNotifier {
     u.password = pw;
     await _users.put(id, u.toMap());
     // A password change must reach every device, or the next sign-in on the
-    // phone would use the old one and be refused.
-    await publishAccount(id);
+    // phone would use the old one and be refused. This is one of the two places
+    // allowed to write the registry hash.
+    await publishAccount(id, withPassword: true);
     addLog('Change password');
     notifyListeners();
   }
