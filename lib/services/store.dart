@@ -1872,9 +1872,35 @@ class Store extends ChangeNotifier {
   }
 
   // ---------------- Per-user settings ----------------
+
+  /// Identifier of the running build: `--dart-define=BUILD_ID=…`.
+  ///
+  /// The deploy script passes the build time, so every deploy ships a different
+  /// value and a browser can be asked "which build are you actually running?".
+  /// Without it the string is empty and only the stored date is available,
+  /// which says when this *device first ran the app*, never which build it is.
+  static const _envBuildId = String.fromEnvironment('BUILD_ID');
+
+  /// The build currently executing. Empty when the build predates BUILD_ID.
+  String get buildId => _envBuildId;
+
+  /// Version shown in the UI.
+  ///
+  /// This used to return `__app_version__` from the `users` box, which was
+  /// seeded once with `DateTime.now()` of the *first launch on that device* and
+  /// never refreshed. The result was a number that looked like a build stamp
+  /// but was really a device-provisioning date: a freshly deployed app on an
+  /// old device reported last month's date, which makes "did the deploy land?"
+  /// impossible to answer. Settings → 백업 → 캐시 삭제 could not fix it either,
+  /// because the stored value lived in Hive, not in the shared_preferences
+  /// cache that button clears.
+  ///
+  /// Truth now comes from the build itself. The stored value remains the
+  /// fallback for builds that predate BUILD_ID, so old clients keep working.
   String get appVersion {
-    final v = _users.get('__app_version__') as String?;
-    if (v != null) return v;
+    if (_envBuildId.isNotEmpty) return _envBuildId;
+    final stored = _users.get('__app_version__') as String?;
+    if (stored != null) return stored;
     final now = DateTime.now();
     final generated =
         '${now.year}.${now.month.toString().padLeft(2, '0')}'
@@ -2103,6 +2129,12 @@ class Store extends ChangeNotifier {
   Future<void> clearCache() async {
     // Clear non-essential cached data but keep user content & settings.
     await clearLogs();
+    if (_envBuildId.isNotEmpty) {
+      // The button claims to clear the cache, so it must also clear the stale
+      // provision date that used to masquerade as a build stamp. Otherwise it
+      // "does nothing" from the user's point of view.
+      await _users.delete('__app_version__');
+    }
     notifyListeners();
   }
 

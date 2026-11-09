@@ -44,6 +44,17 @@ echo "② Flutter 웹 릴리즈 빌드 (base-href=${BASE_HREF})..."
 # 상태로 뜨고, 새 기기에서 로그인해도 자료를 받아올 곳이 없습니다.
 #   SYNTAX: SYNC_URL="https://sync.example.com" SYNC_KEY="..." ./deploy_pages.sh custom
 BUILD_ARGS=(--release --base-href "$BASE_HREF")
+
+# 빌드 식별자를 심습니다. 앱 화면의 버전 표시가 이 값을 씁니다.
+#   · 이게 없으면 앱은 '이 기기를 처음 켠 날짜'를 버전처럼 보여줍니다.
+#     배포를 해도 숫자가 그대로라 "반영이 안 됐다"고 오해하게 됩니다.
+#   · 배포할 때마다 값이 달라지므로, 브라우저에 물어볼 수 있습니다:
+#       화면 버전 == 방금 배포한 BUILD_ID  → 새 빌드가 떴다
+#       화면 버전 != 방금 배포한 BUILD_ID  → 아직 옛 빌드가 돌고 있다 (캐시)
+BUILD_ID="${BUILD_ID:-$(date +%Y.%m.%d.%H%M)}"
+echo "   · BUILD_ID = ${BUILD_ID}"
+BUILD_ARGS+=(--dart-define=BUILD_ID="${BUILD_ID}")
+
 if [ -n "${SYNC_URL:-}" ]; then
   echo "   · SYNC_URL = ${SYNC_URL}"
   BUILD_ARGS+=(--dart-define=SYNC_URL="${SYNC_URL}")
