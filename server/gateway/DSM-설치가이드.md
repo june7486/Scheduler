@@ -183,11 +183,17 @@ DSM → **제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 
 |---|---|
 | 이름 | `scheduler-sync` |
 | 프로토콜(소스) | **HTTPS** |
-| 호스트 이름 | `sync.aqdesign.co.kr` (또는 사용할 주소) |
+| 호스트 이름 | **`sync.june7558.direct.quickconnect.to`** (권장 — 아래 설명) |
 | 포트 | **443** |
 | 프로토콜(대상) | **HTTP** |
 | 호스트 이름 | `localhost` |
 | 포트 | **8097** |
+
+**호스트 이름은 quickconnect 주소를 권장합니다.** 이유는 인증서입니다.
+`*.june7558.direct.quickconnect.to` 는 이미 유효한 인증서가 발급되어 있어서,
+DNS 레코드를 새로 만들 필요도, 인증서를 따로 받을 필요도 없습니다.
+`sync.aqdesign.co.kr` 같은 새 이름을 쓰려면 **DNS 레코드 추가 + 인증서 발급**이
+한 번 더 필요합니다.
 
 **사용자 지정 헤더** (중요 — 없으면 앱이 400/리다이렉트를 받습니다):
 
@@ -200,15 +206,17 @@ DSM → **제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 
 "가끔 동기화가 멈추는" 증상의 원인이 됩니다.
 
 **인증서**: `제어판 → 보안 → 인증서` 에서 위 호스트 이름에 대해
-`aqdesign.co.kr` 인증서를 지정합니다. DNS 는 `sync.aqdesign.co.kr` → 나스 IP
-(또는 DDNS 주소) 로 CNAME/A 레코드를 추가하세요.
+`*.june7558.direct.quickconnect.to` 인증서를 지정합니다.
 
 확인 (외부에서):
 
 ```bash
-curl https://sync.aqdesign.co.kr/health
+curl https://sync.june7558.direct.quickconnect.to/health
 # {"ok":true,"service":"june-nas-gateway","storage":"local","nas":true,...}
 ```
+
+이 명령이 DSM 로그인 페이지(약 494바이트 HTML)를 돌려주면 프록시가 아직
+설정되지 않은 것입니다. 게이트웨이가 살아 있으면 위 JSON 이 나와야 합니다.
 
 ---
 
@@ -219,7 +227,7 @@ curl https://sync.aqdesign.co.kr/health
 ```bash
 cd /home/user/flutter_app
 
-SYNC_URL="https://sync.aqdesign.co.kr" \
+SYNC_URL="https://sync.june7558.direct.quickconnect.to" \
 SYNC_KEY="46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d" \
 GH_REPO="june7486/Scheduler" \
 CUSTOM_DOMAIN="www.aqdesign.co.kr" \
@@ -228,6 +236,14 @@ CUSTOM_DOMAIN="www.aqdesign.co.kr" \
 
 `deploy_pages.sh` 는 두 값을 `--dart-define` 으로 넘기고, 빌드 후
 `scripts/optimize_web.py` 로 폰트 subsetting 까지 자동 수행합니다.
+
+> **주소를 빌드에 심지 않으면 앱은 로컬 전용으로 동작합니다.** 겉보기에는
+> 로그인이 되지만, 계정 명부도 동기화도 기기 안에서만 일어납니다. 빌드 결과물에
+> 주소가 들어갔는지는 이렇게 확인합니다:
+>
+> ```bash
+> grep -c "quickconnect" build/web/main.dart.js   # 0 이면 심기지 않은 것
+> ```
 
 ---
 

@@ -13,6 +13,7 @@ import '../services/drive_service.dart';
 import '../services/file_pick_stub.dart'
     if (dart.library.js_interop) '../services/file_pick_web.dart' as picker;
 import '../services/session_service.dart';
+import '../services/cloud/nas_backend.dart';
 import '../services/cloud/sync_engine.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -1124,24 +1125,55 @@ class _NasPanelState extends State<_NasPanel> {
   }
 
   Future<void> _test() async {
-    final store = context.read<Store>();
     setState(() {
       _busy = true;
       _note = '';
     });
-    final ok = await store.pingNas(
-      url: _url.text,
-      secret: _key.text,
-    );
+    final d = await NasBackend(
+      baseUrl: _url.text.trim(),
+      secret: _key.text.trim(),
+    ).diagnose();
     if (!mounted) return;
-    final ko = context.l10n.lang == AppLang.ko;
     setState(() {
       _busy = false;
-      _noteOk = ok;
-      _note = ok
-          ? context.tr('nas_ok')
-          : (ko ? 'NAS에 연결하지 못했습니다 — 주소와 키를 확인하세요' : context.tr('nas_fail'));
+      _noteOk = d == NasDiagnosis.ok;
+      _note = _diagnosisText(d);
     });
+  }
+
+  /// Turns a failed probe into the one sentence that tells the user what to do.
+  ///
+  /// "연결하지 못했습니다" for every case is what sent us chasing a key typo when
+  /// the real problem was a missing reverse proxy. The DSM login page answers
+  /// HTTP 200, so it looks like success to a naive check — naming that case
+  /// explicitly is the difference between a two-minute fix and an hour of
+  /// guessing.
+  String _diagnosisText(NasDiagnosis d) {
+    final ko = context.l10n.lang == AppLang.ko;
+    switch (d) {
+      case NasDiagnosis.ok:
+        return ko ? '연결됨 — 서버가 정상입니다' : 'Connected — the server looks good';
+      case NasDiagnosis.notConfigured:
+        return ko ? '주소를 입력하세요' : 'Enter an address first';
+      case NasDiagnosis.notGateway:
+        return ko
+            ? '그 주소는 나스 로그인 화면입니다. 게이트웨이로 연결되는 '
+                '리버스 프록시(HTTPS 443 → localhost:8097)가 아직 없습니다.'
+            : 'That address is the NAS login page. The reverse proxy to the '
+                'gateway (HTTPS 443 → localhost:8097) is not set up yet.';
+      case NasDiagnosis.badKey:
+        return ko ? '공유 키가 맞지 않습니다 (X-Sync-Key)' : 'Wrong shared key';
+      case NasDiagnosis.nasDown:
+        return ko
+            ? '게이트웨이는 살아 있지만 저장소에 접근하지 못합니다'
+            : 'Gateway is up but cannot reach storage';
+      case NasDiagnosis.timeout:
+        return ko ? '응답이 없습니다 — 나스가 잠들었거나 회선이 막혔습니다'
+                  : 'No answer — the NAS is asleep or blocked';
+      case NasDiagnosis.unreachable:
+        return ko ? '주소에 닿지 않습니다 — 호스트·포트·방화벽을 확인하세요'
+                  : 'Cannot reach the host — check host, port and firewall';
+    }
   }
 
   Future<void> _save() async {

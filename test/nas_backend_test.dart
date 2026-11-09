@@ -204,8 +204,15 @@ void main() {
 
   test('a wrong key is a failure, never a silent success', () async {
     final backend = nas(secret: 'wrong-key');
-    expect(await backend.ping(), isTrue,
-        reason: 'health는 키 없이도 열려 있어야 합니다');
+    // `ping()` now means "usable", not just "the process is up": it proves the
+    // key too, because a green light in Settings must not hide a wrong key.
+    expect(await backend.ping(), isFalse,
+        reason: 'ping 은 키까지 확인해야 합니다');
+    expect(await backend.diagnose(), NasDiagnosis.badKey);
+    // The raw health bit stays open on purpose — it is the credential-free
+    // up/down signal published as static JSON.
+    expect(await nas(secret: 'wrong-key').healthOpen(), isTrue);
+
     await expectLater(
       backend.read('ACCKEYTEST001'),
       throwsA(isA<CloudException>()),
@@ -241,6 +248,40 @@ void main() {
     await again.useNasBackend(url: '');
     expect(again.usingNas, isFalse);
     expect(again.nasSecret, isEmpty, reason: '주소를 지우면 키도 지워야 합니다');
+  });
+
+  test('진단은 "키 오타"와 "프록시 없음"을 구분한다', () async {
+    // A real gateway answers `service: june-nas-gateway`.
+    expect(await nas().diagnose(), NasDiagnosis.ok);
+
+    // Wrong key: the gateway is there, it just refuses us.
+    expect(await nas(secret: 'wrong').diagnose(), NasDiagnosis.badKey);
+
+    // Nothing listening at all.
+    expect(
+      await NasBackend(baseUrl: 'http://127.0.0.1:8199', secret: 'testsecret123')
+          .diagnose(),
+      NasDiagnosis.unreachable,
+    );
+
+    // The case that used to be indistinguishable from a typo: something answers
+    // 200 on the host, but it is not the gateway. DSM's login page is exactly
+    // this, and it is what a missing reverse proxy looks like.
+    final fake = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    fake.listen((req) {
+      req.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.html
+        ..write('<html><body>DSM login</body></html>');
+      req.response.close();
+    });
+    addTearDown(() => fake.close(force: true));
+    final notGw = await NasBackend(
+      baseUrl: 'http://127.0.0.1:${fake.port}',
+      secret: 'testsecret123',
+    ).diagnose();
+    expect(notGw, NasDiagnosis.notGateway,
+        reason: '게이트웨이가 아닌 무언가가 200 으로 답하면 그렇게 말해야 합니다');
   });
 }
 

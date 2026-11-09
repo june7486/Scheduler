@@ -6,6 +6,31 @@ import 'package:http/http.dart' as http;
 
 import 'cloud_backend.dart';
 
+/// Why a sync server probe failed — specific enough to tell the user what to fix.
+enum NasDiagnosis {
+  /// Everything answered correctly.
+  ok,
+
+  /// No address entered at all.
+  notConfigured,
+
+  /// Something answers on that host, but it is not the gateway — typically DSM's
+  /// login page, which means the reverse proxy has not been set up yet.
+  notGateway,
+
+  /// The gateway answered and rejected the shared key.
+  badKey,
+
+  /// The gateway is up but cannot reach the NAS storage.
+  nasDown,
+
+  /// Nothing answered (wrong host, firewall, DNS).
+  unreachable,
+
+  /// The host accepted the connection but never replied in time.
+  timeout,
+}
+
 /// Talks to the NAS gateway (see `server/gateway/server.js`).
 ///
 /// The gateway holds the DSM session and re-exposes one small JSON file per
@@ -80,19 +105,70 @@ class NasBackend implements CloudBackend {
   }
 
   /// Quick reachability probe used by the Settings screen.
-  Future<bool> ping() async {
+  Future<bool> ping() async => (await diagnose()) == NasDiagnosis.ok;
+
+  /// Is the gateway process answering, *regardless of the shared key*?
+  ///
+  /// `/health` is deliberately unauthenticated: it is the credential-free
+  /// up/down bit that can be published as static JSON on the web host. So this
+  /// answers "the gateway is alive" and nothing about permissions — hence the
+  /// name. Use [diagnose] to learn whether the key is accepted.
+  Future<bool> healthOpen() async {
     if (!isConfigured) return false;
     try {
       final r = await _client.get(_uri('/health')).timeout(_shortTimeout);
-      if (r.statusCode != 200) return false;
-      final body = jsonDecode(utf8.decode(r.bodyBytes));
-      // `nas:false` means the gateway is up but the NAS login failed — honest
-      // reporting beats a green light that lies.
-      return body is Map && body['nas'] != false;
+      return r.statusCode == 200;
     } catch (_) {
       return false;
     }
   }
+
+  /// Explains *why* the server is unusable instead of just answering "no".
+  ///
+  /// `ping()` collapsing every failure into `false` is fine for a background
+  /// retry loop, but useless in Settings: it sends the user hunting for a typo in
+  /// the key when the real problem is that no reverse proxy exists yet and the
+  /// request landed on the DSM login page. The distinctions below are the ones
+  /// that actually change what the user has to do.
+  Future<NasDiagnosis> diagnose() async {
+    if (!isConfigured) return NasDiagnosis.notConfigured;
+    try {
+      final r = await _client.get(_uri('/health')).timeout(_shortTimeout);
+      if (r.statusCode != 200) return NasDiagnosis.notGateway;
+      final text = utf8.decode(r.bodyBytes, allowMalformed: true);
+      Object? body;
+      try {
+        body = jsonDecode(text);
+      } catch (_) {
+        // A 200 that is not JSON is almost always DSM's own login page: the
+        // host answers, but nothing is forwarding to the gateway.
+        return NasDiagnosis.notGateway;
+      }
+      if (body is! Map) return NasDiagnosis.notGateway;
+      if (body['service'] != 'june-nas-gateway') return NasDiagnosis.notGateway;
+      if (body['nas'] == false) return NasDiagnosis.nasDown;
+
+      // `/health` is deliberately open — it is the credential-free up/down bit
+      // that gets published as static JSON. So a wrong key still answers 200
+      // there; only a keyed endpoint can tell us the key is wrong. Reading a
+      // probe workspace that does not exist is side-effect free, and the key is
+      // checked before the workspace is ever touched.
+      final probe = await _client
+          .get(_uri('/api/state', {'ws': _probeWorkspace}), headers: _headers)
+          .timeout(_shortTimeout);
+      if (probe.statusCode == 401) return NasDiagnosis.badKey;
+      if (probe.statusCode != 200) return NasDiagnosis.notGateway;
+
+      return NasDiagnosis.ok;
+    } catch (e) {
+      final s = '$e';
+      if (s.contains('TimeoutException')) return NasDiagnosis.timeout;
+      return NasDiagnosis.unreachable;
+    }
+  }
+
+  /// Workspace name used only to prove the shared key works. Never written.
+  static const _probeWorkspace = 'ACCDIAGNOSTICPROBE0000000000';
 
   static CloudDoc _docFrom(Map body) {
     final raw = body['entities'];
