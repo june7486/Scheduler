@@ -112,12 +112,54 @@ class SyncService {
 
     _subscribe();
 
-    // Push anything the last session could not upload. Everything else is
-    // already on the server, so there is nothing to download first.
+    // --- Pull before push ---------------------------------------------------
+    // Signing in on a second device must DOWNLOAD first. Pushing first would
+    // send that device's seeded defaults over the workspace the user built
+    // elsewhere — the one failure that makes "same id, same data" untrue.
+    //
+    // `haveRev: 0` asks for the document itself rather than "unchanged", and
+    // [Store.adoptServerSnapshot] decides whether it is safe to replace local
+    // state (it refuses when there are unsent edits).
+    if (await _pullFirst()) return;
+
+    // Nothing to adopt (brand-new workspace, or this device holds unsent work).
     if (_store.pendingCount > 0) {
       await flush(manual: true);
     } else {
       _setState(SyncState.syncing, '');
+    }
+  }
+
+  /// Reads the server document and adopts it if that is the right move.
+  ///
+  /// Returns true when the server really answered and local state was replaced,
+  /// so the caller can skip the push this cycle. A network failure returns false
+  /// and leaves the normal path (and its retry) in charge — a pull that could not
+  /// happen must not look like "the server had nothing".
+  Future<bool> _pullFirst() async {
+    final id = workspaceId;
+    if (id.isEmpty) return false;
+    try {
+      final doc = await _backend.read(id, haveRev: 0);
+      if (_stopped) return false;
+
+      final outcome = await _store.adoptServerSnapshot(doc);
+      if (outcome == null) return false;
+
+      _rev = doc.rev;
+      _gen = doc.gen;
+      _lastSync = DateTime.now();
+      _failures = 0;
+      _setState(SyncState.idle, '');
+      return true;
+    } on CloudException catch (e) {
+      // "unchanged" cannot happen here (haveRev: 0) but stay defensive.
+      if (e.message == 'unchanged') return false;
+      _setState(SyncState.offline, _friendly(e.message));
+      return false;
+    } catch (e) {
+      _setState(SyncState.offline, _friendly('$e'));
+      return false;
     }
   }
 

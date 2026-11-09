@@ -589,12 +589,31 @@ class Store extends ChangeNotifier {
   String _catKey(String ownerId, String catId) => '$ownerId::$catId';
   String _logKey(String ownerId, String logId) => '$ownerId::$logId';
 
+  /// Default tabs only: no upload is queued for them.
+  ///
+  /// Called at sign-in *before* the server has been consulted. Seeding is a
+  /// convenience for a brand-new account, not a user edit — queuing it would put
+  /// the new device in a position to overwrite the workspace the user built on
+  /// another device. See [seedDefaultsIfEmpty] for the careful version.
   Future<void> _ensureUserSeed(String ownerId) async {
     final hasCats = _cats.values.any((e) => e['ownerId'] == ownerId);
-    if (!hasCats) await _seedCategories(ownerId);
+    if (!hasCats) await _seedCategories(ownerId, silent: true);
   }
 
-  Future<void> _seedCategories(String ownerId) async {
+  /// Adds the default tabs, but only when they would not mask server data.
+  ///
+  /// Returns true when it actually seeded. Deliberately refuses when a queued
+  /// upload exists: something is waiting to reach the server, so this device is
+  /// not a blank slate and inventing tabs would mix local and remote state.
+  Future<bool> seedDefaultsIfEmpty(String ownerId) async {
+    final hasCats = _cats.values.any((e) => e['ownerId'] == ownerId);
+    if (hasCats) return false;
+    if (pendingDataCount > 0) return false;
+    await _seedCategories(ownerId, silent: true);
+    return true;
+  }
+
+  Future<void> _seedCategories(String ownerId, {bool silent = false}) async {
     for (var i = 0; i < defaultCategories.length; i++) {
       final c = defaultCategories[i];
       final id = c['id'] as String;
@@ -608,6 +627,10 @@ class Store extends ChangeNotifier {
         'enabled': true,
         'showInTopTabs': i < 6,
       });
+      // A default tab is not an edit. Queuing it would make a brand-new device
+      // look like it had local changes, and the pull would then have to reconcile
+      // a workspace it had just invented with the one the user actually built.
+      if (!silent) await _markPending('categories', _catKey(ownerId, id));
     }
   }
 
@@ -1019,6 +1042,19 @@ class Store extends ChangeNotifier {
 
   int get pendingCount => pendingKeys.length;
 
+  /// Queued uploads that are actually *user data*.
+  ///
+  /// `accounts/<id>` is deliberately excluded. That record describes the login
+  /// itself: it is rewritten by every sign-in (`publishAccount`), so counting it
+  /// would make every session look like it held unsent edits. With a non-zero
+  /// count, [adoptServerSnapshot] refuses to pull — and the pull would then never
+  /// happen, which is precisely the bug where a second device kept its own empty
+  /// workspace instead of loading the account's.
+  ///
+  /// A stale account row is harmless: the push that follows the pull carries it,
+  /// and the merge is last-writer-wins on `updatedAt`.
+  int get pendingDataCount => pendingKeys.where((k) => !k.startsWith('accounts/')).length;
+
   Future<void> _markPending(String entity, String boxKey) async {
     if (!syncEnabled) return;
     final set = pendingKeys..add('$entity/$boxKey');
@@ -1128,6 +1164,68 @@ class Store extends ChangeNotifier {
     if (v == null) return;
     if (_users.get(key) == v) return;
     _users.put(key, v);
+  }
+
+  /// Replaces local state with what the server holds (server authoritative).
+  ///
+  /// ## Why this exists
+  /// Signing in used to be "seed defaults, then push." On a second device that is
+  /// backwards: the fresh device has nothing meaningful in it, yet its seeded
+  /// defaults were queued and uploaded — so the workspace the user had been
+  /// building on their phone could be overwritten by an empty one from the
+  /// laptop. The whole point of signing in with the same id is that the server's
+  /// data comes down *first*.
+  ///
+  /// ## Rules that keep it safe
+  /// * **Queued edits are never discarded.** If the outbox is non-empty this
+  ///   device has work that never reached the server (offline edits, a previous
+  ///   failure). Pushing those first is correct, so this returns null and the
+  ///   caller falls through to the normal merge path.
+  /// * **A genuinely new workspace is left alone.** When the server has no
+  ///   records at all there is nothing to adopt, so local defaults are kept and
+  ///   uploaded normally.
+  /// * **A reset is applied as a reset.** The generation tells a deliberate wipe
+  ///   apart from a new account; a wipe drops the local cache instead of
+  ///   re-uploading it.
+  /// * **Credentials and per-device metadata survive.** Anything owned by another
+  ///   account, plus reserved `__…__` keys, is left untouched.
+  ///
+  /// Returns a short status on success (`adopted` / `reset` / `empty`), or null
+  /// when the caller should continue with the normal push path.
+  Future<String?> adoptServerSnapshot(CloudDoc doc) async {
+    if (!doc.exists && doc.gen <= cachedGen) return null; // never had one
+
+    final resetElsewhere = !doc.exists && doc.gen > cachedGen;
+
+    // Local work that never reached the server outranks a download.
+    if (!resetElsewhere && pendingDataCount > 0) return null;
+
+    final owner = currentUserId;
+    beginRemoteApply();
+    try {
+      // Drop what the server no longer has. Accounts and reserved keys are
+      // protected inside dropWorkspaceCache.
+      await dropWorkspaceCache(owner);
+      await clearAllPending();
+
+      if (doc.exists) {
+        applyServerSnapshot(doc.entities);
+      } else {
+        // Wiped from another device: re-create only the default tabs, and do not
+        // queue them — the empty server is the intended state, not a gap to fill.
+        await _ensureUserSeed(owner);
+      }
+
+      await setCachedRev(doc.rev, doc.gen);
+    } finally {
+      endRemoteApply(true);
+    }
+
+    // Deliberately no addLog() here: a log entry is itself a synced record, and
+    // queuing one during a pull would leave the outbox non-empty right after it
+    // was cleared — which is the exact state that makes the next start() push
+    // instead of pull.
+    return doc.exists ? 'adopted' : 'reset';
   }
 
   /// Marks every record of [ownerId] as needing an upload (workspace creation).
