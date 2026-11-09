@@ -80,13 +80,12 @@ do_setup() {
   fi
 
   head_ "2 / 3  게이트웨이 시작"
+  # 기본은 '이미 떠 있으면 그대로 둔다'. 이 스크립트가 매일 00:00 과 부팅 시에
+  # 같이 쓰이므로, 재시작을 기본값으로 두면 매일 밤 3초씩 끊기고
+  # 그 사이에 들어온 롱폴이 전부 실패한다. 재시작은 --restart 로만 한다.
   if "$DIR/start.sh" status >/dev/null 2>&1; then
-    warn "이미 실행 중 — 재시작합니다"
-    "$DIR/start.sh" stop >/dev/null 2>&1 || true
-    sleep 0.5
-  fi
-
-  if ! "$DIR/start.sh" start 2>&1 | sed 's/^/    /'; then
+    ok "이미 실행 중입니다 (pid=$(cat "$DIR/gateway.pid" 2>/dev/null)) — 그대로 둡니다"
+  elif ! "$DIR/start.sh" start 2>&1 | sed 's/^/    /'; then
     echo
     bad "start.sh 가 실패했습니다"
     note "위의 ❌ 메시지를 그대로 보내주세요."
