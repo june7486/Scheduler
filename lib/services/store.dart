@@ -344,8 +344,44 @@ class Store extends ChangeNotifier {
     await enableAutoSyncForUser();
     // Make this account discoverable from any other device.
     await publishAccount(u.id);
+    // A workspace written before the account row carried `pwHash` cannot be
+    // verified against by a new device. Now that we hold the plaintext (someone
+    // just signed in with it), repair that copy. Fire-and-forget: a failure here
+    // must not fail a successful login.
+    unawaited(_healWorkspaceAccountRow(u));
     unawaited(sync.start());
     return true;
+  }
+
+  /// Ensures the workspace's own `accounts/<id>` row carries a usable `pwHash`.
+  ///
+  /// Best-effort only. Quietly does nothing when the row already has a hash, when
+  /// the server is unreachable, or when the local password is a placeholder.
+  Future<void> _healWorkspaceAccountRow(User u) async {
+    if (!_backendIsUsable) return;
+    if (_looksLikePlaceholder(u.password)) return;
+    try {
+      final ws = workspaceCodeFor(u.id);
+      final doc = await backend.read(ws);
+      final row = doc.entities['accounts/${u.id}'];
+      if (row is! Map) return;
+      final hasHash = row['pwHash'];
+      if (hasHash is String && hasHash.isNotEmpty) return; // already fine
+      final fixed = Map<String, dynamic>.from(row);
+      fixed.remove('password');
+      fixed['pwHash'] = hashPassword(u.id, u.password);
+      fixed['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+      await backend.write(
+        ws,
+        CloudDoc(
+          entities: {'accounts/${u.id}': fixed},
+          rev: doc.rev,
+          gen: doc.gen,
+        ),
+      );
+    } catch (_) {
+      // A missing hash only affects brand-new devices; the account still works.
+    }
   }
 
   /// Looks for `accounts/<id>` in that account's workspace and, when the
@@ -1238,6 +1274,10 @@ class Store extends ChangeNotifier {
         final m = Map<String, dynamic>.from(raw);
         m.remove('_rev');
         m.remove('_updatedAt');
+        if (e.key == 'accounts') {
+          out['$prefix$k'] = _accountRowForSync('$k', m);
+          continue;
+        }
         out['$prefix$k'] = m;
       }
     }
@@ -1369,6 +1409,12 @@ class Store extends ChangeNotifier {
       final m = Map<String, dynamic>.from(raw);
       m.remove('_rev');
       m.remove('_updatedAt');
+      if (entity == 'accounts') {
+        // Replace the local plaintext with a hash — the server copy is what a
+        // new device verifies against, so it needs pwHash and must not leak.
+        out[full] = _accountRowForSync(full.substring(slash + 1), m);
+        continue;
+      }
       // Guarantee the server record is attributable to this workspace. Account
       // rows deliberately have no owner — the workspace itself is the owner.
       if (_isOwned(entity) && (m['ownerId'] ?? '') == '') {
@@ -1410,6 +1456,22 @@ class Store extends ChangeNotifier {
       final pending = pendingKeys.contains(key);
       final local = box.get(boxKey);
 
+      // Account rows need special handling: the server copy has no plaintext
+      // password on purpose, so it must be merged rather than written over.
+      if (entity == 'accounts') {
+        _sanitizeIncomingAccount(remote);
+        final merged = _mergeIncomingAccount(boxKey, remote, local);
+        if (local is Map) {
+          final a = Map<String, dynamic>.from(local)
+            ..remove('_rev')
+            ..remove('_updatedAt');
+          if (!pending && _shallowEquals(a, merged)) continue;
+        }
+        box.put(boxKey, merged);
+        changed = true;
+        continue;
+      }
+
       if (local is Map && !pending) {
         final a = Map<String, dynamic>.from(local);
         a.remove('_rev');
@@ -1424,6 +1486,81 @@ class Store extends ChangeNotifier {
       changed = true;
     }
     return changed;
+  }
+
+  /// Removes a plaintext password from an account record arriving from the
+  /// server.
+  ///
+  /// `accounts/<id>` rows travel as ordinary sync entities. Before this existed,
+  /// an already-leaked workspace could drop someone's plaintext password into
+  /// the local credential store; uploads are now hash-only, and this is the
+  /// matching guard on the way in.
+  static void _sanitizeIncomingAccount(Map<String, dynamic> remote) {
+    remote.remove('password');
+  }
+
+  /// Builds the account row that travels to the server.
+  ///
+  /// The workspace copy is what a brand-new device reads to sign in
+  /// ([_adoptAccountFromServer]), so it needs something to verify against — but
+  /// it must never be the plaintext. `password` is dropped here and replaced by
+  /// `pwHash`, derived from the local credential at upload time.
+  ///
+  /// Why this exists: `accounts/<id>` used to be serialised straight from
+  /// `User.toMap()`, which carries `password` and no hash. The registry
+  /// (`ACCREGISTRY…`) always stored only `pwHash`, so the two copies disagreed:
+  /// the workspace leaked plaintext while being useless for hash verification.
+  static Map<String, dynamic> _accountRowForSync(
+    String boxKey,
+    Map<String, dynamic> local,
+  ) {
+    final out = Map<String, dynamic>.from(local);
+    final pw = out.remove('password');
+    if (pw is String && pw.isNotEmpty && !_looksLikePlaceholder(pw)) {
+      out['pwHash'] = hashPassword('${out['id'] ?? boxKey}', pw);
+    }
+    // No local secret (row adopted from the registry, or a never-used master
+    // slot): leave `pwHash` exactly as it was. Fabricating one would overwrite a
+    // good credential on every other device via last-writer-wins.
+    return out;
+  }
+
+  /// True for [_randomPlaceholder] passwords — 64 hex chars, two uuids joined.
+  ///
+  /// Such a value is not a credential and must never be hashed into the
+  /// workspace: doing so would publish a password nobody knows and lock the
+  /// account out once the registry's real hash loses last-writer-wins.
+  static bool _looksLikePlaceholder(String pw) =>
+      pw.length == 64 && RegExp(r'^[0-9a-f]{64}$').hasMatch(pw);
+
+  /// Merges a server account row into the local one without dropping the
+  /// credential this device signs in with.
+  ///
+  /// The server copy carries settings and `pwHash`, never `password` (see
+  /// [_accountRowForSync]). Writing it wholesale would blank the local password
+  /// and break offline sign-in — the account would look fine until the server
+  /// could not be reached, then refuse every login. Local keeps the plaintext;
+  /// remote wins for everything else.
+  static Map<String, dynamic> _mergeIncomingAccount(
+    String boxKey,
+    Map<String, dynamic> remote,
+    Object? local,
+  ) {
+    final merged = Map<String, dynamic>.from(remote);
+    final localPw = local is Map ? local['password'] : null;
+    if (localPw is String && localPw.isNotEmpty) {
+      merged['password'] = localPw;
+    }
+    // A stale server row must not erase a hash this device already trusts.
+    final localHash = local is Map ? local['pwHash'] : null;
+    final remoteHash = remote['pwHash'];
+    if ((remoteHash is! String || remoteHash.isEmpty) &&
+        localHash is String &&
+        localHash.isNotEmpty) {
+      merged['pwHash'] = localHash;
+    }
+    merged['id'] ??= boxKey;
+    return merged;
   }
 
   /// Reserved `users`-box key for a synced preference, or null when the pref is
