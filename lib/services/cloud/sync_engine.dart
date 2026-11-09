@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../store.dart';
 import 'cloud_backend.dart';
+import 'nas_backend.dart';
 
 /// What the cloud sync is doing right now (drives the Settings panel).
 enum SyncState { off, idle, syncing, offline, notConfigured }
@@ -13,24 +14,25 @@ enum SyncState { off, idle, syncing, offline, notConfigured }
 /// ## The model
 /// **The server is the only durable copy.** The device keeps a read cache plus
 /// an *outbox* of records that have not been acknowledged yet. A local edit is
-/// not "saved" until it comes back from the server in a snapshot.
+/// not "saved" until the server confirms it.
 ///
-/// ## Why this is a rewrite
-/// The previous version treated a pub/sub topic (ntfy.sh) as a database:
-/// 2-second polling against a 5-second rate limit, a 4 KB body cap, and 12-hour
-/// message retention. It failed in exactly the way those limits predict —
-/// `HTTP 429`, then silent data loss. Nothing of that design survives here.
+/// ## Why this design loads fast
+/// The previous version treated a pub/sub topic as a database (2 s polling into
+/// a 5 s rate limit, 4 KB bodies) and then, after moving to the NAS, wrote the
+/// whole document and immediately **re-read it** to confirm — two full round
+/// trips for every edit, plus a 2 s poll on top. Opening the app mean waiting.
 ///
-/// ## How it works now
-/// * One `snapshots()` listener per workspace. Firestore pushes changes; there
-///   is no polling, so there is no rate limit to trip.
-/// * A local write marks records in the outbox and schedules an upload. The
-///   upload merges (last-writer-wins on `updatedAt`) inside a transaction.
-/// * The listener confirms the upload: records leave the outbox only when the
-///   server sends them back. A write that never lands stays queued.
-/// * Deletions are tombstones (`deletedAt`), so they propagate like any other
-///   change instead of relying on "missing" — which an unseen document would
-///   confuse with "not synced yet".
+/// Three changes removed almost all of that:
+///
+/// 1. **The write answer is the confirmation.** The gateway merges and returns
+///    `echo` (accepted) and `lost` (someone else won). Both empty the outbox and
+///    apply the winner, so a normal save is ONE request.
+/// 2. **Nothing is downloaded to paint.** The UI renders from Hive, which is a
+///    local read. The network is only asked "is your rev different from mine?"
+///    and an unchanged workspace answers ~40 bytes.
+/// 3. **A parked request instead of a timer.** `watch()` uses the gateway's long
+///    poll, so another device's edit arrives within one round trip and an idle
+///    session costs a couple of requests per minute instead of thirty.
 class SyncService {
   SyncService(this._store, this._backend);
 
@@ -44,6 +46,15 @@ class SyncService {
   bool _busy = false;
   bool _dirty = false;
   bool _stopped = true;
+
+  /// Revision of the workspace this device currently mirrors. Sent on every
+  /// read so the server can answer "unchanged" — the cheapest possible reply.
+  int _rev = 0;
+  int get rev => _rev;
+
+  /// Workspace generation, so a reset on another device is detected.
+  int _gen = 0;
+  int get gen => _gen;
 
   SyncState _state = SyncState.off;
   SyncState get state => _state;
@@ -62,7 +73,7 @@ class SyncService {
   int get lastCount => _lastCount;
 
   /// How long to wait after a local edit before uploading (batches keystrokes).
-  static const pushDebounce = Duration(milliseconds: 500);
+  static const pushDebounce = Duration(milliseconds: 400);
 
   /// Backoff for retries after a failed upload.
   static const _retryBase = Duration(seconds: 2);
@@ -88,21 +99,29 @@ class SyncService {
       return;
     }
     if (!_isBackendReady()) {
-      _setState(SyncState.notConfigured, 'firebase not configured');
+      _setState(SyncState.notConfigured, 'sync server not configured');
       return;
     }
     _stopped = false;
     _failures = 0;
+
+    // Reuse the revision we already mirror so the very first request can be
+    // answered with "unchanged" instead of shipping the whole workspace.
+    _rev = _store.cachedRev;
+    _gen = _store.cachedGen;
+
     _subscribe();
-    await flush(manual: true);
+
+    // Push anything the last session could not upload. Everything else is
+    // already on the server, so there is nothing to download first.
+    if (_store.pendingCount > 0) {
+      await flush(manual: true);
+    } else {
+      _setState(SyncState.syncing, '');
+    }
   }
 
   /// True only when the backend can actually be used.
-  ///
-  /// Constructing the Firestore backend throws when Firebase was never
-  /// initialised, so this must be asked before anything touches it. Treating
-  /// that case as "not configured" is what lets the app run local-only instead
-  /// of crashing on the first edit.
   bool _isBackendReady() {
     try {
       return _backend.isConfigured;
@@ -111,7 +130,7 @@ class SyncService {
     }
   }
 
-  /// Opens the single live subscription for this workspace.
+  /// Opens the single live channel for this workspace.
   void _subscribe() {
     if (_stopped) return;
     if (_sub != null) return;
@@ -120,10 +139,8 @@ class SyncService {
 
     _sub = _backend.watch(
       id,
+      haveRev: _rev,
       onRemote: (doc) {
-        // Firestore calls this once immediately with the current document, then
-        // on every change from any device — including our own uploads, which is
-        // what lets us confirm them and empty the outbox.
         unawaited(_onRemote(doc));
       },
       onError: (reason) {
@@ -148,6 +165,17 @@ class SyncService {
     _setState(SyncState.off, '');
   }
 
+  /// Re-reads the workspace from scratch (used after a reset, or by "지금 동기화").
+  Future<void> resubscribe({bool forceFull = false}) async {
+    _sub?.cancel();
+    _sub = null;
+    if (forceFull) {
+      _rev = 0;
+      _gen = 0;
+    }
+    if (!_stopped) _subscribe();
+  }
+
   /// Called by [Store] whenever local data changed.
   void markDirty() {
     if (_stopped || !_store.syncEnabled) return;
@@ -162,19 +190,18 @@ class SyncService {
     _pushTimer = Timer(pushDebounce, () => unawaited(flush()));
   }
 
-  /// Uploads the outbox right now (used by the "sync now" button and after a
-  /// reconnect).
+  /// Uploads the outbox right now (used by the "지금 동기화" button and after a
+  /// reconnect). Costs exactly one round trip on success.
   Future<void> flush({bool manual = false}) async {
     if (_stopped) {
       if (manual) _setState(SyncState.off, '');
       return;
     }
     if (!_isBackendReady()) {
-      _setState(SyncState.notConfigured, 'firebase not configured');
+      _setState(SyncState.notConfigured, 'sync server not configured');
       return;
     }
     if (_busy) {
-      // Let the running cycle know it has more work once it finishes.
       _dirty = true;
       return;
     }
@@ -186,8 +213,8 @@ class SyncService {
 
     final outbox = _store.pendingSnapshot(_store.currentUserId);
     if (outbox.isEmpty) {
-      // Nothing to upload. Report honestly: we are only in sync if a snapshot
-      // has actually arrived at least once.
+      // Nothing to upload. Do not claim "in sync" before the server has ever
+      // answered — that would be a green light nobody verified.
       _setState(
         _lastSync == null ? SyncState.syncing : SyncState.idle,
         '',
@@ -200,27 +227,65 @@ class SyncService {
     try {
       final res = await _backend.write(
         id,
-        CloudDoc(entities: outbox, rev: 0),
+        CloudDoc(entities: outbox, rev: _rev, gen: _gen),
       );
+
       if (!res.ok) {
         _failures = (_failures + 1).clamp(1, 8);
         _setState(SyncState.offline, _friendly(res.error ?? 'write failed'));
         _scheduleRetry();
         return;
       }
-      // Confirmation comes from the server's answer, not from the HTTP result
-      // alone: the outbox is emptied in [_onRemote] only for records the server
-      // echoed back. That closes the "reported saved but never stored" hole.
-      //
-      // Read back immediately instead of waiting for the push channel to fire.
-      // Firestore's snapshot would arrive on its own, but a polling backend
-      // (NAS) would only confirm on its next tick — up to two seconds of the
-      // pending badge sitting there after a successful upload, which reads as
-      // "it did not work". An extra read costs nothing and makes the panel
-      // honest the instant the write lands.
+
       _failures = 0;
-      final confirm = await _backend.read(id);
-      await _onRemote(confirm);
+      if (res.rev != null) _rev = res.rev!;
+      if (res.gen != null) _gen = res.gen!;
+
+      // --- The one-round-trip confirmation -----------------------------------
+      // `echo` lists the records the server now holds at our version: those
+      // leave the outbox. `lost` carries records where another device's edit was
+      // newer: we adopt it locally and also drop it from the outbox, because the
+      // server is authoritative and this is not a conflict anymore — it is
+      // resolved.
+      _store.beginRemoteApply();
+      var changed = false;
+      try {
+        final lost = res.lost;
+        if (lost != null) {
+          for (final e in lost.entries) {
+            final slash = e.key.indexOf('/');
+            if (slash <= 0) continue;
+            final entity = e.key.substring(0, slash);
+            final boxKey = e.key.substring(slash + 1);
+            if (await _store.applyServerRecord(entity, boxKey, e.value)) {
+              changed = true;
+            }
+          }
+        }
+      } finally {
+        _store.endRemoteApply(changed);
+      }
+
+      final acked = <String>[
+        ...?res.echo?.keys,
+        if (res.lost != null) ...res.lost!.keys,
+      ];
+      if (acked.isNotEmpty) {
+        await _store.clearPending(acked);
+        _lastCount = acked.length;
+      }
+
+      _rev = res.rev ?? _rev;
+      _gen = res.gen ?? _gen;
+      await _store.setCachedRev(_rev, _gen);
+      _lastSync = DateTime.now();
+
+      if (_store.pendingCount > 0) {
+        _setState(SyncState.syncing, '');
+        if (!_busy) markDirty();
+      } else {
+        _setState(SyncState.idle, '');
+      }
     } catch (e) {
       _failures = (_failures + 1).clamp(1, 8);
       debugPrint('CLOUDDBG upload failed: $e');
@@ -232,7 +297,7 @@ class SyncService {
       // run one more pass if anything is still queued.
       if (!_stopped && _dirty) {
         _dirty = false;
-        if (_store.pendingCount > 0) _pushTimer?.cancel();
+        _pushTimer?.cancel();
         _pushTimer = Timer(pushDebounce, () => unawaited(flush()));
       }
     }
@@ -250,13 +315,35 @@ class SyncService {
     if (_stopped) return;
 
     if (!doc.exists) {
-      // Brand-new account: nothing on the server yet. Seed it with whatever is
-      // already on this device so the first device is not an empty shell.
+      // Nothing on the server. That is either a brand-new account or a reset
+      // performed elsewhere — the generation tells them apart.
+      final resetElsewhere = doc.gen > _gen;
+      _rev = doc.rev;
+      _gen = doc.gen;
+
+      if (resetElsewhere) {
+        // The user wiped the workspace from another device. Honour it: drop the
+        // local cache instead of helpfully uploading it all back.
+        _store.beginRemoteApply();
+        try {
+          await _store.dropWorkspaceCache(_store.currentUserId);
+          await _store.clearAllPending();
+        } finally {
+          _store.endRemoteApply(true);
+        }
+        await _store.setCachedRev(_rev, _gen);
+        _lastSync = DateTime.now();
+        _failures = 0;
+        _setState(SyncState.idle, '');
+        return;
+      }
+
       _lastSync ??= DateTime.now();
       if (_store.pendingCount == 0) {
         await _store.queueAllForUpload(_store.currentUserId);
         markDirty();
       }
+      await _store.setCachedRev(_rev, _gen);
       _setState(SyncState.idle, '');
       return;
     }
@@ -284,7 +371,12 @@ class SyncService {
         _lastCount = confirmed.length;
       }
 
-      // Anything the server dropped and that we do not have queued is gone.
+      // Anything the server no longer has and that we are not still holding in
+      // the outbox is genuinely gone.
+      //
+      // This is deliberately skipped when the document is only a partial answer
+      // (i.e. we already had this revision and the poll simply timed out): in
+      // that case `entities` is still the full document, so pruning is safe.
       final pruned = await _store.pruneMissing(
         _store.currentUserId,
         doc.entities.keys.toSet(),
@@ -294,11 +386,13 @@ class SyncService {
       _store.endRemoteApply(changed);
     }
 
+    _rev = doc.rev;
+    _gen = doc.gen;
+    await _store.setCachedRev(_rev, _gen);
     _lastSync = DateTime.now();
     _failures = 0;
 
     if (_store.pendingCount > 0) {
-      // Still something to push (or a fresh local edit).
       _setState(SyncState.syncing, '');
       if (!_busy) markDirty();
     } else {
@@ -313,6 +407,58 @@ class SyncService {
       _subscribe();
     }
     await flush(manual: true);
+    if (_store.pendingCount == 0 && _isBackendReady()) {
+      // Ask the server once, bypassing the parked poll, so a manual sync always
+      // produces a visible answer.
+      try {
+        final doc = await _backend.read(workspaceId, haveRev: _rev);
+        await _onRemote(doc);
+      } on CloudException catch (e) {
+        if (e.message != 'unchanged') {
+          _setState(SyncState.offline, _friendly(e.message));
+        } else {
+          _lastSync = DateTime.now();
+          _setState(SyncState.idle, '');
+        }
+      } catch (e) {
+        _setState(SyncState.offline, _friendly('$e'));
+      }
+    }
+  }
+
+  /// Empties the workspace on the server so every device follows.
+  ///
+  /// Returns an error message, or null on success.
+  Future<String?> resetRemote() async {
+    final id = workspaceId;
+    if (id.isEmpty) return 'not signed in';
+    if (!_isBackendReady()) return 'sync server not configured';
+
+    // Stop the parked poll first: its answer would fight the reset.
+    _sub?.cancel();
+    _sub = null;
+
+    final res = await _backend.resetWorkspace(id);
+    if (!res.ok) {
+      if (!_stopped) _subscribe();
+      return res.error ?? 'reset failed';
+    }
+
+    _rev = res.rev ?? 0;
+    _gen = res.gen ?? (_gen + 1);
+    _store.beginRemoteApply();
+    try {
+      await _store.dropWorkspaceCache(_store.currentUserId);
+      await _store.clearAllPending();
+    } finally {
+      _store.endRemoteApply(true);
+    }
+    await _store.setCachedRev(_rev, _gen);
+    _lastSync = DateTime.now();
+    _failures = 0;
+    _setState(SyncState.idle, '');
+    if (!_stopped) _subscribe();
+    return null;
   }
 
   String _friendly(String s) {
@@ -320,10 +466,12 @@ class SyncService {
     if (t.contains('unavailable') ||
         t.contains('network') ||
         t.contains('Failed host lookup') ||
-        t.contains('ClientException')) {
+        t.contains('ClientException') ||
+        t.contains('SocketException') ||
+        t.contains('TimeoutException')) {
       return 'offline';
     }
-    if (t.contains('permission-denied')) return 'permission denied';
+    if (t.contains('401') || t.contains('bad key')) return 'bad key';
     return t.length > 90 ? '${t.substring(0, 90)}…' : t;
   }
 
@@ -340,13 +488,16 @@ class SyncService {
       case SyncState.off:
         return ko ? '동기화 꺼짐' : 'Sync off';
       case SyncState.idle:
-        return ko ? '서버와 동일' : 'In sync with server';
+        return ko ? '모든 기기와 동일' : 'In sync with all devices';
       case SyncState.syncing:
         return ko ? '동기화 중…' : 'Syncing…';
       case SyncState.offline:
         return ko ? '연결 대기 — 자동 재시도' : 'Waiting to reconnect';
       case SyncState.notConfigured:
-        return ko ? '클라우드 미설정 (로컬 저장)' : 'Cloud not configured (local only)';
+        return ko ? '동기화 서버 미설정 (로컬 저장)' : 'No sync server (local only)';
     }
   }
+
+  /// The long-poll wait used by this backend, for the Settings panel copy.
+  int get pollWaitSeconds => NasBackend.pollWaitSeconds;
 }

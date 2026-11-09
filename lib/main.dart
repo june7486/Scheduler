@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
-import 'services/firebase_options.dart';
 import 'services/session_service.dart';
 import 'services/store.dart';
 import 'theme/app_theme.dart';
@@ -14,11 +13,10 @@ import 'widgets/skin_lang_bar.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cloud storage first: the sync engine needs Firebase ready before the store
-  // restores a session. A missing configuration is not fatal — the app still
-  // runs and stores data locally, Settings just says so.
-  await initFirebase();
-
+  // No network call happens before the first frame. Hive reads are local and
+  // fast, so the UI paints from the on-device cache immediately; the NAS is
+  // contacted afterwards, in the background, by the sync engine. That is the
+  // difference between "opens instantly" and "stares at a spinner".
   final store = Store();
   await store.init();
   // Sync the static language used by the L10n helper.
@@ -44,7 +42,8 @@ class JuneSchedulerApp extends StatelessWidget {
         builder: (context, s, _) {
           // Keep the global language in sync with the store.
           L10n.currentLang = s.language == 'en' ? AppLang.en : AppLang.ko;
-          // Keep the active skin in sync with the store.
+          // Keep the active design language + colour skin in sync.
+          setDesign(s.designKey);
           setSkin(s.skinKey);
           // Hand-writing (pen) preference for non-notebook skins.
           setHandwriting(s.handwritingKey);

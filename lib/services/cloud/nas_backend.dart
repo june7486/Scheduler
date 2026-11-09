@@ -6,20 +6,26 @@ import 'package:http/http.dart' as http;
 
 import 'cloud_backend.dart';
 
-/// Talks to a sync server running on your own NAS (see `server/nas/server.js`).
+/// Talks to the NAS gateway (see `server/gateway/server.js`).
 ///
-/// This is the "my own land" option: the data file lives in a folder you
-/// control, backed up by whatever your NAS already does. No account, no quota,
-/// no retention limit, and no third party that can rate-limit you.
+/// The gateway holds the DSM session and re-exposes one small JSON file per
+/// workspace with proper CORS, so the browser never talks to Synology directly.
 ///
-/// It speaks three endpoints:
-///   GET  /health                    — is the NAS awake?
-///   GET  /api/state?ws=…&rev=…      — full document (or `unchanged`)
-///   POST /api/push                  — merge entities, last-writer-wins
+/// Three endpoints:
+///   GET  /health                       — is the NAS awake?
+///   GET  /api/state?ws=&rev=&gen=&wait= — document, or "unchanged" after a wait
+///   POST /api/push                     — merge entities, return the echo
 ///
-/// Polling is cheap here because the server is yours, but the engine still
-/// prefers one long-lived loop over hammering: an unchanged answer is a tiny
-/// `{unchanged:true}` body, and the interval scales with failures.
+/// ## Why this is fast
+/// * **One round trip per save.** The push answer carries an `echo` map of
+///   `key → updatedAt` the server now holds, so the client can clear its outbox
+///   from the reply itself. The previous design wrote and then immediately
+///   re-read the whole document — doubling latency on every keystroke batch.
+/// * **Long poll instead of a timer.** `wait=25` parks the request server-side;
+///   the answer lands the moment another device writes, so changes feel
+///   instant while idle sessions cost one request per 25 s instead of one per 2 s.
+/// * **`rev` and `gen` short-circuits.** An unchanged workspace answers ~40 bytes,
+///   and a generation mismatch (the user wiped everything) forces a full sync.
 class NasBackend implements CloudBackend {
   NasBackend({
     required String baseUrl,
@@ -28,22 +34,28 @@ class NasBackend implements CloudBackend {
   })  : _base = _normalise(baseUrl),
         _client = client ?? http.Client();
 
-  /// e.g. `http://192.168.0.20:8099`, `https://nas.mydomain.net`
+  /// e.g. `https://sync.mydomain.net`, `http://192.216.0.20:8097`
   final String _base;
 
-  /// Optional shared key (`X-Sync-Key`). Empty means the server is open — fine
-  /// on a trusted LAN, not fine on the public internet.
+  /// Optional shared key (`X-Sync-Key`). Empty means the gateway is open — fine
+  /// on a trusted LAN, never on the public internet.
   final String secret;
 
   final http.Client _client;
 
-  static const _timeout = Duration(seconds: 15);
+  /// Generous, because a long poll is *supposed* to sit there. The gateway caps
+  /// its own wait below this, so hitting the timeout means a dead connection.
+  static const _timeout = Duration(seconds: 40);
+  static const _shortTimeout = Duration(seconds: 15);
+
+  /// How long a `watch` request is parked server-side.
+  static const pollWaitSeconds = 25;
 
   static String _normalise(String raw) {
     var s = raw.trim();
     if (s.isEmpty) return '';
     if (!s.startsWith('http://') && !s.startsWith('https://')) {
-      s = 'http://$s';
+      s = 'https://$s';
     }
     while (s.endsWith('/')) {
       s = s.substring(0, s.length - 1);
@@ -71,41 +83,57 @@ class NasBackend implements CloudBackend {
   Future<bool> ping() async {
     if (!isConfigured) return false;
     try {
-      final r = await _client.get(_uri('/health')).timeout(_timeout);
-      return r.statusCode == 200;
+      final r = await _client.get(_uri('/health')).timeout(_shortTimeout);
+      if (r.statusCode != 200) return false;
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      // `nas:false` means the gateway is up but the NAS login failed — honest
+      // reporting beats a green light that lies.
+      return body is Map && body['nas'] != false;
     } catch (_) {
       return false;
     }
   }
 
+  static CloudDoc _docFrom(Map body) {
+    final raw = body['entities'];
+    final entities = <String, dynamic>{};
+    if (raw is Map) {
+      for (final e in raw.entries) {
+        if (e.value is Map) {
+          entities['${e.key}'] = Map<String, dynamic>.from(e.value as Map);
+        }
+      }
+    }
+    return CloudDoc(
+      entities: entities,
+      rev: (body['rev'] as num?)?.toInt() ?? 0,
+      gen: (body['gen'] as num?)?.toInt() ?? 0,
+      exists: body['exists'] != false,
+    );
+  }
+
   @override
-  Future<CloudDoc> read(String workspaceId) async {
+  Future<CloudDoc> read(String workspaceId, {int haveRev = 0}) async {
     if (!isConfigured) return CloudDoc.unknown;
     try {
       final r = await _client
-          .get(_uri('/api/state', {'ws': workspaceId}), headers: _headers)
-          .timeout(_timeout);
+          .get(
+            _uri('/api/state', {
+              'ws': workspaceId,
+              if (haveRev > 0) 'rev': '$haveRev',
+            }),
+            headers: _headers,
+          )
+          .timeout(_shortTimeout);
       if (r.statusCode == 401) throw const CloudException('bad key');
-      if (r.statusCode != 200) {
-        throw CloudException('HTTP ${r.statusCode}');
-      }
+      if (r.statusCode != 200) throw CloudException('HTTP ${r.statusCode}');
       final body = jsonDecode(utf8.decode(r.bodyBytes));
       if (body is! Map) throw const CloudException('bad response');
-      if (body['exists'] == false) return CloudDoc.unknown;
-      final raw = body['entities'];
-      final entities = <String, dynamic>{};
-      if (raw is Map) {
-        for (final e in raw.entries) {
-          if (e.value is Map) {
-            entities[e.key.toString()] =
-                Map<String, dynamic>.from(e.value as Map);
-          }
-        }
+      if (body['unchanged'] == true) {
+        throw const CloudException('unchanged'); // caller already has it
       }
-      return CloudDoc(
-        entities: entities,
-        rev: (body['rev'] as num?)?.toInt() ?? 0,
-      );
+      if (body['exists'] == false) return CloudDoc.unknown;
+      return _docFrom(body);
     } on CloudException {
       rethrow;
     } catch (e) {
@@ -114,47 +142,113 @@ class NasBackend implements CloudBackend {
   }
 
   @override
-  Future<CloudWriteResult> write(String workspaceId, CloudDoc doc) async {
+  Future<CloudWriteResult> write(
+    String workspaceId,
+    CloudDoc doc, {
+    Map<String, dynamic>? extra,
+  }) async {
+    if (!isConfigured) {
+      return const CloudWriteResult(ok: false, error: 'nas not configured');
+    }
+    try {
+      final payload = <String, dynamic>{
+        'ws': workspaceId,
+        'entities': doc.entities,
+        if (extra != null) ...extra,
+      };
+      final r = await _client
+          .post(
+            _uri('/api/push'),
+            headers: _headers,
+            body: utf8.encode(jsonEncode(payload)),
+          )
+          .timeout(_shortTimeout);
+      if (r.statusCode == 401) {
+        return const CloudWriteResult(ok: false, error: 'bad key');
+      }
+      if (r.statusCode != 200) {
+        return CloudWriteResult(ok: false, error: 'HTTP ${r.statusCode}');
+      }
+      final body = jsonDecode(utf8.decode(r.bodyBytes));
+      if (body is! Map) {
+        return const CloudWriteResult(ok: false, error: 'bad response');
+      }
+      final echoRaw = body['echo'];
+      final echo = <String, int>{};
+      if (echoRaw is Map) {
+        for (final e in echoRaw.entries) {
+          echo['${e.key}'] = (e.value as num?)?.toInt() ?? 0;
+        }
+      }
+      final lostRaw = body['lost'];
+      final lost = <String, Map<String, dynamic>>{};
+      if (lostRaw is Map) {
+        for (final e in lostRaw.entries) {
+          if (e.value is Map) {
+            lost['${e.key}'] = Map<String, dynamic>.from(e.value as Map);
+          }
+        }
+      }
+      return CloudWriteResult(
+        ok: true,
+        rev: (body['rev'] as num?)?.toInt(),
+        gen: (body['gen'] as num?)?.toInt(),
+        echo: echo,
+        lost: lost.isEmpty ? null : lost,
+        count: (body['count'] as num?)?.toInt(),
+      );
+    } catch (e) {
+      return CloudWriteResult.failure(e);
+    }
+  }
+
+  @override
+  CloudSubscription watch(
+    String workspaceId, {
+    required void Function(CloudDoc doc) onRemote,
+    required void Function(String reason) onError,
+    int haveRev = 0,
+  }) {
+    final poller = _NasLongPoller(
+      this,
+      workspaceId,
+      onRemote: onRemote,
+      onError: onError,
+      haveRev: haveRev,
+    );
+    poller.start();
+    return poller;
+  }
+
+  @override
+  Future<CloudWriteResult> resetWorkspace(String workspaceId) async {
     if (!isConfigured) {
       return const CloudWriteResult(ok: false, error: 'nas not configured');
     }
     try {
       final r = await _client
           .post(
-            _uri('/api/push'),
+            _uri('/api/reset'),
             headers: _headers,
-            body: utf8.encode(
-              jsonEncode({'ws': workspaceId, 'entities': doc.entities}),
-            ),
+            body: utf8.encode(jsonEncode({'ws': workspaceId})),
           )
-          .timeout(_timeout);
+          .timeout(_shortTimeout);
       if (r.statusCode != 200) {
         return CloudWriteResult(ok: false, error: 'HTTP ${r.statusCode}');
       }
       final body = jsonDecode(utf8.decode(r.bodyBytes));
-      final rev = body is Map ? (body['rev'] as num?)?.toInt() : null;
-      return CloudWriteResult(ok: true, rev: rev);
+      if (body is! Map) {
+        return const CloudWriteResult(ok: false, error: 'bad response');
+      }
+      return CloudWriteResult(
+        ok: true,
+        rev: (body['rev'] as num?)?.toInt(),
+        gen: (body['gen'] as num?)?.toInt(),
+        count: 0,
+      );
     } catch (e) {
       return CloudWriteResult.failure(e);
     }
-  }
-
-  /// Polls `/api/state`. The first call returns `exists:false` for a new
-  /// workspace, which the engine treats as "seed me" rather than "empty".
-  @override
-  CloudSubscription watch(
-    String workspaceId, {
-    required void Function(CloudDoc doc) onRemote,
-    required void Function(String reason) onError,
-  }) {
-    final poller = _NasPoller(
-      this,
-      workspaceId,
-      onRemote: onRemote,
-      onError: onError,
-    );
-    poller.start();
-    return poller;
   }
 
   @override
@@ -163,34 +257,38 @@ class NasBackend implements CloudBackend {
   }
 }
 
-/// One self-scheduling read loop per workspace.
+/// One parked request per workspace.
 ///
-/// Interval grows while the NAS is unreachable (2s → 60s) and resets the
-/// moment it answers again, so a sleeping NAS costs nothing and a live one
-/// feels instant. `rev` is sent so an unchanged workspace returns ~20 bytes.
-class _NasPoller implements CloudSubscription {
-  _NasPoller(
+/// The gateway holds the connection until something changes (or ~25 s passes),
+/// so this loop is idle rather than busy: no 2-second hammering, no rate limit,
+/// and a change on another device arrives within one round trip.
+class _NasLongPoller implements CloudSubscription {
+  _NasLongPoller(
     this._backend,
     this._workspaceId, {
     required this.onRemote,
     required this.onError,
-  });
+    int haveRev = 0,
+  }) : _rev = haveRev;
 
   final NasBackend _backend;
   final String _workspaceId;
   final void Function(CloudDoc) onRemote;
   final void Function(String) onError;
 
-  static const _fast = Duration(seconds: 2);
-  static const _slow = Duration(seconds: 60);
+  /// Backoff bounds used only while the gateway is unreachable.
+  static const _backoffBase = Duration(seconds: 1);
+  static const _backoffMax = Duration(seconds: 30);
 
   Timer? _timer;
   int _failures = 0;
-  int _rev = 0;
+  int _rev;
+  int _gen = 0;
   bool _closed = false;
   bool _busy = false;
 
   void start() {
+    // First tick immediately: the caller may have an empty local cache.
     scheduleMicrotask(_tick);
   }
 
@@ -203,6 +301,8 @@ class _NasPoller implements CloudSubscription {
             _backend._uri('/api/state', {
               'ws': _workspaceId,
               if (_rev > 0) 'rev': '$_rev',
+              if (_gen > 0) 'gen': '$_gen',
+              'wait': '${NasBackend.pollWaitSeconds}',
             }),
             headers: _backend._headers,
           )
@@ -211,6 +311,7 @@ class _NasPoller implements CloudSubscription {
 
       if (r.statusCode == 401) {
         onError('bad key');
+        _failures++;
       } else if (r.statusCode != 200) {
         onError('HTTP ${r.statusCode}');
         _failures++;
@@ -219,31 +320,28 @@ class _NasPoller implements CloudSubscription {
         _failures = 0;
         if (body is Map) {
           final rev = (body['rev'] as num?)?.toInt() ?? 0;
+          final gen = (body['gen'] as num?)?.toInt() ?? 0;
           if (body['unchanged'] == true) {
             _rev = rev;
+            _gen = gen;
           } else if (body['exists'] == false) {
+            _rev = rev;
+            _gen = gen;
             onRemote(CloudDoc.unknown);
           } else {
             _rev = rev;
-            final raw = body['entities'];
-            final entities = <String, dynamic>{};
-            if (raw is Map) {
-              for (final e in raw.entries) {
-                if (e.value is Map) {
-                  entities[e.key.toString()] =
-                      Map<String, dynamic>.from(e.value as Map);
-                }
-              }
-            }
-            onRemote(CloudDoc(entities: entities, rev: rev));
+            _gen = gen;
+            onRemote(NasBackend._docFrom(body));
           }
         }
       }
     } catch (e) {
+      // A long poll hitting its own client timeout is normal-ish (the gateway
+      // caps at 25 s), so only log genuine failures to keep the console honest.
       if (!_closed) {
-        debugPrint('NASDBG poll failed: $e');
-        onError('$e');
         _failures++;
+        if (_failures > 1) debugPrint('NASDBG poll failed: $e');
+        onError('$e');
       }
     } finally {
       _busy = false;
@@ -253,11 +351,23 @@ class _NasPoller implements CloudSubscription {
 
   void _schedule() {
     _timer?.cancel();
-    final secs = _failures == 0
-        ? _fast.inSeconds
-        : (_fast.inSeconds * (1 << (_failures - 1)))
-            .clamp(_fast.inSeconds, _slow.inSeconds);
+    if (_failures == 0) {
+      // Answer arrived (a change, or the gateway's own 25 s cap).
+      // Wait a single frame-ish beat so a hot loop cannot form if the server
+      // replies instantly with `unchanged` for any reason.
+      _timer = Timer(const Duration(milliseconds: 150), _tick);
+      return;
+    }
+    final secs = (_backoffBase.inSeconds * (1 << (_failures - 1)))
+        .clamp(_backoffBase.inSeconds, _backoffMax.inSeconds);
     _timer = Timer(Duration(seconds: secs), _tick);
+  }
+
+  /// Lets the engine tell the poller "I already have rev N", so the next tick
+  /// does not re-download a document we just produced ourselves.
+  void acknowledge(int rev, int gen) {
+    _rev = rev;
+    _gen = gen;
   }
 
   @override

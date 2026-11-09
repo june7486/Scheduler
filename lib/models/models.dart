@@ -7,6 +7,11 @@ class User {
   bool enabled;
   DateTime createdAt;
 
+  /// Last modification time (epoch ms). The account record itself syncs across
+  /// devices so a new phone can sign in with the same credentials; this is what
+  /// decides which copy of the account is newer.
+  int updatedAt;
+
   // Per-user preferences
   String forwardUrl;
   String appThemeMode; // material | minimal | mix
@@ -20,6 +25,7 @@ class User {
     this.isMaster = false,
     this.enabled = true,
     DateTime? createdAt,
+    this.updatedAt = 0,
     this.forwardUrl = 'https://aqdesign.co.kr',
     this.appThemeMode = 'mix',
     this.printDesignMode = 'minimal',
@@ -33,6 +39,7 @@ class User {
     'isMaster': isMaster,
     'enabled': enabled,
     'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt,
     'forwardUrl': forwardUrl,
     'appThemeMode': appThemeMode,
     'printDesignMode': printDesignMode,
@@ -48,6 +55,7 @@ class User {
     createdAt: map['createdAt'] != null
         ? DateTime.tryParse(map['createdAt'] as String) ?? DateTime.now()
         : DateTime.now(),
+    updatedAt: (map['updatedAt'] as num?)?.toInt() ?? 0,
     forwardUrl: (map['forwardUrl'] ?? 'https://aqdesign.co.kr') as String,
     appThemeMode: (map['appThemeMode'] ?? 'mix') as String,
     printDesignMode: (map['printDesignMode'] ?? 'minimal') as String,

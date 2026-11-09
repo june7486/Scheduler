@@ -8,7 +8,6 @@ import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
 import 'cloud/cloud_backend.dart';
-import 'cloud/firestore_backend.dart';
 import 'cloud/nas_backend.dart';
 import 'cloud/sync_engine.dart';
 
@@ -27,6 +26,7 @@ class Store extends ChangeNotifier {
   static const _catBox = 'categories';
   static const _logBox = 'logs';
   static const _voiceBox = 'voices';
+  static const _prefBox = 'prefs';
 
   static const masterId = 'june7486';
   static const masterPw = 'Corbuser7!@@';
@@ -40,22 +40,38 @@ class Store extends ChangeNotifier {
   late Box _cats;
   late Box _logs;
   late Box _voices;
+  late Box _prefs;
 
   final _uuid = const Uuid();
 
   bool _ready = false;
   bool get isReady => _ready;
 
-  /// Cloud storage provider. Swappable: Firestore today, anything that
-  /// implements [CloudBackend] tomorrow.
+  /// Cloud storage provider — a NAS gateway (or any server speaking the
+  /// `server/gateway` protocol).
   ///
-  /// Created lazily, never in the constructor: constructing it touches
-  /// `FirebaseFirestore.instance`, which throws when Firebase was not
-  /// initialised (missing config, failed init). One eager field would take the
-  /// whole app down instead of degrading to local-only storage.
+  /// A build-time default via `--dart-define=SYNC_URL=…` means a deployed build
+  /// needs no setup: sign in and it is already pointed at the NAS. That value is
+  /// only a fallback, so Settings can still override it per device.
+  ///
+  /// Created lazily so the very first frame never waits on anything.
   CloudBackend? _backendOverride;
-  CloudBackend get backend =>
-      _backendOverride ??= (_nasUrl.isEmpty ? FirestoreBackend() : _nas());
+  CloudBackend get backend => _backendOverride ??= _resolveBackend();
+
+  CloudBackend _resolveBackend() {
+    final url = _nasUrl.isNotEmpty ? _nasUrl : _envSyncUrl;
+    if (url.isEmpty) return const NullBackend();
+    return NasBackend(
+      baseUrl: url,
+      secret: _nasKey.isNotEmpty ? _nasKey : _envSyncKey,
+    );
+  }
+
+  /// Address baked into the build (`--dart-define=SYNC_URL`).
+  static const _envSyncUrl = String.fromEnvironment('SYNC_URL');
+
+  /// Shared key baked into the build (`--dart-define=SYNC_KEY`).
+  static const _envSyncKey = String.fromEnvironment('SYNC_KEY');
 
   /// Builds the NAS client from the saved URL + key. Cheap, but not cached: the
   /// URL can change from Settings, and a stale cached client would keep talking
@@ -63,15 +79,16 @@ class Store extends ChangeNotifier {
   NasBackend _nas() => NasBackend(baseUrl: _nasUrl, secret: _nasKey);
 
   String get _nasUrl => (_users.get('__sync_url__') as String?) ?? '';
+
   String get _nasKey => (_users.get('__sync_secret__') as String?) ?? '';
 
-  /// Saved NAS address (empty ⇒ the app uses the hosted cloud).
-  String get nasUrl => _nasUrl;
+  /// The address actually in use (saved value, else the build default).
+  String get nasUrl => _nasUrl.isNotEmpty ? _nasUrl : _envSyncUrl;
 
-  /// Saved shared key for the NAS server (empty when none was set).
-  String get nasSecret => _nasKey;
+  /// Saved shared key for the gateway (empty when none was set).
+  String get nasSecret => _nasKey.isNotEmpty ? _nasKey : _envSyncKey;
 
-  /// Replaces the storage provider (tests, or a future self-hosted server).
+  /// Replaces the storage provider (tests, or a different server).
   void useBackend(CloudBackend backend) {
     final wasStarted = _sync != null;
     _sync?.stop();
@@ -158,6 +175,7 @@ class Store extends ChangeNotifier {
     _cats = await Hive.openBox(_catBox);
     _logs = await Hive.openBox(_logBox);
     _voices = await Hive.openBox(_voiceBox);
+    _prefs = await Hive.openBox(_prefBox);
 
     await _ensureMaster();
     await _ensureTestUser();
@@ -294,7 +312,7 @@ class Store extends ChangeNotifier {
     }
   }
 
-  /// The Firestore document id for this account.
+  /// The server-side workspace key for this account.
   ///
   /// Derived from the user id so every device that signs in lands on the same
   /// document — no code to copy, no server to choose. Prefixed and hashed so
@@ -765,6 +783,7 @@ class Store extends ChangeNotifier {
     'tasks': _tasks,
     'categories': _cats,
     'voices': _voices,
+    'prefs': _prefs,
   };
 
   /// Re-stamps every record of [ownerId] as modified now.
@@ -961,9 +980,34 @@ class Store extends ChangeNotifier {
         if (_shallowEquals(a, remote)) continue;
       }
       box.put(boxKey, remote);
+      // Preferences arrive as `pref/<name>` records, but the getters read the
+      // `users` box. Mirror them here so a design chosen on the phone is live on
+      // the laptop the moment the snapshot lands.
+      if (entity == 'prefs') _mirrorPref(boxKey, remote);
       changed = true;
     }
     return changed;
+  }
+
+  /// Reserved `users`-box key for a synced preference, or null when the pref is
+  /// not one of the mirrored ones.
+  static const _mirroredPrefs = <String, String>{
+    'design': '__design__',
+    'skin': '__skin__',
+    'lang': '__lang__',
+    'theme_mode': '__theme_mode__',
+    'font': '__font__',
+    'font_scale': '__font_scale__',
+    'handwriting': '__handwriting__',
+  };
+
+  void _mirrorPref(String name, Map<String, dynamic> record) {
+    final key = _mirroredPrefs[name];
+    if (key == null) return;
+    final v = record['value'];
+    if (v == null) return;
+    if (_users.get(key) == v) return;
+    _users.put(key, v);
   }
 
   /// Marks every record of [ownerId] as needing an upload (workspace creation).
@@ -1091,6 +1135,39 @@ class Store extends ChangeNotifier {
       if ('$va' != '$vb') return false;
     }
     return true;
+  }
+
+  /// Drops every locally cached record of [ownerId].
+  ///
+  /// Used when the workspace was reset (here or on another device). The outbox
+  /// is cleared by the caller, because "delete everything" must not leave
+  /// tombstones queued that would resurrect nothing and block the sync.
+  Future<void> dropWorkspaceCache(String ownerId) async {
+    for (final e in _syncBoxes.entries) {
+      for (final k in e.value.keys.toList()) {
+        final raw = e.value.get(k);
+        if (raw is! Map) continue;
+        if (ownerId.isNotEmpty && (raw['ownerId'] ?? '') != ownerId) continue;
+        await e.value.delete(k);
+      }
+    }
+  }
+
+  /// Revision + generation of the workspace this device mirrors.
+  ///
+  /// Persisted so a reload can ask the server "anything new since rev N?" and
+  /// get a ~40-byte "unchanged" instead of the whole document.
+  int get cachedRev => (_users.get('__sync_rev__') as num?)?.toInt() ?? 0;
+
+  int get cachedGen => (_users.get('__sync_gen__') as num?)?.toInt() ?? 0;
+
+  Future<void> setCachedRev(int rev, int gen) async {
+    if (_users.get('__sync_rev__') != rev) {
+      await _users.put('__sync_rev__', rev);
+    }
+    if (_users.get('__sync_gen__') != gen) {
+      await _users.put('__sync_gen__', gen);
+    }
   }
 
   /// Re-reads all boxes from disk after a sync pull changed them.
@@ -1256,11 +1333,36 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---------------- Look & language (synced across devices) -------------
+  //
+  // These live in their own `prefs` box keyed `pref/<name>` so they travel with
+  // the workspace: pick a design on the phone, and the laptop shows the same one
+  // on next open. Keeping them out of the `users` box matters — that box is the
+  // credential store, and this one is deliberately part of the synced document.
+
+  void _putPref(String name, Object? value) {
+    _prefs.put(name, {
+      'id': name,
+      'ownerId': _scopeId,
+      'value': value,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    unawaited(_markPending('prefs', name));
+  }
+
+  T _getPref<T>(String name, T fallback) {
+    final raw = _prefs.get(name);
+    if (raw is! Map) return fallback;
+    final v = raw['value'];
+    return v is T ? v : fallback;
+  }
+
   /// UI language: 'ko' (default) or 'en'.
   String get language => (_users.get('__lang__') as String?) ?? 'ko';
 
   Future<void> setLanguage(String lang) async {
     await _users.put('__lang__', lang);
+    _putPref('lang', lang);
     notifyListeners();
   }
 
@@ -1270,43 +1372,66 @@ class Store extends ChangeNotifier {
 
   Future<void> setThemeModeKey(String mode) async {
     await _users.put('__theme_mode__', mode);
+    _putPref('theme_mode', mode);
+    notifyListeners();
+  }
+
+  /// Active design language (see [AppDesigns]). Defaults to 'paper'.
+  ///
+  /// A design language is not a recolour: it changes the geometry, the
+  /// decoration, the typography and the rhythm of every screen. The colour skin
+  /// selects a palette *inside* that design.
+  String get designKey =>
+      _getPref<String>('design', (_users.get('__design__') as String?) ?? 'paper');
+
+  Future<void> setDesignKey(String id) async {
+    await _users.put('__design__', id);
+    _putPref('design', id);
     notifyListeners();
   }
 
   /// Active colour skin id (see [AppSkins.ids]). Defaults to 'midnight'.
-  String get skinKey => (_users.get('__skin__') as String?) ?? 'midnight';
+  String get skinKey =>
+      _getPref<String>('skin', (_users.get('__skin__') as String?) ?? 'midnight');
 
   Future<void> setSkinKey(String id) async {
     await _users.put('__skin__', id);
+    _putPref('skin', id);
     notifyListeners();
   }
 
-  /// Hand-writing (pen) look for non-notebook skins. The notebook skin always
+  /// Hand-writing (pen) look for non-notebook designs. The paper design always
   /// uses it; here the user can also force it on/off elsewhere.
-  bool get handwritingKey => (_users.get('__handwriting__') as bool?) ?? true;
+  bool get handwritingKey =>
+      _getPref<bool>('handwriting', (_users.get('__handwriting__') as bool?) ?? true);
 
   Future<void> setHandwritingKey(bool on) async {
     await _users.put('__handwriting__', on);
+    _putPref('handwriting', on);
     notifyListeners();
   }
 
   /// Font family choice (see [AppFonts.ids]): 'system' (Windows / platform
   /// default, the app default), 'pen' (NanumPenScript), 'gaegu' (Gaegu),
   /// 'gothic' (NanumGothic), 'myeongjo', 'dodum', 'jua', 'dohyeon', 'black'.
-  String get fontKey => (_users.get('__font__') as String?) ?? 'system';
+  String get fontKey =>
+      _getPref<String>('font', (_users.get('__font__') as String?) ?? 'system');
 
   Future<void> setFontKey(String k) async {
     await _users.put('__font__', k);
+    _putPref('font', k);
     notifyListeners();
   }
 
   /// Global text-size multiplier (0.85 – 1.6; 1.0 = normal).
   double get fontScale =>
-      ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0)
+      _getPref<double>('font_scale', ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0))
           .clamp(0.85, 1.6);
 
   Future<void> setFontScale(double v) async {
-    await _users.put('__font_scale__', v.clamp(0.85, 1.6));
+    final clamped = v.clamp(0.85, 1.6);
+    await _users.put('__font_scale__', clamped);
+    _putPref('font_scale', clamped);
     notifyListeners();
   }
 
