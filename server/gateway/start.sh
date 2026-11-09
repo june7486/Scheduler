@@ -99,7 +99,15 @@ else
   echo "▶ nas     : ${NAS_HOST:-?} folder=${NAS_FOLDER:-?}"
 fi
 
-nohup "$NODE" "$DIR/server.js" >> "$LOG" 2>&1 &
+# DSM 의 작업 스케줄러는 스크립트가 끝나면 그 스크립트의 프로세스 그룹을 정리하는
+# 경우가 있다. nohup 은 SIGHUP 만 막아주므로 그룹째 오는 신호에는 속수무책이다.
+# setsid 로 새 세션에 옮겨두면 부모가 죽어도 게이트웨이는 살아남는다.
+# (setsid 가 없는 나스도 있으므로 없으면 예전처럼 nohup 으로 떨어진다)
+if command -v setsid >/dev/null 2>&1; then
+  setsid "$NODE" "$DIR/server.js" >> "$LOG" 2>&1 < /dev/null &
+else
+  nohup "$NODE" "$DIR/server.js" >> "$LOG" 2>&1 < /dev/null &
+fi
 echo $! > "$PIDFILE"
 sleep 2
 

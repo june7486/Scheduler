@@ -35,6 +35,12 @@ head_() { printf '\n%s\n' "── $1"; }
   exit 1
 }
 
+# FileStation 으로 올린 파일은 실행 비트가 없다. 그래서 ./start.sh 가
+# "Permission denied" 로 죽는 일이 흔하다. 여기서 한 번 고쳐준다.
+chmod +x "$DIR"/*.sh 2>/dev/null || true
+
+# 이 스크립트가 root 로 돌면 이후 start.sh/check-sync.sh 를 그냥 실행해도 된다.
+
 # .env 에서 PORT/DATA_DIR 만 읽는다. start.sh 는 자기 방식대로 읽으므로
 # 여기서는 화면 표시와 폴더 준비에만 쓴다.
 PORT="$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d ' \r')"
@@ -109,7 +115,7 @@ do_setup() {
 
   printf '\n%s게이트웨이가 살아 있습니다.%s\n' "$c_grn" "$c_off"
 
-  printf '\n%s이제 남은 일은 두 가지입니다.%s\n\n' "$c_yel" "$c_off"
+  printf '\n%s이제 남은 일은 세 가지입니다.%s\n\n' "$c_yel" "$c_off"
 
   printf '%s[1] 부팅 시 자동 시작 (한 번만)%s\n' "$c_dim" "$c_off"
   note "DSM → 제어판 → 작업 스케줄러 → 생성 → 트리거된 작업"
@@ -119,12 +125,15 @@ do_setup() {
   note "    $DIR/start.sh start"
   printf '\n'
 
-  printf '%s[2] 리버스 프록시 — 소스/대상이 반대입니다%s\n' "$c_dim" "$c_off"
+  printf '%s[2] 리버스 프록시 (이미 되어 있으면 그대로 두세요)%s\n' "$c_dim" "$c_off"
   note "소스: HTTPS / 443 / <도메인>        ← 사용자가 접속하는 바깥 문"
   note "대상: HTTP  / localhost / $PORT    ← 게이트웨이가 있는 안쪽 방"
-  note "헤더는 '사용자 지정 머리글' 탭에:"
-  note "  Host = \$host      X-Real-IP = \$remote_addr"
   note "HTTP/2 는 끄세요 (롱폴을 버퍼링해 '가끔 멈춤'을 만듭니다)"
+  note "'사용자 지정 머리글' 은 비워두어도 됩니다 — 서버가 Host 를 검사하지 않습니다"
+  printf '\n'
+  printf '%s[3] 인증서 지정 (안 하면 브라우저가 경고를 띄웁니다)%s\n' "$c_dim" "$c_off"
+  note "제어판 → 보안 → 인증서 → 설정 → 서비스 탭"
+  note "  위 주소(예: sync.example.com) 줄을 체크 → 확인 → 저장"
   printf '\n'
   note "그다음 확인:  $DIR/check-sync.sh"
   printf '\n'
