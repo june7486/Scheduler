@@ -34,9 +34,30 @@ code="$(printf '%s' "$body" | tail -n1)"
 payload="$(printf '%s' "$body" | sed '$d')"
 
 if [ "$code" = "000" ]; then
-  bad "응답 없음 — 호스트에 닿지 않습니다"
-  note "확인: 주소 오타 / 나스 꺼짐 / 공유기 포트포워딩 / 방화벽"
-  note "프록시를 세팅했다면 DSM 이 쓰는 443 이 열려 있는지도 보세요."
+  bad "응답 없음 — HTTPS 연결이 완성되지 않았습니다"
+  note "TCP 는 연결되는데 TLS 가 실패하는 경우가 대부분입니다."
+  # 실패한 TLS 핸드셰이크에서 서버가 내려준 인증서를 들여다본다.
+  local_cert="$(echo | timeout 12 openssl s_client -connect "${URL#https://}:443" \
+      -servername "${URL#https://}" 2>/dev/null | openssl x509 -noout -subject 2>/dev/null)"
+  if [ -n "$local_cert" ]; then
+    bad "서버가 내려준 인증서: ${local_cert#subject=}"
+    note "이 이름에 맞는 인증서가 아닙니다 → 제어판 → 보안 → 인증서 에서"
+    note "'${URL#https://}' 에 인증서를 지정하세요. (SNI 로 골라집니다)"
+  else
+    note "확인: 주소 오타 / 나스 꺼짐 / 방화벽 / 프록시 규칙 미저장"
+  fi
+  exit 1
+fi
+
+if [ "$code" = "502" ] || [ "$code" = "503" ]; then
+  ok "프록시 규칙은 살아 있습니다 (HTTPS 인증서도 통과)"
+  bad "HTTP $code — 프록시가 대상을 찾지 못했습니다"
+  note "즉, 게이트웨이가 8097 에서 돌고 있지 않습니다."
+  printf '\n'
+  note "나스에서 실행하세요:"
+  note "  cd /volume1/92_Scheduler/scheduler-sync && sudo ./setup-nas.sh"
+  printf '\n'
+  note "그다음 다시 이 스크립트를 돌리면 통과합니다."
   exit 1
 fi
 
