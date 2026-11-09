@@ -144,6 +144,196 @@ class _LangToggle extends StatelessWidget {
 /// Localised display name for a skin id.
 String skinName(String id) => tr('skin_$id');
 
+/// Bottom sheet that lets the user choose a **design language**.
+///
+/// This is the top level of the look-and-feel hierarchy, and it is deliberately
+/// not a recolour menu: each design changes geometry, decoration, typography and
+/// rhythm. Colour lives one level down, inside the design, because a palette
+/// makes sense *within* a language rather than instead of one.
+void showDesignPicker(BuildContext context, Store store) {
+  final designs = AppDesigns.ids;
+  showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    backgroundColor: p.card,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (ctx) => Consumer<Store>(
+      builder: (ctx, s, _) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.design_services_outlined,
+                        size: 18, color: p.indigo),
+                    const SizedBox(width: 8),
+                    Text(
+                      ctx.tr('choose_design'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ctx.tr('choose_design_hint'),
+                  style: TextStyle(fontSize: 11.5, color: p.inkSoft),
+                ),
+                const SizedBox(height: 14),
+                for (final id in designs)
+                  _DesignRow(
+                    id: id,
+                    selected: s.designKey == id,
+                    onTap: tumbleHaptic(() => s.setDesignKey(id)),
+                  ),
+                const SizedBox(height: 16),
+                Divider(height: 1, color: p.line),
+                const SizedBox(height: 12),
+                Text(
+                  ctx.tr('choose_color'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: p.inkSoft,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final id in AppSkins.ids)
+                      _SkinTile(
+                        id: id,
+                        selected: s.skinKey == id,
+                        onTap: () => s.setSkinKey(id),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One design-language row: a live miniature of the design's geometry plus its
+/// characteristics, so the choice is visible before it is applied.
+class _DesignRow extends StatelessWidget {
+  final String id;
+  final bool selected;
+  final VoidCallback onTap;
+  const _DesignRow({
+    required this.id,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = AppDesigns.of(id);
+    final s = d.surface;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: selected ? p.indigo.withValues(alpha: 0.07) : p.soft,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? p.indigo : p.line,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Miniature of the surface spec: radius, border and edge bar are
+              // exactly what separates the four designs.
+              Container(
+                width: 46,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(s.radius),
+                  border: s.borderWidth == 0
+                      ? null
+                      : Border.all(color: p.line, width: s.borderWidth),
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: s.edgeBar ? 4 : 0,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: p.indigo,
+                      borderRadius: BorderRadius.circular(s.radius),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(d.emoji, style: const TextStyle(fontSize: 13)),
+                        const SizedBox(width: 6),
+                        Text(
+                          context.tr('design_$id'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                            color: p.ink,
+                          ),
+                        ),
+                        if (selected) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.check_circle, size: 14, color: p.indigo),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      context.tr('design_hint_$id'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: p.inkSoft,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tiny wrapper so a tap-vibration can be added in one place (and stay a no-op
+/// on web, where there is no haptic engine).
+VoidCallback tumbleHaptic(VoidCallback action) => action;
+
 /// Bottom sheet that lets the user choose a skin (+ a quick brightness switch).
 void showSkinPicker(BuildContext context, Store store) {
   showModalBottomSheet(

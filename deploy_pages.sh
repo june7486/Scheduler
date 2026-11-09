@@ -40,7 +40,19 @@ fi
 
 # ---- 2) 빌드 --------------------------------------------------------------
 echo "② Flutter 웹 릴리즈 빌드 (base-href=${BASE_HREF})..."
-flutter build web --release --base-href "$BASE_HREF"
+# 동기화 서버 주소를 빌드에 심습니다. 이게 없으면 배포된 앱이 "동기화 서버 미설정"
+# 상태로 뜨고, 새 기기에서 로그인해도 자료를 받아올 곳이 없습니다.
+#   SYNTAX: SYNC_URL="https://sync.example.com" SYNC_KEY="..." ./deploy_pages.sh custom
+BUILD_ARGS=(--release --base-href "$BASE_HREF")
+if [ -n "${SYNC_URL:-}" ]; then
+  echo "   · SYNC_URL = ${SYNC_URL}"
+  BUILD_ARGS+=(--dart-define=SYNC_URL="${SYNC_URL}")
+fi
+if [ -n "${SYNC_KEY:-}" ]; then
+  echo "   · SYNC_KEY = (설정됨)"
+  BUILD_ARGS+=(--dart-define=SYNC_KEY="${SYNC_KEY}")
+fi
+flutter build web "${BUILD_ARGS[@]}"
 
 # ---- 3) GitHub Pages 필수 파일 -------------------------------------------
 echo "③ .nojekyll 생성 (Jekyll 비활성화)..."

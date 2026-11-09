@@ -111,6 +111,29 @@ class L10n {
     'theme_changed': '화면 테마가 변경되었습니다.',
     'choose_skin': '스킨 선택',
 
+    // Design languages (the level above colour)
+    'design': '디자인 테마',
+    'choose_design': '디자인 테마 선택',
+    'choose_design_hint': '같은 자료를 전혀 다른 화면 스타일로 보여줍니다. 색상은 그 안에서 고릅니다.',
+    'choose_color': '색상 스킨',
+    'design_paper': '페이퍼',
+    'design_studioe': '스튜디오 E',
+    'design_desk': '데스크',
+    'design_gazette': '가제트',
+    'design_hint_paper': '줄노트 질감 · 손글씨 · 둥근 모서리',
+    'design_hint_studioe': '각진 사각형 · 대문자 자간 · 점 격자',
+    'design_hint_desk': '촘촘한 목록 · 좌측 색 띠 · 원형 체크',
+    'design_hint_gazette': '테두리 없는 활자 · 굵은 구분선 · 신문 편집',
+
+    // Reset (all devices)
+    'reset_everywhere': '모든 기기 초기화',
+    'reset_everywhere_hint': '이 계정의 자료를 모든 기기에서 지웁니다. 되돌릴 수 없습니다.',
+    'reset_everywhere_msg':
+        '이 계정의 모든 일정·메모·설정이 아이폰·안드로이드·PC에서 동시에 사라집니다. 되돌릴 수 없습니다.\n\n계속하려면 RESET 을 입력하세요.',
+    'reset_type_word': '계속하려면 RESET 을 입력하세요',
+    'reset_everywhere_done': '모든 기기의 자료를 초기화했습니다.',
+    'reset_everywhere_fail': '초기화 실패',
+
     // Skins
     'skin': '스킨',
     'skin_hint': '앱 전체 색상 스킨을 선택하세요 (줄노트 포함).',
@@ -469,6 +492,30 @@ class L10n {
     'theme_changed': 'Screen theme changed.',
     'choose_skin': 'Choose a skin',
 
+    // Design languages (the level above colour)
+    'design': 'Design theme',
+    'choose_design': 'Choose a design theme',
+    'choose_design_hint':
+        'The same data, a completely different visual language. Colour is chosen inside it.',
+    'choose_color': 'Colour skin',
+    'design_paper': 'Paper',
+    'design_studioe': 'Studio E',
+    'design_desk': 'Desk',
+    'design_gazette': 'Gazette',
+    'design_hint_paper': 'Ruled paper · handwriting · soft corners',
+    'design_hint_studioe': 'Square geometry · wide caps · dot grid',
+    'design_hint_desk': 'Dense list · edge bars · round checks',
+    'design_hint_gazette': 'Borderless type · heavy rules · editorial',
+
+    // Reset (all devices)
+    'reset_everywhere': 'Reset every device',
+    'reset_everywhere_hint':
+        'Erases this account on all devices. Cannot be undone.',
+    'reset_everywhere_msg':
+        'Every task, note and setting for this account disappears from the iPhone, Android and PC at the same time. This cannot be undone.\n\nType RESET to continue.',
+    'reset_type_word': 'Type RESET to continue',
+    'reset_everywhere_done': 'Every device has been reset.',
+    'reset_everywhere_fail': 'Reset failed',
     // Skins
     'skin': 'Skin',
     'skin_hint': 'Pick an app-wide colour skin (including ruled notebook).',
@@ -825,5 +872,7 @@ String catLabel(Category c) {
   if (c.isCustomLabel && s.isNotEmpty) return s;
   return catName(c.id, c.label);
 }
+
+
 
 

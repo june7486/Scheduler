@@ -144,6 +144,13 @@ class SettingsScreen extends StatelessWidget {
               danger: true,
               onTap: () => _wipe(context, store),
             ),
+            _Tile(
+              icon: Icons.cloud_off_outlined,
+              title: context.tr('reset_everywhere'),
+              subtitle: context.tr('reset_everywhere_hint'),
+              danger: true,
+              onTap: () => _wipeEverywhere(context, store),
+            ),
             _Group(context.tr('activity_log')),
             _Tile(
               icon: Icons.history,
@@ -156,9 +163,17 @@ class SettingsScreen extends StatelessWidget {
             ),
             _Group(context.tr('display_grp')),
             _Tile(
+              icon: Icons.design_services_outlined,
+              title: context.tr('design'),
+              subtitle:
+                  '${AppDesigns.of(store.designKey).emoji}  ${context.tr('design_${store.designKey}')}',
+              onTap: () => showDesignPicker(context, store),
+            ),
+            _Tile(
               icon: Icons.palette_outlined,
-              title: context.tr('skin'),
-              subtitle: '${AppSkins.emojiFor(store.skinKey)}  ${context.tr('skin_${store.skinKey}')}',
+              title: context.tr('choose_color'),
+              subtitle:
+                  '${AppSkins.emojiFor(store.skinKey)}  ${context.tr('skin_${store.skinKey}')}',
               onTap: () => showSkinPicker(context, store),
             ),
             _Tile(
@@ -734,6 +749,80 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Wipes the workspace **on the server**, so every device follows.
+  ///
+  /// This is the "모든 앱 초기화" the user asked for. It is deliberately a
+  /// separate, scarier action than the local wipe: a local wipe is undone by the
+  /// next sync (the server still has everything), while this one is the truth.
+  void _wipeEverywhere(BuildContext context, Store store) {
+    var typed = '';
+    final ready = ValueNotifier<bool>(false);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(context.tr('reset_everywhere')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('reset_everywhere_msg'),
+              style: TextStyle(fontSize: 12.5, height: 1.45, color: p.inkSoft),
+            ),
+            const SizedBox(height: 14),
+            ValueListenableBuilder<bool>(
+              valueListenable: ready,
+              builder: (_, ok, __) => TextField(
+                enabled: !ok,
+                onChanged: (v) => typed = v,
+                decoration: InputDecoration(
+                  hintText: context.tr('reset_type_word'),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              // Requiring the literal word is the whole point: an irreversible,
+              // all-devices action should not be one stray tap away.
+              if (typed.trim().toUpperCase() != 'RESET') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('reset_type_word'))),
+                );
+                return;
+              }
+              ready.value = true; // disable the field while it runs
+              final err = await store.sync.resetRemote();
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    err == null
+                        ? context.tr('reset_everywhere_done')
+                        : '${context.tr('reset_everywhere_fail')}: $err',
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              context.tr('reset'),
+              style: TextStyle(color: p.danger),
+            ),
+          ),
+        ],
       ),
     );
   }

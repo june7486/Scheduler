@@ -279,20 +279,99 @@ class Store extends ChangeNotifier {
   }
 
   /// Verifies credentials. On success sets the current user & seeds data.
+  ///
+  /// ## Signing in on a device that has never seen this account
+  /// The account row normally lives in the local `users` box — which a brand-new
+  /// phone does not have. Without help, "sign in with the same id" would answer
+  /// "no such account" on every new device, which makes the whole cross-device
+  /// promise hollow.
+  ///
+  /// The workspace key is derived from the id alone ([workspaceCodeFor]), so the
+  /// device *can* find the account's server document before it knows anything
+  /// else: ask the server for that workspace, and if it holds an `accounts/<id>`
+  /// record, prove the password against it and adopt the account locally.
+  ///
+  /// That one lookup is why this method is `async` beyond the local check — and
+  /// why it is only attempted when the local check fails, so the common case
+  /// still answers instantly without touching the network.
   Future<bool> authenticate(String id, String pw) async {
-    final u = userById(id);
-    if (u == null) return false;
-    if (!u.enabled) return false;
-    if (u.password != pw) return false;
+    final trimmed = id.trim();
+    var u = userById(trimmed);
+    final localOk = u != null && u.enabled && u.password == pw;
+
+    if (!localOk) {
+      // Not known here (new device) or the password changed elsewhere.
+      final adopted = await _adoptAccountFromServer(trimmed, pw);
+      if (adopted == null) return false;
+      u = adopted;
+    }
+
     _currentUserId = u.id;
     await _ensureUserSeed(u.id);
     addLog('Login', u.id);
     notifyListeners();
     // Every account is its own cloud workspace: signing in is all it takes.
-    // No setup, no code to copy -- the server copy is pulled immediately.
     await enableAutoSyncForUser();
+    // Make this account discoverable from any other device.
+    await publishAccount(u.id);
     unawaited(sync.start());
     return true;
+  }
+
+  /// Looks for `accounts/<id>` in that account's workspace and, when the
+  /// password matches, writes the account locally so this device can sign in
+  /// offline next time.
+  ///
+  /// Returns the adopted user, or null when the account does not exist, the
+  /// password is wrong, or the server is unreachable. All three are the same
+  /// "no" to the caller — a login form must never leak which one it was, and a
+  /// wrong password must never overwrite a local account.
+  Future<User?> _adoptAccountFromServer(String id, String pw) async {
+    if (id.isEmpty) return null;
+    if (!_backendIsUsable) return null;
+
+    try {
+      final doc = await backend.read(workspaceCodeFor(id));
+      if (!doc.exists) return null;
+      final raw = doc.entities['accounts/$id'];
+      if (raw is! Map) return null;
+
+      final remote = User.fromMap(raw);
+      if (!remote.enabled) return null;
+      if (remote.password != pw) return null;
+
+      // Adopt locally. `updatedAt` is kept so a later merge does not treat this
+      // copy as a fresh local edit and push it back.
+      await _users.put(remote.id, remote.toMap());
+      return remote;
+    } catch (_) {
+      // Offline, bad key, server down: fall back to "cannot verify".
+      return null;
+    }
+  }
+
+  /// True when a backend is configured well enough to be asked anything.
+  bool get _backendIsUsable {
+    try {
+      return backend.isConfigured;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Makes the given account available on every device.
+  ///
+  /// Called on login and whenever the password or display name changes. The
+  /// record travels as a normal entity (`accounts/<id>`) so it merges
+  /// last-writer-wins like everything else.
+  Future<void> publishAccount(String id) async {
+    if (id.isEmpty) return;
+    if (!syncEnabled) return;
+    final u = userById(id);
+    if (u == null) return;
+    u.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    await _users.put(id, u.toMap());
+    await _markPending('accounts', id);
   }
 
   /// Turns cloud storage on for the signed-in account.
@@ -344,6 +423,7 @@ class Store extends ChangeNotifier {
     notifyListeners();
     if (id.isEmpty) return;
     await enableAutoSyncForUser();
+    await publishAccount(id);
     unawaited(sync.start());
   }
 
@@ -784,7 +864,20 @@ class Store extends ChangeNotifier {
     'categories': _cats,
     'voices': _voices,
     'prefs': _prefs,
+    'accounts': _users,
   };
+
+  /// Entities whose records are keyed by account id and therefore do not carry
+  /// an `ownerId` the way tasks do.
+  ///
+  /// This matters in three places that filter on `ownerId` — `queueAllForUpload`,
+  /// `pruneMissing` and `dropWorkspaceCache`. Treating an account row like a task
+  /// would mean it is never uploaded, or worse, is deleted the first time a
+  /// snapshot arrives without it.
+  static const _ownerlessEntities = {'accounts'};
+
+  /// True when [entity] scopes its records by `ownerId`.
+  static bool _isOwned(String entity) => !_ownerlessEntities.contains(entity);
 
   /// Re-stamps every record of [ownerId] as modified now.
   ///
@@ -931,15 +1024,19 @@ class Store extends ChangeNotifier {
     for (final full in pending) {
       final slash = full.indexOf('/');
       if (slash <= 0) continue;
-      final box = _syncBoxes[full.substring(0, slash)];
+      final entity = full.substring(0, slash);
+      final box = _syncBoxes[entity];
       if (box == null) continue;
       final raw = box.get(full.substring(slash + 1));
       if (raw is! Map) continue;
       final m = Map<String, dynamic>.from(raw);
       m.remove('_rev');
       m.remove('_updatedAt');
-      // Guarantee the server record is attributable to this workspace.
-      if ((m['ownerId'] ?? '') == '') m['ownerId'] = ownerId;
+      // Guarantee the server record is attributable to this workspace. Account
+      // rows deliberately have no owner — the workspace itself is the owner.
+      if (_isOwned(entity) && (m['ownerId'] ?? '') == '') {
+        m['ownerId'] = ownerId;
+      }
       out[full] = m;
     }
     return out;
@@ -964,6 +1061,9 @@ class Store extends ChangeNotifier {
       if (slash <= 0) continue;
       final entity = key.substring(0, slash);
       final boxKey = key.substring(slash + 1);
+      // Reserved `__…__` keys are per-device metadata (sync config, cached rev,
+      // app version). Never accept those from the server.
+      if (boxKey.startsWith('__') && boxKey.endsWith('__')) continue;
       final raw = e.value;
       if (raw is! Map) continue;
       final box = _syncBoxes[entity];
@@ -1015,9 +1115,13 @@ class Store extends ChangeNotifier {
     final keys = <String>[];
     for (final e in _syncBoxes.entries) {
       for (final k in e.value.keys) {
+        // Reserved metadata (sync config, cached rev, app version) is per
+        // device and must never be uploaded — it would overwrite the phone's
+        // own settings with the laptop's.
+        if (k is String && _isReservedKey(k)) continue;
         final raw = e.value.get(k);
         if (raw is! Map) continue;
-        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        if (_isOwned(e.key) && (raw['ownerId'] ?? '') != ownerId) continue;
         keys.add('${e.key}/$k');
       }
     }
@@ -1064,11 +1168,14 @@ class Store extends ChangeNotifier {
     var changed = false;
     for (final e in _syncBoxes.entries) {
       for (final k in e.value.keys.toList()) {
+        // Reserved `__…__` keys are app metadata, never server records.
+        if (k is String && _isReservedKey(k)) continue;
         final raw = e.value.get(k);
         if (raw is! Map) continue;
         // Only records belonging to the signed-in account. Categories/logs are
         // keyed `owner::id`, so the owner field is what separates accounts.
-        if ((raw['ownerId'] ?? '') != ownerId) continue;
+        // Account rows are owner-less: the workspace *is* the owner.
+        if (_isOwned(e.key) && (raw['ownerId'] ?? '') != ownerId) continue;
         final full = '${e.key}/$k';
         if (serverKeys.contains(full)) continue;
         // A record that is queued but not yet on the server is *new*, not
@@ -1145,9 +1252,17 @@ class Store extends ChangeNotifier {
   Future<void> dropWorkspaceCache(String ownerId) async {
     for (final e in _syncBoxes.entries) {
       for (final k in e.value.keys.toList()) {
+        // Never wipe credentials or app metadata: a reset clears the user's
+        // content, not the ability to sign in afterwards.
+        if (k is String && _isReservedKey(k)) continue;
+        if (e.key == 'accounts') continue;
         final raw = e.value.get(k);
         if (raw is! Map) continue;
-        if (ownerId.isNotEmpty && (raw['ownerId'] ?? '') != ownerId) continue;
+        if (_isOwned(e.key) &&
+            ownerId.isNotEmpty &&
+            (raw['ownerId'] ?? '') != ownerId) {
+          continue;
+        }
         await e.value.delete(k);
       }
     }
@@ -1477,6 +1592,9 @@ class Store extends ChangeNotifier {
     if (u == null) return;
     u.password = pw;
     await _users.put(id, u.toMap());
+    // A password change must reach every device, or the next sign-in on the
+    // phone would use the old one and be refused.
+    await publishAccount(id);
     addLog('Change password');
     notifyListeners();
   }

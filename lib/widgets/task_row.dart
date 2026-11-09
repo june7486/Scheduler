@@ -30,20 +30,31 @@ class TaskRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final catColor = Color(category.colorValue);
+    // Geometry comes from the active design language, not from hardcoded
+    // numbers: radius, border weight, elevation and row rhythm are exactly what
+    // separates Paper from Studio E from Desk from Gazette. The edge bar is the
+    // Desk signature — a colour stripe carrying the category.
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: EdgeInsets.symmetric(horizontal: 12, vertical: sx.rowGap / 2),
       decoration: BoxDecoration(
         color: p.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: p.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(sx.radius),
+        border: sx.borderWidth == 0
+            ? null
+            : Border.all(color: p.line, width: sx.borderWidth),
+        boxShadow: sx.shadows(),
       ),
+      foregroundDecoration: sx.edgeBar
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(sx.radius),
+              border: Border(
+                left: BorderSide(
+                  color: task.completed ? p.line : catColor,
+                  width: 4,
+                ),
+              ),
+            )
+          : null,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
         child: Column(
@@ -69,9 +80,12 @@ class TaskRow extends StatelessWidget {
                       : Checkbox(
                           value: task.completed,
                           onChanged: (_) => onToggle(),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
+                          shape: sx.roundCheck
+                              ? const CircleBorder()
+                              : RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(sx.radiusSmall),
+                                ),
                           side: BorderSide(color: catColor, width: 1.4),
                           activeColor: catColor,
                           materialTapTargetSize:
@@ -224,10 +238,14 @@ class TaskRow extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: selected
-                            ? col.withValues(alpha: 0.16)
-                            : p.card,
-                        borderRadius: BorderRadius.circular(20),
+                        color: sx.solidChips && selected
+                            ? col.withValues(alpha: 0.85)
+                            : selected
+                                ? col.withValues(alpha: 0.16)
+                                : p.card,
+                        borderRadius: BorderRadius.circular(
+                          sx.pillChips ? 20 : sx.radiusSmall,
+                        ),
                         border: Border.all(
                           color: selected ? col : p.line,
                           width: selected ? 1.2 : 0.8,

@@ -215,7 +215,9 @@ void main() {
       const CloudDoc(entities: {}, rev: 0),
     );
     expect(res.ok, isFalse, reason: '잘못된 키로는 쓰이면 안 됩니다');
-    expect(res.error, contains('401'));
+    // 401 from the gateway is surfaced as a readable reason rather than a bare
+    // status code — the Settings panel shows this string to the user.
+    expect(res.error, contains('bad key'));
   });
 
   test('the NAS address survives an app restart', () async {
