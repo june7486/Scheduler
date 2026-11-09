@@ -222,7 +222,7 @@ class L10n {
     'nas_active': '내 NAS 사용 중',
     'nas_cloud': '클라우드 사용 중',
     'nas_clear': 'NAS 설정 지우기',
-    'nas_guide': '데이터가 내 땅에 저장됩니다. 서버 설치 방법은 server/nas/README를 보세요.',
+    'nas_guide': '데이터가 내 땅에 저장됩니다. 서버 설치 방법은 server/gateway/README를 보세요.',
 
     // Google Drive
     'drive_grp': '구글 드라이브 (업로드·백업)',
@@ -604,7 +604,7 @@ class L10n {
     'nas_active': 'Using my NAS',
     'nas_cloud': 'Using the cloud',
     'nas_clear': 'Clear NAS settings',
-    'nas_guide': 'Your data lives on your own land. See server/nas/README to install.',
+    'nas_guide': 'Your data lives on your own land. See server/gateway/README to install.',
 
     // Google Drive
     'drive_grp': 'Google Drive (upload · backup)',

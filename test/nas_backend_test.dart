@@ -10,8 +10,8 @@ import 'package:june_scheduler/services/store.dart';
 
 /// End-to-end proof that the NAS design works with the real server.
 ///
-/// The test *starts* `server/nas/server.js` itself, so it does not depend on a
-/// developer having something running. If Node is missing the whole file skips
+/// The test *starts* `server/gateway/server.js` (STORAGE=local) itself, so it
+/// needs nothing pre-installed. If Node is missing the whole file skips
 /// instead of failing — a missing runtime is not a broken sync engine.
 ///
 /// What it proves, with two independent [Store] instances signing in to the same
@@ -37,10 +37,10 @@ void main() {
   final List<Store> created = [];
 
   setUpAll(() async {
-    final script = File('server/nas/server.js');
+    final script = File('server/gateway/server.js');
     if (!script.existsSync()) {
       // ignore: avoid_print
-      print('server/nas/server.js not found — skipping NAS tests');
+      print('server/gateway/server.js not found — skipping NAS tests');
       return;
     }
     dataDir = Directory.systemTemp.createTempSync('nasdata_');
@@ -49,6 +49,7 @@ void main() {
       [script.absolute.path],
       environment: {
         'PORT': '$port',
+        'STORAGE': 'local',
         'DATA_DIR': dataDir.path,
         'SYNC_SECRET': 'testsecret123',
       },
@@ -65,7 +66,7 @@ void main() {
   });
 
   tearDownAll(() async {
-    if (File('server/nas/server.js').existsSync()) {
+    if (File('server/gateway/server.js').existsSync()) {
       server.kill(ProcessSignal.sigkill);
     }
     await Hive.close();

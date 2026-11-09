@@ -41,10 +41,31 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const fs = require('fs');
+const path = require('path');
 
 // ---------------- Config ----------------
 
 const PORT = Number(process.env.PORT || 8097);
+
+/**
+ * Where the workspace JSON files actually live.
+ *
+ *   local — a plain directory on the machine running the gateway (fastest).
+ *   dsm   — uploaded to the NAS through DSM's FileStation API.
+ *
+ * Both exist on purpose. `local` is the right choice when the gateway itself
+ * runs *on* the NAS (a packaged Node process): it removes an entire HTTPS round
+ * trip per read and per write, and the share is already the durable copy.
+ * `dsm` is for running the gateway anywhere else while still keeping the data
+ * on the NAS.
+ */
+const STORAGE = (process.env.STORAGE || (process.env.NAS_HOST ? 'dsm' : 'local'))
+  .trim()
+  .toLowerCase();
+
+/** Data directory for `STORAGE=local`. */
+const DATA_DIR = (process.env.DATA_DIR || path.join(__dirname, 'data')).trim();
 
 const NAS_HOST = (process.env.NAS_HOST || '').trim();
 const NAS_PORT = Number(process.env.NAS_PORT || 5001);
@@ -60,8 +81,24 @@ const SYNC_SECRET = (process.env.SYNC_SECRET || '').trim();
 /** How long a document may be served from RAM before re-checking the NAS. */
 const CACHE_MS = Number(process.env.CACHE_MS || 8000);
 
-/** Longest a `/api/state` request may be parked waiting for a change. */
-const MAX_WAIT_MS = 30000;
+/** Longest a `/api/state` request may be parked waiting for a change.
+ *
+ * 20 s, not 60: DSM's own reverse proxy has shorter idle timeouts and buffers
+ * aggressively. Staying well inside them means the connection is never cut
+ * mid-wait, which is what would otherwise look like "sync randomly stops". */
+const MAX_WAIT_MS = 20000;
+
+/** Optional URL prefix when mounted under a sub-path (e.g. `/scheduler-sync`).
+ *
+ * DSM's reverse proxy usually maps a whole subdomain, but a path prefix is also
+ * common. Normalising here means the route checks work either way instead of a
+ * silent 404 that looks like a broken deployment. */
+const BASE_PATH = (() => {
+  const raw = (process.env.BASE_PATH || '').trim();
+  if (!raw || raw === '/') return '';
+  const withSlash = raw.startsWith('/') ? raw : `/${raw}`;
+  return withSlash.replace(/\/+$/, '');
+})();
 
 /** Hard cap on a workspace body. A decade of tasks is far below this. */
 const MAX_BODY = 8 * 1024 * 1024;
@@ -69,16 +106,23 @@ const MAX_BODY = 8 * 1024 * 1024;
 const WS_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const FILE_RE = /^[A-Za-z0-9_-]{6,64}\.json$/;
 
-if (!NAS_HOST || !NAS_USER || !NAS_PASS) {
-  console.error('[gateway] FATAL: NAS_HOST / NAS_USER / NAS_PASS are required');
-  process.exit(1);
-}
-if (!NAS_FOLDER.startsWith('/')) {
-  console.error('[gateway] FATAL: NAS_FOLDER must be an absolute share path');
+if (STORAGE !== 'local' && STORAGE !== 'dsm') {
+  console.error(`[gateway] FATAL: STORAGE must be "local" or "dsm" (got "${STORAGE}")`);
   process.exit(1);
 }
 
-const API = `https://${NAS_HOST}:${NAS_PORT}/webapi/entry.cgi`;
+if (STORAGE === 'dsm') {
+  if (!NAS_HOST || !NAS_USER || !NAS_PASS) {
+    console.error('[gateway] FATAL: STORAGE=dsm needs NAS_HOST / NAS_USER / NAS_PASS');
+    process.exit(1);
+  }
+  if (!NAS_FOLDER.startsWith('/')) {
+    console.error('[gateway] FATAL: NAS_FOLDER must be an absolute share path');
+    process.exit(1);
+  }
+}
+
+const API = NAS_HOST ? `https://${NAS_HOST}:${NAS_PORT}/webapi/entry.cgi` : '';
 
 // ---------------- DSM client ----------------
 
@@ -201,7 +245,7 @@ async function dsm(api, params, { retry = true } = {}) {
   return { ok: false, code, error: json.error };
 }
 
-async function download(name) {
+async function dsmDownload(name) {
   const path = `${NAS_FOLDER}/${name}`;
   const s = await sid();
   const q = new URLSearchParams({
@@ -234,7 +278,7 @@ async function download(name) {
       const code = j.error && j.error.code;
       if (code === 119) {
         session.sid = null;
-        return download(name);
+        return dsmDownload(name);
       }
       if (code === 408 || code === 900) return { ok: true, missing: true };
       return { ok: false, code };
@@ -245,7 +289,7 @@ async function download(name) {
   return { ok: true, text: trimmed };
 }
 
-async function upload(name, text) {
+async function dsmUpload(name, text) {
   const s = await sid();
   const boundary = '----june' + crypto.randomBytes(8).toString('hex');
   const head = Buffer.from(
@@ -283,10 +327,55 @@ async function upload(name, text) {
   if (json.success) return { ok: true };
   if (json.error && json.error.code === 119) {
     session.sid = null;
-    return upload(name, text);
+    return dsmUpload(name, text);
   }
   return { ok: false, code: json.error && json.error.code };
 }
+
+// ---------------- local storage driver -----------------
+
+/** Writes are small and rare; a millisecond is not worth an fsync per write. */
+function writeAtomic(file, text) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, text, 'utf8');
+  fs.renameSync(tmp, file); // rename is atomic on the same filesystem
+}
+
+async function localDownload(name) {
+  const file = path.join(DATA_DIR, name);
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return { ok: true, missing: true };
+    return { ok: false, code: e.code };
+  }
+  return { ok: true, text: text.trim() };
+}
+
+async function localUpload(name, text) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    writeAtomic(path.join(DATA_DIR, name), text);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, code: e.code };
+  }
+}
+
+// ---------------- storage façade -----------------
+
+/**
+ * The only two calls the rest of the server makes. Picking the driver once at
+ * startup keeps every request path free of `if (storage === …)` branches — the
+ * merge, cache, and long-poll code is identical whichever disk is behind it.
+ */
+const download = STORAGE === 'local' ? localDownload : dsmDownload;
+const upload = STORAGE === 'local' ? localUpload : dsmUpload;
+
+/** Human-readable storage description for /health, the banner, and selftest. */
+const STORAGE_LABEL =
+  STORAGE === 'local' ? `local(${DATA_DIR})` : `dsm(${NAS_HOST}:${NAS_PORT}${NAS_FOLDER})`;
 
 // ---------------- Cache & coalescing ----------------
 
@@ -494,16 +583,31 @@ const server = http.createServer(async (req, res) => {
   if (rateLimited(ip)) return send(res, 429, { error: 'rate limited' }, req);
 
   const url = new URL(req.url, 'http://localhost');
-  const path = url.pathname;
+  let path = url.pathname;
+  if (BASE_PATH && path.startsWith(BASE_PATH)) {
+    path = path.slice(BASE_PATH.length) || '/';
+  }
 
   // --- liveness. Deliberately says nothing sensitive: it is published as
   // static JSON so the web app can decide "NAS or local" before first paint.
   if (path === '/health') {
-    let up = false;
-    try {
-      up = (await sid()) != null;
-    } catch {
-      up = false;
+    // With local storage there is no session to check, so "reachable" is simply
+    // "the data directory is writable" — the same thing the next push needs.
+    let up;
+    if (STORAGE === 'local') {
+      try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.accessSync(DATA_DIR, fs.constants.W_OK);
+        up = true;
+      } catch {
+        up = false;
+      }
+    } else {
+      try {
+        up = (await sid()) != null;
+      } catch {
+        up = false;
+      }
     }
     return send(
       res,
@@ -511,6 +615,7 @@ const server = http.createServer(async (req, res) => {
       {
         ok: true,
         service: 'june-nas-gateway',
+        storage: STORAGE,
         nas: up,
         time: Date.now(),
       },
@@ -713,12 +818,84 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[june-gateway] listening on :${PORT}`);
-  console.log(`[june-gateway] nas=${NAS_HOST}:${NAS_PORT} folder=${NAS_FOLDER}`);
-  console.log(`[june-gateway] auth=${SYNC_SECRET ? 'key required' : 'OPEN'}`);
-});
+// ---------------- Startup self-check ----------------
 
-process.on('SIGTERM', () => {
-  server.close(() => process.exit(0));
-});
+/**
+ * `node server.js --selftest` talks to the NAS once and prints what it found.
+ *
+ * Meant to be run over SSH right after installing, before touching the app: it
+ * separates "the NAS credentials are wrong" from "the reverse proxy is wrong"
+ * from "the app is wrong", which are otherwise indistinguishable from a browser.
+ */
+async function selftest() {
+  const line = (ok, label, extra = '') =>
+    console.log(`${ok ? '  OK  ' : ' FAIL '} ${label}${extra ? ` — ${extra}` : ''}`);
+
+  console.log('\n[june-gateway] self-test\n');
+  line(true, 'storage', STORAGE_LABEL);
+  line(true, 'auth', SYNC_SECRET ? 'shared key required' : 'OPEN (LAN only!)');
+
+  if (STORAGE === 'dsm') {
+    try {
+      const s = await sid();
+      line(!!s, 'DSM login', 'session established');
+    } catch (e) {
+      line(false, 'DSM login', e.message);
+      console.log('\n  → NAS_USER / NAS_PASS 확인, NAS_PORT=5001 인지 확인\n');
+      process.exit(1);
+    }
+  }
+
+  const probe = 'ACCSELFTEST000000000000000';
+
+  try {
+    const down = await download(`${probe}.json`);
+    line(
+      down.ok,
+      'download',
+      down.missing ? 'nothing stored yet (normal)' : 'readable'
+    );
+  } catch (e) {
+    line(false, 'download', e.message);
+  }
+
+  try {
+    const up = await upload(
+      `${probe}.json`,
+      JSON.stringify({ rev: 0, gen: 0, entities: {} })
+    );
+    line(up.ok, 'upload', up.ok ? 'write + folder creation works' : `code ${up.code}`);
+    if (up.ok) {
+      if (STORAGE === 'local') {
+        fs.unlinkSync(path.join(DATA_DIR, `${probe}.json`));
+      } else {
+        await dsm('SYNO.FileStation.Delete', {
+          version: '2',
+          method: 'delete',
+          path: `${NAS_FOLDER}/${probe}.json`,
+        });
+      }
+    }
+  } catch (e) {
+    line(false, 'upload', e.message);
+  }
+
+  console.log(`\n  저장 위치: ${STORAGE_LABEL}`);
+  console.log('  결과가 모두 OK 면 게이트웨이는 저장소와 정상 통신합니다.');
+  console.log('  이제 브라우저에서 /health 를 열어 프록시까지 확인하세요.\n');
+  process.exit(0);
+}
+
+if (process.argv.includes('--selftest')) {
+  selftest();
+} else {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[june-gateway] listening on :${PORT}`);
+    console.log(`[june-gateway] storage=${STORAGE_LABEL}`);
+    console.log(`[june-gateway] auth=${SYNC_SECRET ? 'key required' : 'OPEN'}`);
+  });
+
+  process.on('SIGTERM', () => {
+    server.close(() => process.exit(0));
+  });
+}

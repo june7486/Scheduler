@@ -100,7 +100,7 @@ class Store extends ChangeNotifier {
   }
 
   /// Points every future read/write at a NAS (or any server speaking the
-  /// `server/nas/server.js` protocol) and remembers it for next launch.
+  /// `server/gateway/server.js` protocol) and remembers it for next launch.
   ///
   /// An empty [url] means "go back to the cloud default", which is why the
   /// stored key is cleared as well — half a configuration is worse than none.

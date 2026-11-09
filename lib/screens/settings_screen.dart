@@ -1093,7 +1093,7 @@ class _SyncPanel extends StatelessWidget {
       '${d.second.toString().padLeft(2, '0')}';
 }
 
-/// Points the app at a sync server the user runs themselves (`server/nas/`).
+/// Points the app at a sync server the user runs themselves (`server/gateway/`).
 ///
 /// Deliberately plain: one address, one optional key, two buttons. Leaving the
 /// address empty returns the app to the hosted cloud, so the panel can never
