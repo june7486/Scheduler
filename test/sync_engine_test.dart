@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:june_scheduler/services/cloud/cloud_backend.dart';
+import 'package:june_scheduler/services/cloud/sync_engine.dart';
+import 'package:june_scheduler/services/store.dart';
 
 /// A minimal in-test backend.
 ///
@@ -175,4 +177,72 @@ void main() {
     // A subscription that can be cancelled without a timer behind it.
     nb.watch('WS', onRemote: (_) {}, onError: (_) {}).cancel();
   });
+
+  /// The support case that started this: a build with no server address.
+  ///
+  /// `start()` marks the engine stopped when there is no backend, and `flush()`
+  /// used to check "stopped" first — so it reported `off` ("동기화 꺼짐"),
+  /// implying the user had switched sync off themselves. The honest answer is
+  /// `notConfigured`: an address has to be entered. That distinction is the
+  /// difference between "I broke it" and "it was never set up".
+  test('서버 주소가 없으면 "꺼짐"이 아니라 "미설정"으로 보고한다', () async {
+    final store = _StubStore();
+    final engine = SyncService(store, const NullBackend());
+
+    await engine.start();
+    expect(engine.state, SyncState.notConfigured,
+        reason: '주소가 없으면 start() 는 미설정으로 보고해야 합니다');
+
+    // Manual flush must not overwrite that with a less useful state.
+    await engine.flush(manual: true);
+    expect(engine.state, SyncState.notConfigured,
+        reason: 'flush() 가 "꺼짐"으로 덮어쓰면 원인을 숨기게 됩니다');
+    expect(engine.statusLabel(ko: true), contains('미설정'));
+    engine.stop();
+  });
+}
+
+/// The smallest [Store] stand-in [SyncService] needs.
+///
+/// Only the handful of members the engine actually touches are overridden, so
+/// this stays honest: if the engine starts depending on something new, the
+/// compile fails here instead of silently doing the wrong thing.
+class _StubStore extends Store {
+  @override
+  bool get syncEnabled => true;
+
+  @override
+  String get workspaceId => 'ACCSTUBWORKSPACE0000000000000';
+
+  @override
+  int get pendingCount => 0;
+
+  @override
+  Future<void> clearPending(Iterable<String> keys) async {}
+
+  @override
+  Future<void> setCachedRev(int rev, int gen) async {}
+
+  @override
+  void beginRemoteApply() {}
+
+  @override
+  void endRemoteApply(bool changed) {}
+
+  @override
+  Future<bool> applyServerRecord(
+          String entity, String id, Map<String, dynamic>? record) async =>
+      false;
+
+  @override
+  Future<void> dropWorkspaceCache(String ownerId) async {}
+
+  @override
+  Future<void> clearAllPending() async {}
+
+  @override
+  void onSyncStatusChanged() {}
+
+  @override
+  void notifyListeners() {}
 }

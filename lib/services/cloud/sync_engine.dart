@@ -193,12 +193,16 @@ class SyncService {
   /// Uploads the outbox right now (used by the "지금 동기화" button and after a
   /// reconnect). Costs exactly one round trip on success.
   Future<void> flush({bool manual = false}) async {
-    if (_stopped) {
-      if (manual) _setState(SyncState.off, '');
-      return;
-    }
+    // "No server configured" is the real answer and must not be degraded into
+    // "sync is switched off": the first means the user has to enter an address,
+    // the second means they turned it off on purpose. `start()` marks the engine
+    // stopped in the not-configured case, so that check has to come first.
     if (!_isBackendReady()) {
       _setState(SyncState.notConfigured, 'sync server not configured');
+      return;
+    }
+    if (_stopped) {
+      if (manual) _setState(SyncState.off, '');
       return;
     }
     if (_busy) {

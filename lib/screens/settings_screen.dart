@@ -1247,6 +1247,36 @@ class _NasPanelState extends State<_NasPanel> {
               context.tr('nas_guide'),
               style: TextStyle(fontSize: 11, color: p.inkSoft, height: 1.35),
             ),
+            // The most common "sync does not work" support case, and the one
+            // that used to hide: a build with no baked-in address and nothing
+            // typed here. Everything else on this screen looks fine, so the
+            // cause has to be stated where the user will actually see it.
+            if (!active)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, size: 13, color: p.danger),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        ko
+                            ? '동기화 서버 주소가 없습니다. 지금은 이 기기에만 저장되고 '
+                                '다른 기기와 공유되지 않습니다.'
+                            : 'No sync server address. Changes stay on this device '
+                                'and are not shared with your other devices.',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: p.danger,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (_expanded) ...[
               const SizedBox(height: 10),
               _NasField(

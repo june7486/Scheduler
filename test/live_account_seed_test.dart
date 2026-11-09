@@ -29,6 +29,25 @@ void main() {
   const key = '46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d';
   final masterPw = Platform.environment['MASTER_PW'] ?? '';
 
+  /// Where the two live tests need a gateway. Probed once, in [setUpAll].
+  ///
+  /// This file is part of the normal `flutter test` run, so it must not fail on
+  /// a machine where nobody started a gateway — a missing server is not a
+  /// regression, and a red suite would train the reader to ignore red.
+  late bool gatewayUp;
+
+  setUpAll(() async {
+    gatewayUp = false;
+    try {
+      final socket = await Socket.connect('127.0.0.1', 8097,
+          timeout: const Duration(milliseconds: 800));
+      socket.destroy();
+      gatewayUp = true;
+    } catch (_) {
+      gatewayUp = false;
+    }
+  });
+
   late Directory tmp;
 
   setUp(() async {
@@ -48,6 +67,10 @@ void main() {
   test('빈 기기에서 june7486 로그인 — 서버 계정을 받아온다', () async {
     if (masterPw.isEmpty) {
       markTestSkipped('MASTER_PW 미지정 — 실제 비밀번호는 저장소에 두지 않습니다');
+      return;
+    }
+    if (!gatewayUp) {
+      markTestSkipped('게이트웨이(127.0.0.1:8097) 미실행 — 실서버가 필요합니다');
       return;
     }
     final s = Store();
@@ -73,6 +96,10 @@ void main() {
   });
 
   test('틀린 비밀번호는 서버 계정으로도 통하지 않는다', () async {
+    if (!gatewayUp) {
+      markTestSkipped('게이트웨이(127.0.0.1:8097) 미실행 — 실서버가 필요합니다');
+      return;
+    }
     final s = Store();
     await s.init();
     final users = await Hive.openBox('users');
