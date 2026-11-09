@@ -64,7 +64,10 @@ const STORAGE = (process.env.STORAGE || (process.env.NAS_HOST ? 'dsm' : 'local')
   .trim()
   .toLowerCase();
 
-/** Data directory for `STORAGE=local`. */
+/** Data directory for `STORAGE=local`.
+ *
+ * Deliberately the same folder DSM mode writes to: switching drivers then
+ * finds the existing documents instead of an empty directory. */
 const DATA_DIR = (process.env.DATA_DIR || path.join(__dirname, 'data')).trim();
 
 const NAS_HOST = (process.env.NAS_HOST || '').trim();

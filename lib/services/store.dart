@@ -28,8 +28,17 @@ class Store extends ChangeNotifier {
   static const _voiceBox = 'voices';
   static const _prefBox = 'prefs';
 
+  /// The owner account. The password is **not** in the source.
+  ///
+  /// A fresh install has no local `june7486` at all; the first sign-in reads
+  /// `accounts/june7486` from that account's workspace on the server, checks the
+  /// password there, and caches the account locally. So this constant no longer
+  /// grants access — it only names the account that is allowed to be master.
+  ///
+  /// Getting here took a deliberate order: the account had to reach the server
+  /// *before* the password could be deleted from the code, otherwise the first
+  /// login on a new device would have had nothing to adopt.
   static const masterId = 'june7486';
-  static const masterPw = 'Corbuser7!@@';
 
   // A ready-to-use demo account (id/pw = test/test).
   static const testId = 'test';
@@ -183,17 +192,28 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Puts a master-shaped user in the box on a brand-new install.
+  ///
+  /// The stored password is **random per install** and never shown or typed, so
+  /// it can never be used to sign in. It only makes `userById(masterId)` return
+  /// something sane before the first real sign-in. Actual access is decided by
+  /// the server copy of `accounts/june7486` — see [authenticate].
   Future<void> _ensureMaster() async {
     if (!_users.containsKey(masterId)) {
       final master = User(
         id: masterId,
-        password: masterPw,
+        password: _randomPlaceholder(),
         displayName: 'Master',
         isMaster: true,
       );
       await _users.put(masterId, master.toMap());
     }
   }
+
+  /// 32 random hex chars. Uses [Uuid]'s v4 source, which is already a dependency
+  /// and is cryptographically seeded.
+  String _randomPlaceholder() =>
+      '${_uuid.v4()}-${_uuid.v4()}'.replaceAll('-', '');
 
   /// Ensures the demo account (id/pw = test/test) exists with sample content,
   /// so reviewers can sign in immediately without the master credentials.
