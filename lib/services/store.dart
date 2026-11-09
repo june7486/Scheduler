@@ -332,25 +332,54 @@ class Store extends ChangeNotifier {
         u = local;
       } else {
         u = await _bounded<User?>(() => _adoptAccountFromServer(trimmed, pw));
-        if (u == null) return false;
+        if (u == null) {
+          // Say *why*, and leave a trace. A single "아이디 또는 비밀번호가
+          // 올바르지 않습니다" for both "wrong password" and "the server never
+          // answered" sends people hunting for a typo when the real problem is
+          // the connection — and leaves nothing in the log to tell them apart
+          // afterwards.
+          final reason = await _diagnoseReason();
+          addLog('LoginFailed', '$trimmed reason=$reason');
+          return false;
+        }
       }
     }
 
-    _currentUserId = u.id;
-    await _ensureUserSeed(u.id);
-    addLog('Login', u.id);
+    final user = u;
+    _currentUserId = user.id;
+    await _ensureUserSeed(user.id);
+    addLog('Login', user.id);
     notifyListeners();
     // Every account is its own cloud workspace: signing in is all it takes.
     await enableAutoSyncForUser();
     // Make this account discoverable from any other device.
-    await publishAccount(u.id);
+    await publishAccount(user.id);
     // A workspace written before the account row carried `pwHash` cannot be
     // verified against by a new device. Now that we hold the plaintext (someone
     // just signed in with it), repair that copy. Fire-and-forget: a failure here
     // must not fail a successful login.
-    unawaited(_healWorkspaceAccountRow(u));
+    unawaited(_healWorkspaceAccountRow(user));
     unawaited(sync.start());
     return true;
+  }
+
+  /// Why a sign-in could not be confirmed, for the log.
+  ///
+  /// Distinguishes "the password is wrong" from "the server never answered".
+  /// Uses the *saved* address and key, not a blank client, so the answer
+  /// describes the connection this device is actually configured for.
+  Future<String> _diagnoseReason() async {
+    if (!_backendIsUsable) return 'notConfigured';
+    try {
+      final url = nasUrl;
+      if (url.isEmpty) return 'notConfigured';
+      final d = await NasBackend(baseUrl: url, secret: nasSecret)
+          .diagnose()
+          .timeout(_registryTimeout);
+      return d.name;
+    } catch (_) {
+      return 'unreachable';
+    }
   }
 
   /// Ensures the workspace's own `accounts/<id>` row carries a usable `pwHash`.
@@ -404,7 +433,21 @@ class Store extends ChangeNotifier {
 
       final remote = User.fromMap(raw);
       if (!remote.enabled) return null;
-      if (remote.password != pw) return null;
+
+      // The workspace copy carries `pwHash`, never plaintext (see
+      // [_accountRowForSync]), so comparing `remote.password` would reject every
+      // correct password once this device has synced — the bug that stopped new
+      // devices from signing in. Verify the hash, and keep accepting a legacy
+      // plaintext row so accounts written by older builds still work.
+      final record = Map<dynamic, dynamic>.from(raw);
+      final hasHash = record['pwHash'];
+      final verified = (hasHash is String && hasHash.isNotEmpty)
+          ? verifyAccountPassword(record, pw)
+          : remote.password == pw;
+      if (!verified) return null;
+
+      // This is the only moment the plaintext is known — the user just typed it.
+      remote.password = pw;
 
       // Adopt locally. `updatedAt` is kept so a later merge does not treat this
       // copy as a fresh local edit and push it back.
@@ -578,9 +621,16 @@ class Store extends ChangeNotifier {
   /// A login form must answer even when the NAS is asleep, on the wrong network,
   /// or behind a reverse proxy that has stopped answering. Without a bound, that
   /// case would leave the button spinning instead of telling the user what
-  /// happened. Generous enough for a slow round trip, short enough to feel like
-  /// a button press rather than a hang.
-  static const _registryTimeout = Duration(seconds: 4);
+  /// happened.
+  ///
+  /// **Was 4 seconds — too tight.** A cold connection to a home NAS has to do
+  /// DNS, a TCP handshake, a TLS handshake and then two round trips (registry,
+  /// then the account's workspace), and a Synology reverse proxy adds a little
+  /// on top. On a mobile network 4s is easily exceeded, and the failure mode is
+  /// vicious: the timeout is swallowed, the local fallback finds no plaintext
+  /// (it is never synced), and the user is told "wrong password" for what is
+  /// really a slow connection. 12s still ends a press rather than hanging it.
+  static const _registryTimeout = Duration(seconds: 12);
 
   /// Runs [work], but gives up after [_registryTimeout] instead of hanging.
   ///
