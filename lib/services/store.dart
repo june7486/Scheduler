@@ -320,7 +320,7 @@ class Store extends ChangeNotifier {
     // The registry is the authority when it is reachable. Checking it first is
     // the whole point of central account management: a local row must not be
     // able to accept a password the other devices would reject.
-    var u = await authenticateAgainstRegistry(trimmed, pw);
+    var u = await _bounded<User?>(() => authenticateAgainstRegistry(trimmed, pw));
 
     if (u == null) {
       // Registry unreachable, or it does not know this id yet (an account made
@@ -331,7 +331,7 @@ class Store extends ChangeNotifier {
       if (localOk) {
         u = local;
       } else {
-        u = await _adoptAccountFromServer(trimmed, pw);
+        u = await _bounded<User?>(() => _adoptAccountFromServer(trimmed, pw));
         if (u == null) return false;
       }
     }
@@ -534,6 +534,32 @@ class Store extends ChangeNotifier {
       return out;
     } catch (_) {
       return const {};
+    }
+  }
+
+  /// How long a sign-in may wait on the central account list.
+  ///
+  /// A login form must answer even when the NAS is asleep, on the wrong network,
+  /// or behind a reverse proxy that has stopped answering. Without a bound, that
+  /// case would leave the button spinning instead of telling the user what
+  /// happened. Generous enough for a slow round trip, short enough to feel like
+  /// a button press rather than a hang.
+  static const _registryTimeout = Duration(seconds: 4);
+
+  /// Runs [work], but gives up after [_registryTimeout] instead of hanging.
+  ///
+  /// Returns null on timeout *and* on failure: to a login form those are the same
+  /// "the server did not confirm this", and both have to fall through to the
+  /// local path rather than keep the user waiting.
+  Future<T?> _bounded<T>(Future<T> Function() work) async {
+    final pending = work();
+    // An answer that arrives after the deadline must not surface as an unhandled
+    // error — nobody is listening to it anymore.
+    pending.then((_) {}, onError: (Object _) {});
+    try {
+      return await pending.timeout(_registryTimeout);
+    } catch (_) {
+      return null;
     }
   }
 
