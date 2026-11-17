@@ -8,6 +8,7 @@ import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notebook_ui.dart';
+import '../widgets/design_quick_picker.dart';
 import '../widgets/task_row.dart';
 import 'settings_screen.dart';
 import 'admin_screen.dart';
@@ -140,6 +141,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // 테마를 여기 두는 이유: 스킨 설정 화면은 앱을 자기 화면으로 덮는다.
+          // 디자인은 '비교'의 문제인데, 고르고 → 닫고 → 보고 → 다시 열고 하는
+          // 왕복은 비교 자체를 불가능하게 만든다. 여기서는 목록이 그대로 보이는
+          // 상태에서 즉시 적용되므로, 미리보기가 아니라 그 자체가 결과다.
+          const DesignQuickPicker(),
           if (store.isMaster)
             IconButton(
               tooltip: context.tr('master_console'),
