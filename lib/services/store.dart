@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
@@ -188,6 +189,8 @@ class Store extends ChangeNotifier {
 
     await _ensureMaster();
     await _ensureTestUser();
+    await _loadRemembered();
+    await rememberAppVersion();
     _ready = true;
     notifyListeners();
   }
@@ -287,6 +290,126 @@ class Store extends ChangeNotifier {
     return raw == null ? null : User.fromMap(raw);
   }
 
+  // ---------------- remembered accounts ----------------
+  //
+  // Who has signed in on *this* device. The login form shows these as one-tap
+  // chips, which is the difference between "type a 12-character password on a
+  // phone keyboard every morning" and "tap your name".
+  //
+  // Deliberately stored outside the `users` box: it is a list of ids only, not
+  // credentials, and it must never be published to the server. The passwords
+  // used for the one-tap path live in `shared_preferences`, which is
+  // device-local by definition — copying them to the NAS would undo the whole
+  // point of stripping plaintext from the synced account rows.
+
+  /// Ids that have signed in here, most recent first.
+  List<String> get rememberedAccountIds => List<String>.from(_remembered);
+
+  /// Accounts this device can offer with one tap.
+  ///
+  /// Only accounts that still exist locally *and* are enabled: a deleted or
+  /// disabled account must not linger as a button that cannot work.
+  List<User> get rememberedAccounts {
+    final out = <User>[];
+    for (final id in _remembered) {
+      final u = userById(id);
+      if (u == null || !u.enabled) continue;
+      out.add(u);
+    }
+    return out;
+  }
+
+  List<String> _remembered = const [];
+  Map<String, String> _savedPw = const {};
+  SharedPreferences? _devicePrefs;
+
+  static const _kRemembered = 'remembered_accounts';
+  static const _kSavedPwPrefix = 'saved_pw::';
+
+  Future<SharedPreferences> get _device async =>
+      _devicePrefs ??= await SharedPreferences.getInstance();
+
+  /// Loads the remembered list. Called from [init]; failures are non-fatal.
+  Future<void> _loadRemembered() async {
+    try {
+      final prefs = await _device;
+      _remembered = prefs.getStringList(_kRemembered) ?? const [];
+      final pw = <String, String>{};
+      for (final id in _remembered) {
+        final v = prefs.getString('$_kSavedPwPrefix$id');
+        if (v != null && v.isNotEmpty) pw[id] = v;
+      }
+      _savedPw = pw;
+    } catch (_) {
+      _remembered = const [];
+      _savedPw = const {};
+    }
+  }
+
+  /// Records that [id] signed in on this device, optionally remembering [pw].
+  ///
+  /// [pw] is only remembered when the caller explicitly wants one-tap sign-in;
+  /// a wrong or empty password is never stored.
+  Future<void> rememberAccount(String id, {bool rememberPassword = true}) async {
+    if (id.isEmpty) return;
+    final next = [id, ..._remembered.where((e) => e != id)];
+    // Keep the list short — a login screen with twenty chips is noise.
+    _remembered = next.take(6).toList();
+    final saved = Map<String, String>.from(_savedPw);
+    try {
+      final prefs = await _device;
+      await prefs.setStringList(_kRemembered, _remembered);
+      if (rememberPassword) {
+        final u = userById(id);
+        final pw = u?.password ?? '';
+        if (pw.isNotEmpty && !_looksLikePlaceholder(pw)) {
+          saved[id] = pw;
+          await prefs.setString('$_kSavedPwPrefix$id', pw);
+        }
+      }
+      _savedPw = saved;
+    } catch (_) {
+      // Private browsing / storage full: the chip still appears, it just asks
+      // for the password. Never let this break a successful sign-in.
+    }
+    notifyListeners();
+  }
+
+  /// The password saved on this device for [id], if any.
+  String? savedPasswordFor(String id) {
+    final v = _savedPw[id];
+    return (v != null && v.isNotEmpty) ? v : null;
+  }
+
+  /// Drops the saved password but keeps the account in this device's list.
+  ///
+  /// Used when a one-tap sign-in is refused: the saved copy is probably stale
+  /// (the password was changed elsewhere), and a chip that keeps failing is
+  /// worse than one that asks. The user only has to type the password once —
+  /// [rememberAccount] saves it again on the next successful sign-in.
+  Future<void> forgetSavedPassword(String id) async {
+    if (!_savedPw.containsKey(id)) return;
+    _savedPw = Map<String, String>.from(_savedPw)..remove(id);
+    try {
+      final prefs = await _device;
+      await prefs.remove('$_kSavedPwPrefix$id');
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// Forgets one account on this device (its chip and its saved password).
+  Future<void> forgetAccount(String id) async {
+    _remembered = _remembered.where((e) => e != id).toList();
+    final saved = Map<String, String>.from(_savedPw)..remove(id);
+    _savedPw = saved;
+    try {
+      final prefs = await _device;
+      await prefs.setStringList(_kRemembered, _remembered);
+      await prefs.remove('$_kSavedPwPrefix$id');
+    } catch (_) {}
+    notifyListeners();
+  }
+
   User? get currentUser => userById(_currentUserId);
   String get currentUserId => _currentUserId;
   bool get isMaster => currentUser?.isMaster ?? false;
@@ -348,6 +471,7 @@ class Store extends ChangeNotifier {
     final user = u;
     _currentUserId = user.id;
     await _ensureUserSeed(user.id);
+    await rememberAccount(user.id);
     addLog('Login', user.id);
     notifyListeners();
     // Every account is its own cloud workspace: signing in is all it takes.
@@ -2084,17 +2208,43 @@ class Store extends ChangeNotifier {
   ///
   /// Truth now comes from the build itself. The stored value remains the
   /// fallback for builds that predate BUILD_ID, so old clients keep working.
+  /// The version string shown on the login screen.
+  ///
+  /// **A getter must not touch storage.** This used to `put()` the generated
+  /// value into Hive the first time it ran, which happens during `build()` — so
+  /// a widget rebuild quietly turned into a disk write, every launch, on a
+  /// frame. In the app that is merely wasteful; inside a widget test the write
+  /// is a real async I/O that the fake clock never lets finish, and the test
+  /// dies with a confusing compiler error. (It cost an hour to find. Hence this
+  /// comment.)
+  ///
+  /// So: reads are read-only, and [rememberAppVersion] does the one-time write
+  /// from a place that is allowed to await.
   String get appVersion {
     if (_envBuildId.isNotEmpty) return _envBuildId;
     final stored = _users.get('__app_version__') as String?;
     if (stored != null) return stored;
+    return _generatedVersion;
+  }
+
+  /// The value [appVersion] would generate, without storing it.
+  String get _generatedVersion {
     final now = DateTime.now();
-    final generated =
-        '${now.year}.${now.month.toString().padLeft(2, '0')}'
+    return '${now.year}.${now.month.toString().padLeft(2, '0')}'
         '.${now.day.toString().padLeft(2, '0')}.'
-        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    _users.put('__app_version__', generated);
-    return generated;
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Persists the generated version once, outside of any build pass.
+  ///
+  /// Called from [init]. Safe to call again: an existing value is left alone.
+  Future<void> rememberAppVersion() async {
+    if (_envBuildId.isNotEmpty) return;
+    if (_users.get('__app_version__') is String) return;
+    try {
+      await _users.put('__app_version__', _generatedVersion);
+    } catch (_) {}
   }
 
   Future<void> setAppVersion(String v) async {

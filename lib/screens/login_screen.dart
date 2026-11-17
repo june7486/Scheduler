@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
+import '../models/models.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
@@ -17,39 +18,106 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _idCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
+  final _pwFocus = FocusNode();
   final _session = SessionService();
   bool _obscure = true;
   bool _loading = false;
   String? _error;
 
+  /// Which chip is currently signing in (so only that one shows a spinner).
+  String? _busyId;
+
   @override
   void dispose() {
     _idCtrl.dispose();
     _pwCtrl.dispose();
+    _pwFocus.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
+    await _loginWith(_idCtrl.text.trim(), _pwCtrl.text);
+  }
+
+  /// The one shared sign-in path.
+  ///
+  /// Both the form and the saved-account chips go through here so they cannot
+  /// drift apart: one place decides what success means, what is remembered, and
+  /// where the user lands.
+  Future<bool> _loginWith(String id, String pw) async {
+    if (id.isEmpty || pw.isEmpty) return false;
     final store = context.read<Store>();
     setState(() {
       _loading = true;
       _error = null;
+      _busyId = id;
     });
     await Future.delayed(const Duration(milliseconds: 250));
 
-    final ok = await store.authenticate(_idCtrl.text.trim(), _pwCtrl.text);
+    final ok = await store.authenticate(id, pw);
+    if (!mounted) return false;
     if (ok) {
+      await store.rememberAccount(id);
       await _session.login(store.currentUserId);
-      if (!mounted) return;
+      if (!mounted) return false;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
-    } else {
-      setState(() {
-        _loading = false;
-        _error = context.tr('incorrect_login');
-      });
+      return true;
     }
+    setState(() {
+      _loading = false;
+      _busyId = null;
+      _error = context.tr('incorrect_login');
+    });
+    return false;
+  }
+
+  /// Tapping a remembered account.
+  ///
+  /// With a password saved on this device it signs in immediately — that is the
+  /// whole point of the chip. Without one it fills the id and drops the cursor
+  /// in the password field, which is still faster than typing the id on a phone.
+  Future<void> _quickLogin(User u) async {
+    final store = context.read<Store>();
+    final pw = store.savedPasswordFor(u.id);
+    if (pw == null || pw.isEmpty) {
+      _askForPassword(u);
+      return;
+    }
+
+    final ok = await _loginWith(u.id, pw);
+    if (ok || !mounted) return;
+
+    // The saved password was refused. The most likely reason is not a typo —
+    // nobody typed anything — it is that the password was changed on another
+    // device and this copy went stale. Keeping it would produce the same dead
+    // end every morning, so drop it and ask once. The account stays in the list;
+    // only the one-tap part stops working until the next successful sign-in.
+    await store.forgetSavedPassword(u.id);
+    if (!mounted) return;
+    _askForPassword(u);
+  }
+
+  /// Puts the user in front of the password field for [u] with the id filled in.
+  void _askForPassword(User u) {
+    _idCtrl.text = u.id;
+    _pwCtrl.clear();
+    setState(() {
+      _loading = false;
+      _busyId = null;
+      _error = null;
+    });
+    _pwFocus.requestFocus();
+  }
+
+  Future<void> _forget(User u) async {
+    final store = context.read<Store>();
+    await store.forgetAccount(u.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.tr('forget_account_done'))),
+    );
   }
 
   Future<void> _clearCache() async {
@@ -141,6 +209,148 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// One remembered account.
+  ///
+  /// The whole row is the tap target — a 40px chip is a cruel thing to aim at
+  /// with a thumb. The key icon says whether a tap signs in (key filled) or
+  /// merely fills the id and asks for the password (key outline), so the user
+  /// is never surprised by what happens next.
+  Widget _savedAccountRow(Store store, User u, bool isKo) {
+    final hasPw = (store.savedPasswordFor(u.id) ?? '').isNotEmpty;
+    final busy = _busyId == u.id;
+    final name = u.displayName.trim().isNotEmpty ? u.displayName : u.id;
+    final initial = name.characters.first.toUpperCase();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _loading ? null : () => _quickLogin(u),
+          onLongPress: () => _confirmForget(u),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: p.line),
+              color: p.indigo.withValues(alpha: 0.03),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: p.indigo.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.indigo,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: p.ink,
+                              ),
+                            ),
+                          ),
+                          if (u.isMaster) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: p.indigo.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isKo ? '대표' : 'MASTER',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.indigo,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        u.id,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (busy)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: p.indigo,
+                    ),
+                  )
+                else
+                  Icon(
+                    hasPw ? Icons.key_rounded : Icons.key_outlined,
+                    size: 17,
+                    color: hasPw ? p.indigo : p.inkSoft,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Long-press a saved account to remove it from this device.
+  void _confirmForget(User u) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.tr('forget_account')),
+        content: Text('${u.id}\n\n${ctx.tr('saved_pw_note')}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _forget(u);
+            },
+            child: Text(ctx.tr('delete')),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = context.watch<Store>();
@@ -203,6 +413,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _pwCtrl,
+                    focusNode: _pwFocus,
                     obscureText: _obscure,
                     style: const TextStyle(fontSize: 13.5),
                     onSubmitted: (_) => _login(),
@@ -258,6 +469,42 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: p.inkSoft),
                   ),
+
+                  // ---- 이 기기에서 사용한 계정 (빠른 로그인) ----
+                  if (store.rememberedAccounts.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(height: 1, color: p.line),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            context.tr('saved_accounts'),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: p.inkSoft,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Container(height: 1, color: p.line),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    for (final u in store.rememberedAccounts)
+                      _savedAccountRow(store, u, isKo),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('saved_pw_note'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 10, color: p.inkSoft),
+                    ),
+                  ],
+
                   const SizedBox(height: 28),
                   const Divider(),
                   const SizedBox(height: 14),

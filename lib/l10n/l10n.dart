@@ -96,6 +96,16 @@ class L10n {
     'installed_version': '설치된 버전',
     'version_note': '버전은 저장된 빌드 날짜·시간으로 정해집니다.',
     'session_kept': '아이디별 데이터는 따로 관리됩니다. 세션은 1시간 유지됩니다.',
+
+    // 빠른 로그인 (이 기기에서 사용한 계정)
+    'saved_accounts': '이 기기에서 사용한 계정',
+    'saved_accounts_hint': '이름을 누르면 바로 로그인합니다.',
+    'saved_accounts_nopw': '비밀번호를 한 번 더 입력해야 합니다.',
+    'saved_accounts_current': '최근 사용',
+    'forget_account': '이 기기에서 지우기',
+    'forget_account_done': '기기에서 지웠습니다.',
+    'signing_in': '로그인 중…',
+    'saved_pw_note': '비밀번호는 이 기기에만 저장되며 서버로 보내지 않습니다. 공용 기기에서는 지워 주세요.',
     'cache_cleared': '캐시가 삭제되었습니다.',
     'id_created': '아이디 "{id}"가 생성되었습니다.',
     'language': '언어',
@@ -477,6 +487,16 @@ class L10n {
     'version_note': 'Version is defined by the stored build date & time.',
     'session_kept':
         'Each ID keeps its own separate data. Session is kept for 1 hour.',
+
+    'saved_accounts': 'Accounts used on this device',
+    'saved_accounts_hint': 'Tap a name to sign in right away.',
+    'saved_accounts_nopw': 'Password needed one more time.',
+    'saved_accounts_current': 'Recent',
+    'forget_account': 'Remove from this device',
+    'forget_account_done': 'Removed from this device.',
+    'signing_in': 'Signing in…',
+    'saved_pw_note':
+        'Passwords are stored on this device only and never sent to the server. Clear them on a shared device.',
     'cache_cleared': 'Cache cleared.',
     'id_created': 'ID "{id}" created.',
     'language': 'Language',
