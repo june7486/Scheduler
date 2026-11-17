@@ -411,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           task: t,
                           category: cat,
                           assignTargets: cats,
+                          stripeIndex: i,
                           onToggle: () => store.toggleComplete(t),
                           onTap: () => setState(
                             () => _selectedTaskId = _selectedTaskId == t.id
@@ -940,7 +941,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: p.danger,
               ),
               title: Text(
-                'Delete',
+                // 하드코딩된 'Delete' 였다. 영어 UI 에서는 티가 안 났지만
+                // 한국어 사용자에게는 이 메뉴 한 줄만 영어로 남는다.
+                context.tr('delete'),
                 style: TextStyle(fontSize: 13.5, color: p.danger),
               ),
               onTap: () {

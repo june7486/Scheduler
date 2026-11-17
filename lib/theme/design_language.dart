@@ -10,6 +10,15 @@ enum SkinDeco { plain, ruled, grid, gradient, mesh, dotted }
 /// corner sharpness, borders, depth, spacing, and how chips/checkboxes/headers
 /// are drawn. This is the difference between "another shade of blue" and
 /// "another architect drew the same building".
+///
+/// ## Density
+/// The fields below `rowGap` are the *information-density* axis. They were added
+/// when the dense designs arrived, because "how many rows fit on a phone" is not
+/// a colour decision and cannot be faked with a smaller radius.
+///
+/// Every one of them defaults to the behaviour the older designs already had, so
+/// adding them changed nothing on screen. That is deliberate: Paper, Studio E,
+/// Desk and Gazette must look exactly as they did before.
 class SurfaceSpec {
   /// Corner radius for primary cards / rows.
   final double radius;
@@ -71,6 +80,87 @@ class SurfaceSpec {
   /// Letter-spacing applied to small caps labels.
   final double tracking;
 
+  // ---------------- density ----------------
+  //
+  // Everything below defaults to "what the four original designs did", so a
+  // design that says nothing here keeps its old appearance bit for bit.
+
+  /// Task title size in logical pixels, before the user's font scale.
+  ///
+  /// The row used to hard-code 13.5, which meant a dense language had no way to
+  /// ask for smaller type. 8.5–9 is legible on a phone and roughly doubles how
+  /// many rows a glance can take in.
+  final double titleSize;
+
+  /// The secondary line (note / badges / amounts).
+  final double metaSize;
+
+  /// Checkbox / completion mark box.
+  final double checkSize;
+
+  /// Whether rows carry the per-row category assignment strip.
+  ///
+  /// It is the single most expensive element in a row — a whole horizontal
+  /// scroll of chips costs ~32px of height on every row. Dense languages drop it
+  /// and rely on the category badge to say where a task lives; the editor still
+  /// allows reassignment, so nothing becomes impossible, it just stops being one
+  /// tap away. That is the trade a dense view is asking for.
+  final bool showAssignChips;
+
+  /// Draw a hairline between rows instead of a gap.
+  ///
+  /// The cheapest way to add density: a 1px rule costs 1px, a gap costs 4–16.
+  final bool rowDivider;
+
+  /// Show the secondary metadata line (category, amount, due date) at all.
+  ///
+  /// Never used to hide information that exists nowhere else — the task detail
+  /// screen always has it. This only decides whether it earns a line here.
+  final bool showMeta;
+
+  /// Show the note under the title on the list row.
+  ///
+  /// For the densest languages the note is truncated away; it is still one tap
+  /// deep. Two lines of note per row is exactly what turns a "dense" view into a
+  /// normal one.
+  final bool showNote;
+
+  /// Right-align the money amount, ledger style, and give it a fixed gutter.
+  final bool amountGutter;
+
+  /// Draw the category as a short colour swatch (2 characters) rather than a
+  /// full chip with emoji. Sits between "full chip" and "nothing".
+  final bool compactCategory;
+
+  /// Alternating row tint, so the eye can track a line across a wide table.
+  final bool zebra;
+
+  /// Uppercase the small metadata labels (a log/terminal feel).
+  final bool upperMeta;
+
+  /// Put the category swatch and the amount on the *title line*, to the right of
+  /// the title, instead of giving them a second line.
+  ///
+  /// This is the honest way to be dense: not "show less", but "show the same in
+  /// less space". A second line costs ~15px on every row; an inline swatch costs
+  /// nothing because the title line is already there. The amount keeps its
+  /// tabular alignment so a money column still reads straight down.
+  ///
+  /// Requires [showMeta] to be false — otherwise the information renders twice.
+  final bool inlineMeta;
+
+  /// Draw the per-row delete button.
+  ///
+  /// Material's IconButton enforces a 48px (dense: 40px) minimum tap target, so
+  /// this one widget sets the row's height no matter how small the type gets.
+  /// That is the right default — a delete you can actually hit — but it makes a
+  /// true dense row impossible.
+  ///
+  /// Turning it off costs nothing functionally: deletion is already in the
+  /// long-press menu (which is where a destructive action belongs anyway). The
+  /// dense designs use this to trade a redundant button for rows half the height.
+  final bool showDeleteButton;
+
   const SurfaceSpec({
     required this.radius,
     required this.radiusSmall,
@@ -92,6 +182,19 @@ class SurfaceSpec {
     this.solidChips = false,
     this.headerCase = 'normal',
     this.tracking = 0,
+    this.titleSize = 13.5,
+    this.metaSize = 10,
+    this.checkSize = 26,
+    this.showAssignChips = true,
+    this.rowDivider = false,
+    this.showMeta = true,
+    this.showNote = true,
+    this.amountGutter = false,
+    this.compactCategory = false,
+    this.zebra = false,
+    this.upperMeta = false,
+    this.showDeleteButton = true,
+    this.inlineMeta = false,
   });
 
   /// The box shadow for this language at a given strength multiplier.
@@ -105,6 +208,27 @@ class SurfaceSpec {
         offset: Offset(0, 2 * elevation * multiplier),
       ),
     ];
+  }
+
+  /// A rough score for "how many rows fit on one screen", higher is denser.
+  ///
+  /// Used by the design picker to label a language honestly, and by the tests to
+  /// assert that a design claiming to be dense actually is. It is an estimate,
+  /// not a measurement — but an unchecked claim is how "dense" themes end up
+  /// looking identical to the normal one.
+  double get densityScore {
+    final perRow =
+        pad.top +
+        pad.bottom +
+        rowGap +
+        titleSize * 1.25 +
+        (showNote ? metaSize * 1.6 : 0) +
+        (showMeta ? metaSize * 1.7 : 0) +
+        (showAssignChips ? 32 : 0) +
+        (rowDivider ? 1 : 0) +
+        (showDeleteButton ? 12 : 0);
+    // inlineMeta 는 별도 줄을 쓰지 않으므로 점수를 깎지 않는다.
+    return 100 / perRow;
   }
 }
 
@@ -163,7 +287,29 @@ class AppDesign {
 class AppDesigns {
   static const String defaultId = 'paper';
 
-  static const List<String> ids = ['paper', 'studioe', 'desk', 'gazette'];
+  static const List<String> ids = [
+    'paper',
+    'studioe',
+    'desk',
+    'gazette',
+    // ---- 고밀도 (dense) 계열 ----
+    'ledger',
+    'terminal',
+    'compact',
+    'matrix',
+    'chrono',
+  ];
+
+  /// The dense designs, in the order the picker shows them under their heading.
+  static const List<String> denseIds = [
+    'ledger',
+    'terminal',
+    'compact',
+    'matrix',
+    'chrono',
+  ];
+
+  static bool isDense(String id) => denseIds.contains(id);
 
   static const Map<String, AppDesign> _byId = {
     // 1) PAPER — the hand-written notebook. Warm, round, forgiving.
@@ -271,6 +417,234 @@ class AppDesigns {
         pillChips: false,
         headerCase: 'normal',
         tracking: 0.6,
+      ),
+    ),
+
+    // =====================================================================
+    // 고밀도 (DENSE) 계열 — "한 화면에 최대한 많은 정보"
+    // =====================================================================
+    //
+    // 다섯 개는 서로 다른 *정보 전략*이지 색만 다른 변형이 아니다. 각 테마가
+    // 어떤 정보를 남기고 무엇을 포기했는지가 이름에 담겨 있다.
+    //
+    // 공통 원칙: 사용자가 어디를 눌러도 정보를 잃지 않는다. 목록에서 뺀 것은
+    // 상세 화면에 그대로 있다. 밀도는 "정보 삭제"가 아니라 "한 화면에 담는
+    // 양"의 문제다.
+
+    // 5) LEDGER — 회계 장부. 숫자가 1등 시민이다.
+    'ledger': AppDesign(
+      id: 'ledger',
+      emoji: '📊',
+      family: 'dense',
+      deco: SkinDeco.plain,
+      typeScale: 0.90,
+      titleWeight: FontWeight.w600,
+      labelWeight: FontWeight.w800,
+      surface: SurfaceSpec(
+        radius: 3,
+        radiusSmall: 2,
+        radiusLarge: 8,
+        borderWidth: 0, // 장부에는 테두리가 없다. 선 하나로 구분한다.
+        ruleWidth: 1,
+        elevation: 0,
+        pad: EdgeInsets.fromLTRB(8, 3, 8, 3),
+        rowGap: 0,
+        headerHeight: 56,
+        headerPadX: 10,
+        headerBand: true,
+        headerRule: true,
+        roundCheck: false,
+        pillChips: false,
+        solidChips: false,
+        tracking: 0.2,
+        // --- 밀도 ---
+        titleSize: 11.5,
+        metaSize: 9,
+        checkSize: 20,
+        rowDivider: true, // 헤어라인 한 줄이 여백을 대신한다
+        showAssignChips: false, // 칩 띠 제거 = 행당 32px 회수
+        showNote: false,
+        showMeta: true, // 분류·금액은 반드시 남긴다
+        amountGutter: true, // 금액 우측 정렬 + 고정 폭
+        compactCategory: true, // 이모지+이름 대신 색 견본
+        zebra: true, // 줄무늬로 가로 추적
+        upperMeta: false,
+        showDeleteButton: false,
+      ),
+    ),
+
+    // 6) TERMINAL — 로그 뷰어. 밀도가 가장 높고, 색이 유일한 장식이다.
+    'terminal': AppDesign(
+      id: 'terminal',
+      emoji: '⬛',
+      family: 'dense',
+      deco: SkinDeco.grid,
+      typeScale: 0.88,
+      titleWeight: FontWeight.w500,
+      labelWeight: FontWeight.w700,
+      surface: SurfaceSpec(
+        radius: 0, // 각도 없는 순수 격자
+        radiusSmall: 0,
+        radiusLarge: 0,
+        borderWidth: 0,
+        ruleWidth: 1,
+        elevation: 0,
+        pad: EdgeInsets.fromLTRB(6, 1, 6, 1),
+        rowGap: 0,
+        headerHeight: 46,
+        headerPadX: 8,
+        headerBand: true,
+        headerAccentTitle: true,
+        headerRule: true,
+        roundCheck: false,
+        pillChips: false,
+        solidChips: true,
+        headerCase: 'upper',
+        tracking: 0.9,
+        // --- 밀도 (최고) ---
+        titleSize: 10.5,
+        metaSize: 8,
+        checkSize: 16,
+        rowDivider: true,
+        showAssignChips: false,
+        showNote: false,
+        showMeta: true,
+        amountGutter: true,
+        compactCategory: false,
+        zebra: false,
+        upperMeta: true, // 소문자 대신 대문자 = 로그 느낌 + 라인 높이 절약
+        showDeleteButton: false,
+      ),
+    ),
+
+    // 7) COMPACT — 순수 밀도. 장식은 전부 걷어내고 이름과 체크만 남긴다.
+    'compact': AppDesign(
+      id: 'compact',
+      emoji: '▤',
+      family: 'dense',
+      deco: SkinDeco.plain,
+      typeScale: 0.95,
+      titleWeight: FontWeight.w500,
+      surface: SurfaceSpec(
+        radius: 2,
+        radiusSmall: 2,
+        radiusLarge: 6,
+        borderWidth: 0,
+        ruleWidth: 1,
+        elevation: 0,
+        pad: EdgeInsets.fromLTRB(6, 2, 4, 2),
+        rowGap: 0,
+        headerHeight: 48,
+        headerPadX: 8,
+        headerRule: true,
+        roundCheck: true,
+        pillChips: false,
+        solidChips: false,
+        tracking: 0,
+        // --- 밀도 ---
+        // 이 테마의 결단: 정보를 **빼지 않고** 한 줄에 접는다.
+        // 카테고리 견본과 금액이 제목 옆으로 올라가므로 두 번째 줄이 사라져도
+        // 잃는 정보가 없다. "고밀도"라는 말이 "빈 화면"이 되지 않게 하는
+        // 유일한 방법이다.
+        titleSize: 11,
+        metaSize: 8.5,
+        checkSize: 16,
+        rowDivider: true,
+        showAssignChips: false,
+        showNote: false,
+        showMeta: false, // 두 번째 줄 없음 …
+        inlineMeta: true, // … 대신 제목 줄 우측에 붙인다
+        amountGutter: true,
+        compactCategory: true,
+        zebra: false,
+        upperMeta: false,
+        showDeleteButton: false,
+      ),
+    ),
+
+    // 8) MATRIX — 격자. 구분선이 사방을 감아 표(table)처럼 읽힌다.
+    'matrix': AppDesign(
+      id: 'matrix',
+      emoji: '▦',
+      family: 'dense',
+      deco: SkinDeco.grid,
+      typeScale: 0.91,
+      titleWeight: FontWeight.w600,
+      labelWeight: FontWeight.w700,
+      surface: SurfaceSpec(
+        radius: 1,
+        radiusSmall: 1,
+        radiusLarge: 4,
+        borderWidth: 1, // 셀 경계 = 표의 격자
+        ruleWidth: 1,
+        elevation: 0,
+        pad: EdgeInsets.fromLTRB(6, 2, 6, 2),
+        rowGap: 0,
+        headerHeight: 52,
+        headerPadX: 8,
+        headerBand: true,
+        headerRule: true,
+        roundCheck: false,
+        pillChips: false,
+        solidChips: false,
+        headerCase: 'upper',
+        tracking: 0.5,
+        // --- 밀도 ---
+        titleSize: 11,
+        metaSize: 8.5,
+        checkSize: 17,
+        rowDivider: true,
+        showAssignChips: false,
+        showNote: false,
+        showMeta: true,
+        amountGutter: true,
+        compactCategory: true,
+        zebra: true,
+        upperMeta: true,
+        showDeleteButton: false,
+      ),
+    ),
+
+    // 9) CHRONO — 일정/날짜 우선. 시간 열이 왼쪽에 고정된 느낌으로 읽힌다.
+    'chrono': AppDesign(
+      id: 'chrono',
+      emoji: '⏱',
+      family: 'dense',
+      deco: SkinDeco.ruled,
+      typeScale: 0.93,
+      titleWeight: FontWeight.w600,
+      labelWeight: FontWeight.w700,
+      surface: SurfaceSpec(
+        radius: 2,
+        radiusSmall: 2,
+        radiusLarge: 8,
+        borderWidth: 0,
+        ruleWidth: 1,
+        elevation: 0,
+        pad: EdgeInsets.fromLTRB(7, 2, 7, 2),
+        rowGap: 0,
+        headerHeight: 54,
+        headerPadX: 9,
+        headerRule: true,
+        roundCheck: true,
+        pillChips: false,
+        solidChips: false,
+        tracking: 0.3,
+        // --- 밀도 ---
+        // 레저(11.5)보다 살짝 크다. 일정은 날짜·요일 글자를 읽어야 하고,
+        // 장부는 숫자 정렬로 읽는다. 같은 밀도 숫자를 쓸 이유가 없다.
+        titleSize: 12,
+        metaSize: 9.5,
+        checkSize: 19,
+        rowDivider: true,
+        showAssignChips: false,
+        showNote: false,
+        showMeta: true, // 날짜/요일이 이 테마의 존재 이유
+        amountGutter: false,
+        compactCategory: true,
+        zebra: true,
+        upperMeta: false,
+        showDeleteButton: false,
       ),
     ),
   };

@@ -189,12 +189,45 @@ void showDesignPicker(BuildContext context, Store store) {
                   style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                 ),
                 const SizedBox(height: 14),
-                for (final id in designs)
+                // 두 계열로 나눈다. 아홉 개를 한 줄로 늘어놓으면
+                // "고밀도"가 그냥 목록의 아래쪽 항목처럼 보인다.
+                for (final id in designs.where((e) => !AppDesigns.isDense(e)))
                   _DesignRow(
                     id: id,
                     selected: s.designKey == id,
                     onTap: tumbleHaptic(() => s.setDesignKey(id)),
                   ),
+
+                if (designs.any(AppDesigns.isDense)) ...[
+                  const SizedBox(height: 10),
+                  Divider(height: 1, color: p.line),
+                  const SizedBox(height: 12),
+                  Text(
+                    ctx.tr('choose_design_dense'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: p.ink,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    ctx.tr('choose_design_dense_hint'),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.4,
+                      color: p.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final id in designs.where(AppDesigns.isDense))
+                    _DesignRow(
+                      id: id,
+                      selected: s.designKey == id,
+                      onTap: tumbleHaptic(() => s.setDesignKey(id)),
+                    ),
+                ],
                 const SizedBox(height: 16),
                 Divider(height: 1, color: p.line),
                 const SizedBox(height: 12),
@@ -262,30 +295,13 @@ class _DesignRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Miniature of the surface spec: radius, border and edge bar are
-              // exactly what separates the four designs.
-              Container(
-                width: 46,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: p.card,
-                  borderRadius: BorderRadius.circular(s.radius),
-                  border: s.borderWidth == 0
-                      ? null
-                      : Border.all(color: p.line, width: s.borderWidth),
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    width: s.edgeBar ? 4 : 0,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: p.indigo,
-                      borderRadius: BorderRadius.circular(s.radius),
-                    ),
-                  ),
-                ),
-              ),
+              // Miniature of the surface spec.
+              //
+              // 고밀도 테마는 반지름과 테두리만으로는 구분되지 않는다. 그래서
+              // 밀도 자체를 그림으로 보여준다: 행 수가 곧 그 테마의 주장이고,
+              // 색만 다른 변형이 아니라는 유일한 증거다.
+              // (paper 는 3줄, terminal 은 8줄 — 실제 화면 비율과 같은 방향)
+              _DesignMiniature(id: id, spec: s),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -319,6 +335,27 @@ class _DesignRow extends StatelessWidget {
                         color: p.inkSoft,
                       ),
                     ),
+                    if (AppDesigns.isDense(id)) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: p.indigo.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          context.tr('density_label', args: {
+                            'n': s.densityScore.toStringAsFixed(1),
+                          }),
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: p.indigo,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -749,6 +786,102 @@ class _FontSizeSlider extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// A 46×40 miniature of a design's rhythm — not just its corners.
+///
+/// The old preview drew one rectangle with a radius and a border, which meant
+/// the four designs differed by a few pixels of corner. That is fine when the
+/// choice is decorative, and useless when the user is asking "which of these
+/// shows me the most at once".
+///
+/// So this draws *rows*. The row height comes straight from the same numbers the
+/// real list uses (padding, gap, title size), which means the preview is an
+/// honest scale model: Paper shows 3 rules, Terminal shows 8. A design cannot
+/// claim to be dense here and not be dense on screen.
+class _DesignMiniature extends StatelessWidget {
+  const _DesignMiniature({required this.id, required this.spec});
+  final String id;
+  final SurfaceSpec spec;
+
+  @override
+  Widget build(BuildContext context) {
+    // One real row, in miniature units. `densityScore` is 100 / row height, so
+    // dividing back gives the row height the row widget would produce.
+    final rowHeight = (100 / spec.densityScore).clamp(4.0, 40.0);
+    // Scale so the densest design (rowHeight ~12) fits 8 rows in 40px.
+    final unit = rowHeight * 0.42;
+    final rows = (40 / (unit + (spec.rowGap * 0.15))).floor().clamp(1, 10);
+    final lined = spec.rowDivider;
+
+    return Container(
+      width: 46,
+      height: 40,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(spec.radius),
+        border: spec.borderWidth == 0
+            ? Border.all(color: p.line, width: 0.6)
+            : Border.all(color: p.line, width: spec.borderWidth),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (spec.edgeBar)
+            Container(width: 3, color: p.indigo.withValues(alpha: 0.75)),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2.5, vertical: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < rows; i++)
+                    Expanded(
+                      child: Container(
+                        margin: EdgeInsets.only(
+                          bottom: lined ? 0 : 1.6,
+                          top: i == 0 ? 0 : (lined ? 0 : 0.8),
+                        ),
+                        decoration: BoxDecoration(
+                          color: spec.zebra && i.isOdd
+                              ? p.indigo.withValues(alpha: 0.16)
+                              : null,
+                          border: lined
+                              ? Border(
+                                  bottom: BorderSide(
+                                    color: p.ink.withValues(alpha: 0.22),
+                                    width: 0.6,
+                                  ),
+                                )
+                              : null,
+                          borderRadius: BorderRadius.circular(
+                            lined ? 0 : spec.radiusSmall,
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.35 + ((i * 17) % 55) / 100,
+                            child: Container(
+                              height: (unit * 0.22).clamp(1.0, 2.4),
+                              decoration: BoxDecoration(
+                                color: p.ink.withValues(alpha: 0.30),
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

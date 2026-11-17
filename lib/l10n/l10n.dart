@@ -135,6 +135,21 @@ class L10n {
     'design_hint_desk': '촘촘한 목록 · 좌측 색 띠 · 원형 체크',
     'design_hint_gazette': '테두리 없는 활자 · 굵은 구분선 · 신문 편집',
 
+    // 고밀도 계열
+    'choose_design_dense': '고밀도 (한 화면에 더 많이)',
+    'choose_design_dense_hint': '목록에서 뺀 정보는 상세 화면에 그대로 있습니다. 밀도는 정보 삭제가 아니라 배치의 문제입니다.',
+    'design_ledger': '레저',
+    'design_terminal': '터미널',
+    'design_compact': '컴팩트',
+    'design_matrix': '매트릭스',
+    'design_chrono': '크로노',
+    'design_hint_ledger': '장부 · 줄무늬 · 금액 우측 정렬 · 헤어라인',
+    'design_hint_terminal': '로그 뷰어 · 대문자 라벨 · 최고 밀도',
+    'design_hint_compact': '이름과 체크만 · 장식 제거 · 순수 밀도',
+    'design_hint_matrix': '표 격자 · 셀 경계 · 표처럼 읽기',
+    'design_hint_chrono': '날짜 우선 · 규칙선 · 일정에 최적',
+    'density_label': '밀도 {n}배',
+
     // Reset (all devices)
     'reset_everywhere': '모든 기기 초기화',
     'reset_everywhere_hint': '이 계정의 자료를 모든 기기에서 지웁니다. 되돌릴 수 없습니다.',
@@ -526,6 +541,21 @@ class L10n {
     'design_hint_studioe': 'Square geometry · wide caps · dot grid',
     'design_hint_desk': 'Dense list · edge bars · round checks',
     'design_hint_gazette': 'Borderless type · heavy rules · editorial',
+
+    'choose_design_dense': 'High density (more per screen)',
+    'choose_design_dense_hint':
+        'Nothing is lost — anything dropped from the list is still on the detail screen. Density is layout, not deletion.',
+    'design_ledger': 'Ledger',
+    'design_terminal': 'Terminal',
+    'design_compact': 'Compact',
+    'design_matrix': 'Matrix',
+    'design_chrono': 'Chrono',
+    'design_hint_ledger': 'Accounting · zebra · right-aligned amounts',
+    'design_hint_terminal': 'Log viewer · upper labels · densest',
+    'design_hint_compact': 'Name and check only · no decoration',
+    'design_hint_matrix': 'Table grid · cell borders · reads like a table',
+    'design_hint_chrono': 'Date first · rules · built for schedules',
+    'density_label': '{n}x density',
 
     // Reset (all devices)
     'reset_everywhere': 'Reset every device',
