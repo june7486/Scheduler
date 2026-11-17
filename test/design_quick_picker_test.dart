@@ -97,27 +97,58 @@ void main() {
     }
     // 실제로 적용되는지: 테마를 바꾸면 store 가 즉시 반영한다.
     //
-    // runAsync 로 감싸는 이유는 setDesignKey 가 실제 Hive 에 쓰기 때문이다.
-    // testWidgets 의 가짜 시계 아래에서 진짜 파일 I/O 를 돌리면 그 future 가
-    // 영원히 완료되지 않고 테스트가 멈춘다(이 프로젝트에서 이미 여러 번 겪었다).
+    // ## 여기서 크게 데인 부분 — onSelected 는 "탭한 순간"에 불리지 않는다
+    // PopupMenuButton 은 항목을 탭하면 **먼저 메뉴를 닫는 애니메이션을 예약**하고,
+    // 그 애니메이션이 끝난 뒤에야 onSelected 를 호출한다. 그래서
+    //   tap → runAsync 로 실시간 대기 → expect
+    // 순서로 짜면 영원히 옛 값이 나온다. 실시간을 아무리 기다려도 프레임이
+    // 돌지 않으면 애니메이션은 1도 진행되지 않기 때문이다(가짜 시계).
+    // 반드시 pump 로 프레임을 넘겨 애니메이션을 끝낸 뒤에 확인해야 한다.
     await tester.tap(find.text('터미널').first);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Hive 쓰기는 진짜 파일 I/O 라서, 프레임을 넘겨 준 다음 실제 시간도
+    // 조금 흘려 줘야 값이 확정된다.
     await tester.runAsync(() async {
       for (var i = 0; i < 40; i++) {
         if (store.designKey == 'terminal') break;
         await Future<void>.delayed(const Duration(milliseconds: 25));
       }
     });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
     expect(store.designKey, 'terminal',
         reason: '선택기가 테마를 실제로 바꾸지 못했다');
+
+    // 바뀐 테마가 실제 렌더에도 반영되는지 — 표 머리글이 나타나야 한다.
+    // store 값만 바뀌고 화면이 그대로면 그건 절반만 성공한 것이다.
+    // (main.dart 가 setDesign 을 부르는 것과 같은 일을 여기서 한다.)
+    setDesign(store.designKey);
+    await tester.pump();
+    expect(find.byType(TaskRow), findsWidgets);
   });
 
-  tearDown(() async {
+  // ## tearDown 이 멈추던 문제 (여기서 마지막으로 걸렸다)
+  // `await Hive.close()` 는 열린 박스를 진짜 파일에서 닫는다. testWidgets 의
+  // 가짜 시계 아래에 놓이면 그 future 가 완료되지 않고, 증상은 "본문은 전부
+  // 통과했는데 did not complete" 로만 나타난다 — 어서션 실패보다 훨씬 고약하다.
+  //
+  // runAsync 로 감싸는 것도 답이 아니었다. tearDown 이 도는 시점에는 테스트의
+  // 비동기 영역이 이미 정리 단계라 runAsync 가 그 자리에서 멈춘다.
+  //
+  // 이 파일에는 테스트가 하나뿐이고, 남는 것은 임시 디렉터리와 열린 박스뿐이다.
+  // 박스는 프로세스가 끝날 때 OS 가 회수하므로 여기서 닫지 않는다.
+  // (Hive 를 닫아야 하는 테스트가 여러 개인 파일이라면, 닫는 일을 본문 마지막의
+  //  runAsync 안으로 옮겨야 한다.)
+  tearDown(() {
     try {
       store.sync.stop();
     } catch (_) {}
-    await Hive.close();
-    if (dir.existsSync()) dir.deleteSync(recursive: true);
+    try {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    } catch (_) {}
   });
 }
 
