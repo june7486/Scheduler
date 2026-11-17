@@ -124,9 +124,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               store.isMaster && store.masterViewingAll
                   ? context.tr('master_viewing_all')
-                  : context.tr('signed_in', args: {
-                      'id': '${store.currentUserId}${store.isMaster ? " (${context.tr('master')})" : ""}'
-                    }),
+                  : context.tr(
+                      'signed_in',
+                      args: {
+                        'id':
+                            '${store.currentUserId}${store.isMaster ? " (${context.tr('master')})" : ""}',
+                      },
+                    ),
               style: TextStyle(
                 fontSize: 10.5,
                 color: p.inkSoft,
@@ -210,7 +214,10 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: p.onAccent,
         onPressed: () => _openEditor(),
         icon: const Icon(Icons.add, size: 20),
-        label: Text(context.tr('add_task'), style: const TextStyle(fontSize: 13)),
+        label: Text(
+          context.tr('add_task'),
+          style: const TextStyle(fontSize: 13),
+        ),
       ),
     );
   }
@@ -397,33 +404,43 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(fontSize: 12.5, color: p.inkSoft),
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 90),
-                  itemCount: active.length,
-                  itemBuilder: (_, i) {
-                    final t = active[i];
-                    final cat = store.categoryById(t.categoryId) ?? cats.first;
-                    return _wrapSelectable(
-                      t,
-                      GestureDetector(
-                        onLongPress: () => _showTaskMenu(store, t),
-                        child: TaskRow(
-                          task: t,
-                          category: cat,
-                          assignTargets: cats,
-                          stripeIndex: i,
-                          onToggle: () => store.toggleComplete(t),
-                          onTap: () => setState(
-                            () => _selectedTaskId = _selectedTaskId == t.id
-                                ? null
-                                : t.id,
-                          ),
-                          onDelete: () => _confirmDelete(store, t),
-                          onAssign: (c) => store.toggleCategoryIn(t, c.id),
-                        ),
+              : Column(
+                  children: [
+                    // 표 테마에서만 머리글을 그린다. 열이 맞아도 이름이 없으면
+                    // 그냥 흩어진 글자다. 머리글이 열을 '열'로 만든다.
+                    if (sx.isTable) TaskRow.tableHeader(context),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 90),
+                        itemCount: active.length,
+                        itemBuilder: (_, i) {
+                          final t = active[i];
+                          final cat =
+                              store.categoryById(t.categoryId) ?? cats.first;
+                          return _wrapSelectable(
+                            t,
+                            GestureDetector(
+                              onLongPress: () => _showTaskMenu(store, t),
+                              child: TaskRow(
+                                task: t,
+                                category: cat,
+                                assignTargets: cats,
+                                stripeIndex: i,
+                                onToggle: () => store.toggleComplete(t),
+                                onTap: () => setState(
+                                  () => _selectedTaskId =
+                                      _selectedTaskId == t.id ? null : t.id,
+                                ),
+                                onDelete: () => _confirmDelete(store, t),
+                                onAssign: (c) =>
+                                    store.toggleCategoryIn(t, c.id),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
         ),
         // ---------------- Completed section ----------------
@@ -461,10 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Text(
                         '(${done.length})',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: p.inkSoft,
-                        ),
+                        style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                       ),
                       const Spacer(),
                       Icon(
@@ -486,10 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.only(bottom: 14),
                           child: Text(
                             context.tr('nothing_completed'),
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: p.inkSoft,
-                            ),
+                            style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                           ),
                         )
                       : ListView.builder(
@@ -542,10 +553,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
           const SizedBox(width: 6),
-          Text(
-            '($count)',
-            style: TextStyle(fontSize: 11.5, color: p.inkSoft),
-          ),
+          Text('($count)', style: TextStyle(fontSize: 11.5, color: p.inkSoft)),
         ],
       ),
     );
@@ -589,11 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             onPressed: () => store.deleteTask(t),
-            icon: Icon(
-              Icons.delete_outline,
-              size: 17,
-              color: p.danger,
-            ),
+            icon: Icon(Icons.delete_outline, size: 17, color: p.danger),
             visualDensity: VisualDensity.compact,
             tooltip: context.tr('delete'),
           ),
@@ -619,11 +623,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? context.tr('select_task_then_tab')
                   : context.tr('assign_to'),
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 9.5,
-                color: p.inkSoft,
-                height: 1.3,
-              ),
+              style: TextStyle(fontSize: 9.5, color: p.inkSoft, height: 1.3),
             ),
           ),
           const Divider(height: 1),
@@ -643,7 +643,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final c = cats[i];
                 final col = Color(c.colorValue);
                 final count = store.taskCountFor(c.id);
-                final isCurrent = _selectedTaskId != null &&
+                final isCurrent =
+                    _selectedTaskId != null &&
                     store.tasks
                         .firstWhere(
                           (t) => t.id == _selectedTaskId,
@@ -799,8 +800,12 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _selectedTaskId = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.tr('moved_to',
-                args: {'title': t.title, 'category': catLabel(c)})),
+            content: Text(
+              context.tr(
+                'moved_to',
+                args: {'title': t.title, 'category': catLabel(c)},
+              ),
+            ),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -824,10 +829,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Delete',
-              style: TextStyle(color: p.danger),
-            ),
+            child: Text('Delete', style: TextStyle(color: p.danger)),
           ),
         ],
       ),
@@ -897,7 +899,10 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             ListTile(
               leading: const Icon(Icons.edit_outlined, size: 20),
-              title: Text(context.tr('edit_task'), style: const TextStyle(fontSize: 13.5)),
+              title: Text(
+                context.tr('edit_task'),
+                style: const TextStyle(fontSize: 13.5),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _editTask(store, t);
@@ -926,7 +931,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 20,
               ),
               title: Text(
-                t.completed ? context.tr('reopen_task') : context.tr('mark_complete'),
+                t.completed
+                    ? context.tr('reopen_task')
+                    : context.tr('mark_complete'),
                 style: const TextStyle(fontSize: 13.5),
               ),
               onTap: () {
@@ -935,11 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
-              leading: Icon(
-                Icons.delete_outline,
-                size: 20,
-                color: p.danger,
-              ),
+              leading: Icon(Icons.delete_outline, size: 20, color: p.danger),
               title: Text(
                 // 하드코딩된 'Delete' 였다. 영어 UI 에서는 티가 안 났지만
                 // 한국어 사용자에게는 이 메뉴 한 줄만 영어로 남는다.

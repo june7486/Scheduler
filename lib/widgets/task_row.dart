@@ -94,163 +94,166 @@ class TaskRow extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: sx.checkSize,
-                  height: sx.checkSize,
-                  child: handwritingOn
-                      ? GestureDetector(
-                          onTap: onToggle,
-                          child: Center(
-                            child: HandCheck(
-                              size: sx.checkSize * 0.85,
-                              color: catColor,
-                              checked: task.completed,
+            if (sx.isTable)
+              _tableRow(catColor)
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: sx.checkSize,
+                    height: sx.checkSize,
+                    child: handwritingOn
+                        ? GestureDetector(
+                            onTap: onToggle,
+                            child: Center(
+                              child: HandCheck(
+                                size: sx.checkSize * 0.85,
+                                color: catColor,
+                                checked: task.completed,
+                              ),
+                            ),
+                          )
+                        : FittedBox(
+                            fit: BoxFit.contain,
+                            child: Checkbox(
+                              value: task.completed,
+                              onChanged: (_) => onToggle(),
+                              shape: sx.roundCheck
+                                  ? const CircleBorder()
+                                  : RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        sx.radiusSmall,
+                                      ),
+                                    ),
+                              side: BorderSide(color: catColor, width: 1.4),
+                              activeColor: catColor,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: sx.checkSize < 22
+                                  ? VisualDensity.compact
+                                  : VisualDensity.standard,
                             ),
                           ),
-                        )
-                      : FittedBox(
-                          fit: BoxFit.contain,
-                          child: Checkbox(
-                            value: task.completed,
-                            onChanged: (_) => onToggle(),
-                            shape: sx.roundCheck
-                                ? const CircleBorder()
-                                : RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      sx.radiusSmall,
-                                    ),
-                                  ),
-                            side: BorderSide(color: catColor, width: 1.4),
-                            activeColor: catColor,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: sx.checkSize < 22
-                                ? VisualDensity.compact
-                                : VisualDensity.standard,
-                          ),
-                        ),
-                ),
-                SizedBox(width: sx.titleSize < 12 ? 5 : 8),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: onTap,
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            if (task.pinned)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 3),
-                                child: handwritingOn
-                                    ? HandAsterisk(
-                                        size: sx.metaSize + 2,
-                                        color: p.teal,
-                                        seed: task.id.hashCode,
-                                      )
-                                    : Icon(
-                                        Icons.push_pin,
-                                        size: sx.metaSize + 2,
-                                        color: p.indigo,
-                                      ),
-                              ),
-                            if (task.recurrence != 'none')
-                              Padding(
-                                padding: const EdgeInsets.only(right: 3),
-                                child: Icon(
-                                  Icons.autorenew,
-                                  size: sx.metaSize + 2,
-                                  color: p.teal,
+                  ),
+                  SizedBox(width: sx.titleSize < 12 ? 5 : 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onTap,
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (task.pinned)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 3),
+                                  child: handwritingOn
+                                      ? HandAsterisk(
+                                          size: sx.metaSize + 2,
+                                          color: p.teal,
+                                          seed: task.id.hashCode,
+                                        )
+                                      : Icon(
+                                          Icons.push_pin,
+                                          size: sx.metaSize + 2,
+                                          color: p.indigo,
+                                        ),
                                 ),
-                              ),
-                            Expanded(
-                              child:
-                                  (handwritingOn &&
-                                      task.pinned &&
-                                      !task.completed)
-                                  ? HandHighlight(
-                                      color: const Color(0xFFFFE066),
-                                      child: Text(
+                              if (task.recurrence != 'none')
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 3),
+                                  child: Icon(
+                                    Icons.autorenew,
+                                    size: sx.metaSize + 2,
+                                    color: p.teal,
+                                  ),
+                                ),
+                              Expanded(
+                                child:
+                                    (handwritingOn &&
+                                        task.pinned &&
+                                        !task.completed)
+                                    ? HandHighlight(
+                                        color: const Color(0xFFFFE066),
+                                        child: Text(
+                                          task.title,
+                                          maxLines: lined ? 1 : 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: _titleStyle(task),
+                                        ),
+                                      )
+                                    : Text(
                                         task.title,
                                         maxLines: lined ? 1 : 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: _titleStyle(task),
                                       ),
-                                    )
-                                  : Text(
-                                      task.title,
-                                      maxLines: lined ? 1 : 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: _titleStyle(task),
-                                    ),
-                            ),
-                          ],
-                        ),
-                        if (sx.showNote && task.note.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              task.note,
-                              maxLines: lined ? 1 : 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: sx.metaSize + 1,
-                                color: p.inkSoft,
-                                height: 1.2,
+                              ),
+                            ],
+                          ),
+                          if (sx.showNote && task.note.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                task.note,
+                                maxLines: lined ? 1 : 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: sx.metaSize + 1,
+                                  color: p.inkSoft,
+                                  height: 1.2,
+                                ),
                               ),
                             ),
-                          ),
-                        // inlineMeta 와 showMeta 는 배타적으로 쓴다. 둘 다 켜면
-                        // 같은 정보가 두 번 그려지므로 여기서 막는다.
-                        if (sx.showMeta && !sx.inlineMeta)
-                          Padding(
-                            padding: EdgeInsets.only(top: lined ? 1 : 3),
-                            child: _metaLine(catColor),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                // ── 인라인 메타 ──────────────────────────────────────────────
-                // 고밀도의 정직한 방법: 정보를 **빼는** 게 아니라 **접는** 것.
-                // 두 번째 줄은 행마다 ~15px 를 먹는다. 제목 줄은 어차피
-                // 존재하므로, 카테고리 견본과 금액을 그 줄 오른쪽으로 올리면
-                // 같은 정보가 0px 에 표시된다.
-                //
-                // 제목 Expanded 바깥(형제)에 두는 이유: 제목 길이에 따라
-                // 금액이 밀리면 돈 열이 지그재그가 된다. 형제로 두면
-                // 오른쪽 끝에 고정되고, 제목만 말줄임된다.
-                if (sx.inlineMeta)
-                  Padding(
-                    padding: EdgeInsets.only(left: sx.titleSize < 12 ? 6 : 8),
-                    child: _inlineMeta(catColor),
-                  ),
-                // Material's IconButton enforces a 48px minimum tap target
-                // (40px at compact density), so this single widget — not the
-                // type size — decides the row's height. Dense designs drop it
-                // and rely on the long-press menu, which already has delete.
-                if (sx.showDeleteButton)
-                  SizedBox(
-                    width: lined ? 26 : 38,
-                    child: IconButton(
-                      onPressed: onDelete,
-                      icon: Icon(
-                        Icons.delete_outline,
-                        size: lined ? 13 : 18,
-                        color: lined ? p.inkSoft : p.danger,
+                          // inlineMeta 와 showMeta 는 배타적으로 쓴다. 둘 다 켜면
+                          // 같은 정보가 두 번 그려지므로 여기서 막는다.
+                          if (sx.showMeta && !sx.inlineMeta)
+                            Padding(
+                              padding: EdgeInsets.only(top: lined ? 1 : 3),
+                              child: _metaLine(catColor),
+                            ),
+                        ],
                       ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      visualDensity: VisualDensity.compact,
-                      tooltip: context.tr('delete'),
                     ),
                   ),
-              ],
-            ),
+                  // ── 인라인 메타 ──────────────────────────────────────────────
+                  // 고밀도의 정직한 방법: 정보를 **빼는** 게 아니라 **접는** 것.
+                  // 두 번째 줄은 행마다 ~15px 를 먹는다. 제목 줄은 어차피
+                  // 존재하므로, 카테고리 견본과 금액을 그 줄 오른쪽으로 올리면
+                  // 같은 정보가 0px 에 표시된다.
+                  //
+                  // 제목 Expanded 바깥(형제)에 두는 이유: 제목 길이에 따라
+                  // 금액이 밀리면 돈 열이 지그재그가 된다. 형제로 두면
+                  // 오른쪽 끝에 고정되고, 제목만 말줄임된다.
+                  if (sx.inlineMeta && !sx.isTable)
+                    Padding(
+                      padding: EdgeInsets.only(left: sx.titleSize < 12 ? 6 : 8),
+                      child: _inlineMeta(catColor),
+                    ),
+                  // Material's IconButton enforces a 48px minimum tap target
+                  // (40px at compact density), so this single widget — not the
+                  // type size — decides the row's height. Dense designs drop it
+                  // and rely on the long-press menu, which already has delete.
+                  if (sx.showDeleteButton)
+                    SizedBox(
+                      width: lined ? 26 : 38,
+                      child: IconButton(
+                        onPressed: onDelete,
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: lined ? 13 : 18,
+                          color: lined ? p.inkSoft : p.danger,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: context.tr('delete'),
+                      ),
+                    ),
+                ],
+              ),
 
             // The per-row category strip. Its absence is worth ~32px of every
             // row — the largest single density win available, which is why the
@@ -288,6 +291,239 @@ class TaskRow extends StatelessWidget {
   /// `compactCategory` is the middle gear between a full `📁 이름` chip and no
   /// category information: a small colour swatch plus the first two characters,
   /// which still tells the categories apart at a glance.
+  /// A row laid out as **columns**, which is the whole point of a dense table.
+  ///
+  /// The difference from the ordinary row is not size, it is *structure*. An
+  /// ordinary row reads left to right once: checkbox, title, a couple of things
+  /// appended to the title. A table gives each kind of fact its own column, so
+  /// the eye can travel **down** one column and compare like with like — every
+  /// category, every amount, every due date. That vertical scan is the
+  /// information a table adds, and no amount of shrink-to-fit reproduces it.
+  ///
+  /// Column widths come from [SurfaceSpec] so a design can choose its own
+  /// emphasis (ledger favours money, matrix favours category) instead of every
+  /// table being the same table recoloured.
+  Widget _tableRow(Color catColor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // 1) 완료 표시. 폭을 고정해야 아래 행들과 세로로 맞는다.
+        SizedBox(
+          width: sx.checkSize,
+          height: sx.checkSize,
+          child: handwritingOn
+              ? GestureDetector(
+                  onTap: onToggle,
+                  child: Center(
+                    child: HandCheck(
+                      size: sx.checkSize * 0.85,
+                      color: catColor,
+                      checked: task.completed,
+                    ),
+                  ),
+                )
+              : FittedBox(
+                  fit: BoxFit.contain,
+                  child: Checkbox(
+                    value: task.completed,
+                    onChanged: (_) => onToggle(),
+                    shape: sx.roundCheck
+                        ? const CircleBorder()
+                        : RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(sx.radiusSmall),
+                          ),
+                    side: BorderSide(color: catColor, width: 1.4),
+                    activeColor: catColor,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: sx.checkSize < 22
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                  ),
+                ),
+        ),
+        SizedBox(width: sx.titleSize < 12 ? 5 : 7),
+
+        // 2) 분류 열. 고정 폭 + 한 줄 고정. 이 폭이 없으면 '열'이 아니라
+        //    그냥 '제목 앞에 붙은 글자'가 되어 표로 읽히지 않는다.
+        if (sx.colCategory > 0)
+          SizedBox(
+            width: sx.colCategory,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: _categoryMark(catColor),
+              ),
+            ),
+          ),
+
+        // 3) 제목 열 — 남는 폭을 전부 쓰고, 한 줄에서 말줄임한다.
+        //    표에서 두 줄짜리 셀은 행 높이를 무너뜨리므로 허용하지 않는다.
+        Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                if (task.pinned)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Icon(
+                      Icons.push_pin,
+                      size: sx.metaSize,
+                      color: p.indigo,
+                    ),
+                  ),
+                if (task.recurrence != 'none')
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Icon(
+                      Icons.autorenew,
+                      size: sx.metaSize,
+                      color: p.teal,
+                    ),
+                  ),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _titleStyle(task),
+                  ),
+                ),
+                // 노트가 남아 있고 이 테마가 노트를 허용하면, 제목 **뒤에
+                // 흐리게** 붙인다. 줄을 하나 더 쓰지 않으면서 '무엇에 대한
+                // 일인지'를 잃지 않는 방법.
+                if (sx.showNote && task.note.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      task.note,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: sx.metaSize + 1,
+                        color: p.inkSoft,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // 4) 금액 열 — 우측 정렬 + 등폭 숫자. 이 조합이 '돈 열'을 만든다.
+        if (sx.colAmount > 0) ...[
+          const SizedBox(width: 4),
+          SizedBox(
+            width: sx.colAmount,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: task.amount == null
+                  ? const SizedBox.shrink()
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: _amountText(),
+                    ),
+            ),
+          ),
+        ],
+
+        // 5) 상태 열 — 완료 표시는 이미 체크박스에 있으므로, 여기서는
+        //    '지연'처럼 눈에 안 보이는 사실을 짧게 알린다.
+        if (sx.colState > 0) ...[
+          const SizedBox(width: 2),
+          SizedBox(width: sx.colState, child: _stateMark(catColor)),
+        ],
+      ],
+    );
+  }
+
+  /// The trailing state column: overdue, urgent, or nothing.
+  ///
+  /// A column that is usually empty looks like a bug, so it is sized and given
+  /// a faint rule in the header to look deliberate. What it must never do is
+  /// change the row's height.
+  Widget _stateMark(Color catColor) {
+    final due = task.dueDate;
+    if (due == null) return const SizedBox.shrink();
+    final overdue = !task.completed && due.isBefore(DateTime.now());
+    if (!overdue) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Icon(Icons.error_outline, size: sx.metaSize + 1, color: p.danger),
+    );
+  }
+
+  /// The column header strip, drawn once above the whole list.
+  ///
+  /// It lives here rather than in the list because it has to share the *exact*
+  /// same column widths as the rows — any duplication of those numbers would
+  /// drift the moment a design tweaks one of them.
+  static Widget tableHeader(BuildContext context) {
+    final s = sx;
+    return Container(
+      height: s.tableHeaderHeight,
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: p.ink.withValues(alpha: 0.05),
+        border: Border(bottom: BorderSide(color: p.line, width: 0.8)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: s.checkSize),
+          SizedBox(width: s.titleSize < 12 ? 5 : 7),
+          if (s.colCategory > 0)
+            SizedBox(
+              width: s.colCategory,
+              child: Text(
+                context.tr('col_category'),
+                style: _headerStyle(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          Expanded(
+            child: Text(
+              context.tr('col_task'),
+              style: _headerStyle(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          if (s.colAmount > 0)
+            SizedBox(
+              width: s.colAmount,
+              child: Text(
+                context.tr('col_amount'),
+                style: _headerStyle(),
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          if (s.colState > 0) ...[
+            const SizedBox(width: 2),
+            SizedBox(width: s.colState),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static TextStyle _headerStyle() => TextStyle(
+    fontSize: sx.metaSize - 0.5,
+    fontWeight: FontWeight.w800,
+    color: p.inkSoft,
+    letterSpacing: sx.upperMeta ? 0.8 : 0.3,
+    height: 1.0,
+  );
+
   /// The category mark, factored out because both the second line
   /// ([_metaLine]) and the folded title line ([_inlineMeta]) need exactly the
   /// same object. Two copies would drift.
@@ -339,6 +575,10 @@ class TaskRow extends StatelessWidget {
   /// straight down instead of wobbling.
   Widget _amountText() => Text(
     '₩${_fmt(task.amount!)}',
+    // 돈은 절대 두 줄이 되면 안 된다. 줄바꿈은 행 높이를 무너뜨리고 동시에
+    // '열'이라는 착각을 깬다. 자리가 모자라면 글자를 줄이지, 줄을 늘리지 않는다.
+    maxLines: 1,
+    softWrap: false,
     style: TextStyle(
       fontSize: sx.metaSize,
       color: p.inkSoft,

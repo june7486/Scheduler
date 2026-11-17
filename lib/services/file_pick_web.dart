@@ -26,7 +26,9 @@ Future<String?> pickTextFile() {
       reader.onload = ((web.Event _) {
         final result = reader.result;
         if (!completer.isCompleted) {
-          completer.complete(result == null ? null : (result as JSString).toDart);
+          completer.complete(
+            result == null ? null : (result as JSString).toDart,
+          );
         }
         input.remove();
       }).toJS;

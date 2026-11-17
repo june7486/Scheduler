@@ -108,10 +108,13 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         .take(5)
         .map((s) => s.length > 90 ? '${s.substring(0, 90)}…' : s)
         .toList();
-    final summary = tr('key_points', args: {
-      'n': '${sentences.length}',
-      'summary': bullets.take(2).join(' / '),
-    });
+    final summary = tr(
+      'key_points',
+      args: {
+        'n': '${sentences.length}',
+        'summary': bullets.take(2).join(' / '),
+      },
+    );
 
     return {
       'summary': summary,
@@ -136,9 +139,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     );
     await store.saveVoiceNote(note);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('note_saved'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.tr('note_saved'))));
     setState(() {
       _transcriptCtrl.clear();
       _seconds = 0;
@@ -194,11 +197,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                (_recording
-                                        ? p.danger
-                                        : p.indigo)
-                                    .withValues(alpha: 0.3),
+                            color: (_recording ? p.danger : p.indigo)
+                                .withValues(alpha: 0.3),
                             blurRadius: 14,
                             spreadRadius: 2,
                           ),
@@ -218,10 +218,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         : (_recording
                               ? context.tr('recording_tap_stop')
                               : context.tr('tap_to_record')),
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: p.inkSoft,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                   ),
                 ],
               ),
@@ -253,9 +250,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               decoration: BoxDecoration(
                 color: p.indigo.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: p.indigo.withValues(alpha: 0.2),
-                ),
+                border: Border.all(color: p.indigo.withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,11 +333,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.graphic_eq,
-                        size: 18,
-                        color: p.teal,
-                      ),
+                      Icon(Icons.graphic_eq, size: 18, color: p.teal),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -409,10 +400,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   e.key,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: p.inkSoft,
-                  ),
+                  style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                 ),
               ),
               Expanded(

@@ -76,7 +76,9 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
         title: Text(context.tr('print_export')),
         actions: [
           IconButton(
-            tooltip: _showPreview ? context.tr('hide_preview') : context.tr('show_preview'),
+            tooltip: _showPreview
+                ? context.tr('hide_preview')
+                : context.tr('show_preview'),
             icon: Icon(_showPreview ? Icons.visibility_off : Icons.visibility),
             onPressed: () => setState(() => _showPreview = !_showPreview),
           ),
@@ -103,10 +105,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     : Center(
                         child: Text(
                           context.tr('preview_hidden'),
-                          style: TextStyle(
-                            color: p.inkSoft,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: p.inkSoft, fontSize: 13),
                         ),
                       ),
               ),
@@ -172,10 +171,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     const SizedBox(height: 6),
                     Text(
                       '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 12, color: p.inkSoft),
                     ),
                     Slider(
                       value: _lineSpacing,
@@ -188,10 +184,7 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                     ),
                     Text(
                       '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 12, color: p.inkSoft),
                     ),
                     Slider(
                       value: _fontSize,
@@ -218,12 +211,8 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
                             ),
                           ),
                           selected: sel,
-                          selectedColor: p.indigo.withValues(
-                            alpha: 0.14,
-                          ),
-                          side: BorderSide(
-                            color: sel ? p.indigo : p.line,
-                          ),
+                          selectedColor: p.indigo.withValues(alpha: 0.14),
+                          side: BorderSide(color: sel ? p.indigo : p.line),
                           onSelected: (_) {
                             setState(() => _design = d);
                             store.setPrintDesignMode(_designToString(d));
@@ -762,9 +751,11 @@ class _PrintPreviewScreenState extends State<PrintPreviewScreen> {
       ], subject: "June's Scheduler");
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.tr('image_failed', args: {'err': '$e'}))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('image_failed', args: {'err': '$e'})),
+        ),
+      );
     }
   }
 

@@ -8,10 +8,7 @@ import 'package:web/web.dart' as web;
 /// success so callers can skip the share-sheet fallback.
 bool triggerBrowserDownload(String filename, Uint8List bytes, String mime) {
   try {
-    final blob = web.Blob(
-      [bytes.toJS].toJS,
-      web.BlobPropertyBag(type: mime),
-    );
+    final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: mime));
     final url = web.URL.createObjectURL(blob);
     final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
     anchor.href = url;

@@ -83,10 +83,13 @@ class AdminScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            context.tr('n_ids_tasks', args: {
-              'ids': '${store.allUsers.length}',
-              'tasks': '${store.allTaskTotal()}',
-            }),
+            context.tr(
+              'n_ids_tasks',
+              args: {
+                'ids': '${store.allUsers.length}',
+                'tasks': '${store.allTaskTotal()}',
+              },
+            ),
             style: TextStyle(fontSize: 11.5, color: p.inkSoft),
           ),
           const SizedBox(height: 8),
@@ -141,8 +144,9 @@ class AdminScreen extends StatelessWidget {
                   height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: (u.isMaster ? p.indigo : p.teal)
-                        .withValues(alpha: 0.14),
+                    color: (u.isMaster ? p.indigo : p.teal).withValues(
+                      alpha: 0.14,
+                    ),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
@@ -192,10 +196,7 @@ class AdminScreen extends StatelessWidget {
                               padding: EdgeInsets.only(left: 6),
                               child: Text(
                                 context.tr('disabled'),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: p.danger,
-                                ),
+                                style: TextStyle(fontSize: 10, color: p.danger),
                               ),
                             ),
                         ],
@@ -203,10 +204,7 @@ class AdminScreen extends StatelessWidget {
                       Text(
                         '${u.displayName.isEmpty ? "—" : u.displayName} · '
                         '${context.tr('open_done', args: {'open': '$open', 'done': '$done'})}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: p.inkSoft,
-                        ),
+                        style: TextStyle(fontSize: 11, color: p.inkSoft),
                       ),
                     ],
                   ),
@@ -320,12 +318,14 @@ class AdminScreen extends StatelessWidget {
                 store.setUserPassword(u.id, ctrl.text);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('pw_changed', args: {'id': u.id}))),
+                  SnackBar(
+                    content: Text(context.tr('pw_changed', args: {'id': u.id})),
+                  ),
                 );
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('min_4'))),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(context.tr('min_4'))));
               }
             },
             child: Text(context.tr('save')),
@@ -339,7 +339,9 @@ class AdminScreen extends StatelessWidget {
     final def = await store.resetUserPassword(u.id);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('pw_reset_to', args: {'id': u.id, 'pw': def}))),
+      SnackBar(
+        content: Text(context.tr('pw_reset_to', args: {'id': u.id, 'pw': def})),
+      ),
     );
   }
 
@@ -400,9 +402,7 @@ class AdminScreen extends StatelessWidget {
             const SizedBox(height: 10),
             TextField(
               controller: nameCtrl,
-              decoration: InputDecoration(
-                hintText: context.tr('display_name'),
-              ),
+              decoration: InputDecoration(hintText: context.tr('display_name')),
             ),
           ],
         ),
@@ -448,7 +448,9 @@ class UserDataScreen extends StatelessWidget {
     final tasks = store.tasksForOwner(userId);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('data_for', args: {'id': u?.id ?? userId}))),
+      appBar: AppBar(
+        title: Text(context.tr('data_for', args: {'id': u?.id ?? userId})),
+      ),
       body: SafeArea(
         child: tasks.isEmpty
             ? Center(
@@ -530,10 +532,7 @@ class UserDataScreen extends StatelessWidget {
                   if (t.amount != null)
                     Text(
                       '₩${t.amount!.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 11, color: p.inkSoft),
                     ),
                 ],
               ),

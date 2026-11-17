@@ -260,10 +260,7 @@ class SyncService {
     if (outbox.isEmpty) {
       // Nothing to upload. Do not claim "in sync" before the server has ever
       // answered — that would be a green light nobody verified.
-      _setState(
-        _lastSync == null ? SyncState.syncing : SyncState.idle,
-        '',
-      );
+      _setState(_lastSync == null ? SyncState.syncing : SyncState.idle, '');
       return;
     }
 
@@ -350,8 +347,10 @@ class SyncService {
 
   void _scheduleRetry() {
     _retry?.cancel();
-    final secs = (_retryBase.inSeconds * (1 << (_failures - 1)))
-        .clamp(_retryBase.inSeconds, _retryMax.inSeconds);
+    final secs = (_retryBase.inSeconds * (1 << (_failures - 1))).clamp(
+      _retryBase.inSeconds,
+      _retryMax.inSeconds,
+    );
     _retry = Timer(Duration(seconds: secs), () => unawaited(flush()));
   }
 

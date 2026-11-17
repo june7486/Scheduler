@@ -84,7 +84,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final cats = store.enabledCategories;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.task == null ? context.tr('new_task') : context.tr('edit_task')),
+        title: Text(
+          widget.task == null
+              ? context.tr('new_task')
+              : context.tr('edit_task'),
+        ),
         actions: [
           TextButton(
             onPressed: _save,
@@ -151,23 +155,31 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               segments: [
                 ButtonSegment(
                   value: 'none',
-                  label: Text(context.tr('rec_none'),
-                      style: const TextStyle(fontSize: 11.5)),
+                  label: Text(
+                    context.tr('rec_none'),
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
                 ),
                 ButtonSegment(
                   value: 'daily',
-                  label: Text(context.tr('rec_daily'),
-                      style: const TextStyle(fontSize: 11.5)),
+                  label: Text(
+                    context.tr('rec_daily'),
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
                 ),
                 ButtonSegment(
                   value: 'weekly',
-                  label: Text(context.tr('rec_weekly'),
-                      style: const TextStyle(fontSize: 11.5)),
+                  label: Text(
+                    context.tr('rec_weekly'),
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
                 ),
                 ButtonSegment(
                   value: 'monthly',
-                  label: Text(context.tr('rec_monthly'),
-                      style: const TextStyle(fontSize: 11.5)),
+                  label: Text(
+                    context.tr('rec_monthly'),
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
                 ),
               ],
               selected: {_recurrence},
@@ -181,7 +193,9 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 controller: _day,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(fontSize: 13.5),
-                decoration: InputDecoration(hintText: context.tr('day_of_month_hint')),
+                decoration: InputDecoration(
+                  hintText: context.tr('day_of_month_hint'),
+                ),
               ),
             ],
             const SizedBox(height: 16),
@@ -202,14 +216,20 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('pin_top'), style: const TextStyle(fontSize: 13.5)),
+              title: Text(
+                context.tr('pin_top'),
+                style: const TextStyle(fontSize: 13.5),
+              ),
               value: _pinned,
               activeThumbColor: p.indigo,
               onChanged: (v) => setState(() => _pinned = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('long_term'), style: const TextStyle(fontSize: 13.5)),
+              title: Text(
+                context.tr('long_term'),
+                style: const TextStyle(fontSize: 13.5),
+              ),
               value: _longTerm,
               activeThumbColor: p.indigo,
               onChanged: (v) => setState(() => _longTerm = v),
@@ -238,9 +258,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 if (!context.mounted) return;
                 if (!ok) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(context.tr('cannot_open_calendar')),
-                    ),
+                    SnackBar(content: Text(context.tr('cannot_open_calendar'))),
                   );
                 }
               },

@@ -239,38 +239,52 @@ void main() {
       }
     });
 
-    testWidgets('compact 는 정보를 빼지 않고 제목 줄에 접는다 (inlineMeta)', (tester) async {
-      final spec = AppDesigns.of('compact').surface;
-      // 설계 의도 자체를 고정한다: 이 테마는 "정보를 줄인" 것이 아니라
-      // "같은 정보를 한 줄에 접은" 테마다. 둘 중 하나라도 어긋나면
-      // 이 테마는 다시 '빈 미니멀 테마'가 되어버린다.
-      expect(spec.inlineMeta, isTrue, reason: 'compact 의 존재 이유가 inlineMeta 다');
-      expect(
-        spec.showMeta,
-        isFalse,
-        reason: 'inlineMeta 와 showMeta 를 동시에 켜면 정보가 두 번 그려진다',
-      );
-      expect(spec.compactCategory, isTrue, reason: '카테고리 표시는 남아야 한다');
+    testWidgets('다섯 개 모두 진짜 표(table)다 — 열과 머리글을 갖는다', (tester) async {
+      for (final id in AppDesigns.denseIds) {
+        final spec = AppDesigns.of(id).surface;
+        expect(spec.isTable, isTrue, reason: '$id: 고밀도는 "작은 목록"이 아니라 "표"여야 한다');
+        expect(spec.showTableHeader, isTrue, reason: '$id: 열에 이름이 있어야 열이다');
+        expect(spec.colCategory, greaterThan(0), reason: '$id: 분류 열이 없다');
+        expect(spec.colAmount, greaterThan(0), reason: '$id: 금액 열이 없다');
+        // 표는 한 줄 레이아웃과 동시에 쓰면 정보가 두 번 그려진다.
+        expect(spec.inlineMeta, isFalse, reason: '$id: 표와 인라인 접기는 배타적이다');
+      }
+    });
 
-      await rowHeight(tester, 'compact');
-      // 카테고리 견본(첫 두 글자)과 금액이 둘 다 제목 줄에 있어야 한다.
-      expect(find.text('할일'), findsOneWidget, reason: '인라인 카테고리 견본이 사라졌다');
-      expect(
-        find.textContaining('1,250,000'),
-        findsOneWidget,
-        reason: '인라인 금액이 사라졌다',
-      );
+    testWidgets('표 행은 한 줄로 유지된다 — 금액이 줄바꿈되면 표가 무너진다', (tester) async {
+      for (final id in AppDesigns.denseIds) {
+        final h = await rowHeight(tester, id);
+        // 한 줄짜리 표 행은 40px 를 넘을 이유가 없다. 넘으면 어딘가에서
+        // 줄바꿈이 일어나 '열'이 깨진 것이다.
+        expect(
+          h,
+          lessThan(40),
+          reason: '$id: 행 높이 ${h.toStringAsFixed(1)}px — 표 행이 한 줄이 아니다',
+        );
+      }
+    });
 
-      // 접었으니 두 번째 줄보다 싸야 한다: 같은 조건의 ledger(두 번째 줄 사용)
-      // 보다 확실히 낮아야 한다.
-      final compactH = tester.getSize(find.byType(TaskRow)).height;
-      await rowHeight(tester, 'ledger');
-      final ledgerH = tester.getSize(find.byType(TaskRow)).height;
-      expect(
-        compactH,
-        lessThan(ledgerH),
-        reason: 'compact($compactH) 는 두 줄 쓰는 ledger($ledgerH) 보다 낮아야 한다',
-      );
+    testWidgets('표는 정보를 빼지 않는다 — 분류·금액·제목이 모두 보인다', (tester) async {
+      for (final id in AppDesigns.denseIds) {
+        await rowHeight(tester, id);
+        expect(
+          find.textContaining('1,250,000'),
+          findsOneWidget,
+          reason: '$id: 금액이 사라졌다',
+        );
+        // 표기 방식은 테마마다 다르다(색 견본 `할일`, 이모지 포함 `✅ 할일`).
+        // 확인하려는 것은 표기법이 아니라 '분류 정보가 남아 있는가'다.
+        expect(
+          find.textContaining('할일'),
+          findsWidgets,
+          reason: '$id: 분류가 사라졌다',
+        );
+        expect(
+          find.textContaining('도면 검토'),
+          findsOneWidget,
+          reason: '$id: 제목이 사라졌다',
+        );
+      }
     });
   });
 

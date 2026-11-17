@@ -66,20 +66,15 @@ class ManageTabsScreen extends StatelessWidget {
                       c.showInTopTabs
                           ? context.tr('top_tab_on')
                           : context.tr('top_tab_off'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 11, color: p.inkSoft),
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      context.tr('open_count', args: {
-                        'n': '${store.taskCountFor(c.id)}',
-                      }),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: p.inkSoft,
+                      context.tr(
+                        'open_count',
+                        args: {'n': '${store.taskCountFor(c.id)}'},
                       ),
+                      style: TextStyle(fontSize: 11, color: p.inkSoft),
                     ),
                   ],
                 ),
@@ -235,9 +230,19 @@ class OutputSettingsScreen extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _modeChip(context, store, 'muji', context.tr('muji')),
-                _modeChip(context, store, 'minimal', context.tr('minimal_design')),
+                _modeChip(
+                  context,
+                  store,
+                  'minimal',
+                  context.tr('minimal_design'),
+                ),
                 _modeChip(context, store, 'fancy', context.tr('fancy')),
-                _modeChip(context, store, 'whitespace', context.tr('whitespace')),
+                _modeChip(
+                  context,
+                  store,
+                  'whitespace',
+                  context.tr('whitespace'),
+                ),
               ],
             ),
             const SizedBox(height: 22),
@@ -260,19 +265,25 @@ class OutputSettingsScreen extends StatelessWidget {
             Wrap(
               spacing: 8,
               children: [
-                _themeChip(context, store, 'material', context.tr('theme_material')),
-                _themeChip(context, store, 'minimal', context.tr('theme_minimal')),
+                _themeChip(
+                  context,
+                  store,
+                  'material',
+                  context.tr('theme_material'),
+                ),
+                _themeChip(
+                  context,
+                  store,
+                  'minimal',
+                  context.tr('theme_minimal'),
+                ),
                 _themeChip(context, store, 'mix', context.tr('theme_mix')),
               ],
             ),
             const SizedBox(height: 24),
             Text(
               context.tr('output_tip'),
-              style: TextStyle(
-                fontSize: 11.5,
-                color: p.inkSoft,
-                height: 1.4,
-              ),
+              style: TextStyle(fontSize: 11.5, color: p.inkSoft, height: 1.4),
             ),
           ],
         ),
@@ -290,10 +301,7 @@ class OutputSettingsScreen extends StatelessWidget {
     return ChoiceChip(
       label: Text(
         label,
-        style: TextStyle(
-          fontSize: 11.5,
-          color: sel ? p.indigo : p.inkSoft,
-        ),
+        style: TextStyle(fontSize: 11.5, color: sel ? p.indigo : p.inkSoft),
       ),
       selected: sel,
       selectedColor: p.indigo.withValues(alpha: 0.14),
@@ -312,10 +320,7 @@ class OutputSettingsScreen extends StatelessWidget {
     return ChoiceChip(
       label: Text(
         label,
-        style: TextStyle(
-          fontSize: 11.5,
-          color: sel ? p.indigo : p.inkSoft,
-        ),
+        style: TextStyle(fontSize: 11.5, color: sel ? p.indigo : p.inkSoft),
       ),
       selected: sel,
       selectedColor: p.indigo.withValues(alpha: 0.14),
@@ -362,11 +367,7 @@ class LogScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.circle,
-                          size: 6,
-                          color: p.indigo,
-                        ),
+                        Icon(Icons.circle, size: 6, color: p.indigo),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -394,10 +395,7 @@ class LogScreen extends StatelessWidget {
                           '${l.timestamp.month}/${l.timestamp.day} '
                           '${l.timestamp.hour.toString().padLeft(2, '0')}:'
                           '${l.timestamp.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: p.inkSoft,
-                          ),
+                          style: TextStyle(fontSize: 10.5, color: p.inkSoft),
                         ),
                       ],
                     ),

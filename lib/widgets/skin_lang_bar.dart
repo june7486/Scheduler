@@ -52,10 +52,7 @@ class _SkinPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => showSkinPicker(
-        appNavKey.currentContext ?? context,
-        store,
-      ),
+      onTap: () => showSkinPicker(appNavKey.currentContext ?? context, store),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -67,8 +64,10 @@ class _SkinPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(AppSkins.emojiFor(store.skinKey),
-                style: const TextStyle(fontSize: 14)),
+            Text(
+              AppSkins.emojiFor(store.skinKey),
+              style: const TextStyle(fontSize: 14),
+            ),
             const SizedBox(width: 6),
             Text(
               skinName(store.skinKey),
@@ -114,7 +113,11 @@ class _LangToggle extends StatelessWidget {
   }
 
   Widget _chip(
-      BuildContext context, String label, String code, String tooltip) {
+    BuildContext context,
+    String label,
+    String code,
+    String tooltip,
+  ) {
     final sel = store.language == code;
     return GestureDetector(
       onTap: () {
@@ -170,8 +173,11 @@ void showDesignPicker(BuildContext context, Store store) {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.design_services_outlined,
-                        size: 18, color: p.indigo),
+                    Icon(
+                      Icons.design_services_outlined,
+                      size: 18,
+                      color: p.indigo,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       ctx.tr('choose_design'),
@@ -189,45 +195,15 @@ void showDesignPicker(BuildContext context, Store store) {
                   style: TextStyle(fontSize: 11.5, color: p.inkSoft),
                 ),
                 const SizedBox(height: 14),
-                // 두 계열로 나눈다. 아홉 개를 한 줄로 늘어놓으면
-                // "고밀도"가 그냥 목록의 아래쪽 항목처럼 보인다.
-                for (final id in designs.where((e) => !AppDesigns.isDense(e)))
+                // 한 목록으로 보여준다. 고밀도를 별도 섹션으로 떼어놓으면
+                // '테마'가 아니라 '다른 기능'처럼 읽힌다. 테마는 테마다.
+                // 밀도는 각 항목의 배지로만 알려준다.
+                for (final id in designs)
                   _DesignRow(
                     id: id,
                     selected: s.designKey == id,
                     onTap: tumbleHaptic(() => s.setDesignKey(id)),
                   ),
-
-                if (designs.any(AppDesigns.isDense)) ...[
-                  const SizedBox(height: 10),
-                  Divider(height: 1, color: p.line),
-                  const SizedBox(height: 12),
-                  Text(
-                    ctx.tr('choose_design_dense'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: p.ink,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    ctx.tr('choose_design_dense_hint'),
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      height: 1.4,
-                      color: p.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  for (final id in designs.where(AppDesigns.isDense))
-                    _DesignRow(
-                      id: id,
-                      selected: s.designKey == id,
-                      onTap: tumbleHaptic(() => s.setDesignKey(id)),
-                    ),
-                ],
                 const SizedBox(height: 16),
                 Divider(height: 1, color: p.line),
                 const SizedBox(height: 12),
@@ -315,8 +291,9 @@ class _DesignRow extends StatelessWidget {
                           context.tr('design_$id'),
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight:
-                                selected ? FontWeight.w800 : FontWeight.w600,
+                            fontWeight: selected
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                             color: p.ink,
                           ),
                         ),
@@ -339,15 +316,18 @@ class _DesignRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1),
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: p.indigo.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
-                          context.tr('density_label', args: {
-                            'n': s.densityScore.toStringAsFixed(1),
-                          }),
+                          context.tr(
+                            'density_label',
+                            args: {'n': s.densityScore.toStringAsFixed(1)},
+                          ),
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
@@ -515,14 +495,14 @@ class _SkinTile extends StatelessWidget {
   }
 
   Widget _dot(Color c) => Container(
-        width: 14,
-        height: 14,
-        decoration: BoxDecoration(
-          color: c,
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0x22000000)),
-        ),
-      );
+    width: 14,
+    height: 14,
+    decoration: BoxDecoration(
+      color: c,
+      shape: BoxShape.circle,
+      border: Border.all(color: const Color(0x22000000)),
+    ),
+  );
 }
 
 class _BrightnessRow extends StatelessWidget {
@@ -532,7 +512,11 @@ class _BrightnessRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <({String key, IconData icon, String label})>[
-      (key: 'system', icon: Icons.brightness_auto, label: context.tr('follow_system')),
+      (
+        key: 'system',
+        icon: Icons.brightness_auto,
+        label: context.tr('follow_system'),
+      ),
       (key: 'light', icon: Icons.light_mode, label: context.tr('light_mode')),
       (key: 'dark', icon: Icons.dark_mode, label: context.tr('dark_mode')),
     ];
@@ -555,11 +539,13 @@ class _BrightnessRow extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    Icon(it.icon,
-                        size: 18,
-                        color: store.themeModeKey == it.key
-                            ? p.indigo
-                            : p.inkSoft),
+                    Icon(
+                      it.icon,
+                      size: 18,
+                      color: store.themeModeKey == it.key
+                          ? p.indigo
+                          : p.inkSoft,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       it.label,
@@ -637,17 +623,17 @@ class _FontSection extends StatelessWidget {
   const _FontSection({required this.store});
 
   String _label(BuildContext context, String id) => switch (id) {
-        'system' => context.tr('font_system'),
-        'pen' => context.tr('font_pen'),
-        'gaegu' => context.tr('font_gaegu'),
-        'gothic' => context.tr('font_gothic'),
-        'myeongjo' => context.tr('font_myeongjo'),
-        'dodum' => context.tr('font_dodum'),
-        'jua' => context.tr('font_jua'),
-        'dohyeon' => context.tr('font_dohyeon'),
-        'black' => context.tr('font_black'),
-        _ => id,
-      };
+    'system' => context.tr('font_system'),
+    'pen' => context.tr('font_pen'),
+    'gaegu' => context.tr('font_gaegu'),
+    'gothic' => context.tr('font_gothic'),
+    'myeongjo' => context.tr('font_myeongjo'),
+    'dodum' => context.tr('font_dodum'),
+    'jua' => context.tr('font_jua'),
+    'dohyeon' => context.tr('font_dohyeon'),
+    'black' => context.tr('font_black'),
+    _ => id,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -672,8 +658,10 @@ class _FontSection extends StatelessWidget {
               GestureDetector(
                 onTap: () => store.setFontKey(id),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: store.fontKey == id
                         ? p.indigo.withValues(alpha: 0.12)
@@ -764,8 +752,11 @@ class _FontSizeSlider extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: () => store.setFontScale((v - 0.05).clamp(0.85, 1.6)),
-              child: Icon(Icons.remove_circle_outline,
-                  size: 18, color: p.inkSoft),
+              child: Icon(
+                Icons.remove_circle_outline,
+                size: 18,
+                color: p.inkSoft,
+              ),
             ),
             Expanded(
               child: Slider(
@@ -780,8 +771,7 @@ class _FontSizeSlider extends StatelessWidget {
             ),
             GestureDetector(
               onTap: () => store.setFontScale((v + 0.05).clamp(0.85, 1.6)),
-              child: Icon(Icons.add_circle_outline,
-                  size: 18, color: p.inkSoft),
+              child: Icon(Icons.add_circle_outline, size: 18, color: p.inkSoft),
             ),
           ],
         ),

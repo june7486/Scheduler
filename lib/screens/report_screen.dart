@@ -89,7 +89,10 @@ class _ReportScreenState extends State<ReportScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _typeChip(ReportType.userStatus, context.tr('id_status')),
+                        _typeChip(
+                          ReportType.userStatus,
+                          context.tr('id_status'),
+                        ),
                         _typeChip(ReportType.byUser, context.tr('by_id')),
                         _typeChip(ReportType.byDate, context.tr('by_date')),
                       ],
@@ -110,13 +113,9 @@ class _ReportScreenState extends State<ReportScreen> {
                             ),
                           ),
                           selected: sel,
-                          selectedColor: p.indigo.withValues(
-                            alpha: 0.15,
-                          ),
+                          selectedColor: p.indigo.withValues(alpha: 0.15),
                           checkmarkColor: p.indigo,
-                          side: BorderSide(
-                            color: sel ? p.indigo : p.line,
-                          ),
+                          side: BorderSide(color: sel ? p.indigo : p.line),
                           onSelected: (v) => setState(() {
                             v
                                 ? _selectedUsers.add(u.id)
@@ -151,10 +150,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     Text(
                       '${context.tr('line_spacing')} — ${_lineSpacing.toStringAsFixed(1)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 12, color: p.inkSoft),
                     ),
                     Slider(
                       value: _lineSpacing,
@@ -166,10 +162,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     Text(
                       '${context.tr('font_size')} — ${_fontSize.toStringAsFixed(0)} pt',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: p.inkSoft,
-                      ),
+                      style: TextStyle(fontSize: 12, color: p.inkSoft),
                     ),
                     Slider(
                       value: _fontSize,
@@ -234,10 +227,7 @@ class _ReportScreenState extends State<ReportScreen> {
     return ChoiceChip(
       label: Text(
         label,
-        style: TextStyle(
-          fontSize: 11.5,
-          color: sel ? p.indigo : p.inkSoft,
-        ),
+        style: TextStyle(fontSize: 11.5, color: sel ? p.indigo : p.inkSoft),
       ),
       selected: sel,
       selectedColor: p.indigo.withValues(alpha: 0.14),
@@ -292,13 +282,17 @@ class _ReportScreenState extends State<ReportScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _row([
-          context.tr('col_id'),
-          context.tr('col_name'),
-          context.tr('col_open'),
-          context.tr('col_done'),
-          context.tr('col_created'),
-        ], base, bold: true),
+        _row(
+          [
+            context.tr('col_id'),
+            context.tr('col_name'),
+            context.tr('col_open'),
+            context.tr('col_done'),
+            context.tr('col_created'),
+          ],
+          base,
+          bold: true,
+        ),
         const Divider(),
         ...users.map((u) {
           final tasks = store.tasksForOwner(u.id);
@@ -665,10 +659,10 @@ class _ReportScreenState extends State<ReportScreen> {
       ], subject: "June's Scheduler — User Report");
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text(context.tr('image_failed', args: {'err': '$e'}))),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('image_failed', args: {'err': '$e'})),
+        ),
       );
     }
   }

@@ -27,10 +27,7 @@ class SkinBackdrop extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                palette.bg,
-                Color.lerp(palette.bg, palette.card, 0.55)!,
-              ],
+              colors: [palette.bg, Color.lerp(palette.bg, palette.card, 0.55)!],
             ),
           ),
           child: child,

@@ -11,7 +11,8 @@ import '../l10n/l10n.dart';
 import '../services/calendar_service.dart';
 import '../services/drive_service.dart';
 import '../services/file_pick_stub.dart'
-    if (dart.library.js_interop) '../services/file_pick_web.dart' as picker;
+    if (dart.library.js_interop) '../services/file_pick_web.dart'
+    as picker;
 import '../services/session_service.dart';
 import '../services/cloud/nas_backend.dart';
 import '../services/cloud/sync_engine.dart';
@@ -61,7 +62,10 @@ class SettingsScreen extends StatelessWidget {
             _Tile(
               icon: Icons.lock_outline,
               title: context.tr('change_password'),
-              subtitle: context.tr('current_user_is', args: {'id': store.username}),
+              subtitle: context.tr(
+                'current_user_is',
+                args: {'id': store.username},
+              ),
               onTap: () => _changePassword(context, store),
             ),
             _Tile(
@@ -72,7 +76,11 @@ class SettingsScreen extends StatelessWidget {
                 final m = await SessionService().remainingMinutes();
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('session_remaining', args: {'m': '$m'}))),
+                  SnackBar(
+                    content: Text(
+                      context.tr('session_remaining', args: {'m': '$m'}),
+                    ),
+                  ),
                 );
               },
             ),
@@ -80,7 +88,10 @@ class SettingsScreen extends StatelessWidget {
             _Tile(
               icon: Icons.tab_outlined,
               title: context.tr('manage_tabs'),
-              subtitle: context.tr('active_tabs', args: {'n': '${store.enabledCategories.length}'}),
+              subtitle: context.tr(
+                'active_tabs',
+                args: {'n': '${store.enabledCategories.length}'},
+              ),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ManageTabsScreen()),
@@ -133,9 +144,9 @@ class SettingsScreen extends StatelessWidget {
                 await store.clearCache();
                 await SessionService().clearCache();
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(context.tr('cache_cleared'))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(context.tr('cache_cleared'))),
+                );
               },
             ),
             _Tile(
@@ -156,7 +167,10 @@ class SettingsScreen extends StatelessWidget {
             _Tile(
               icon: Icons.history,
               title: context.tr('activity_log'),
-              subtitle: context.tr('entries', args: {'n': '${store.logs.length}'}),
+              subtitle: context.tr(
+                'entries',
+                args: {'n': '${store.logs.length}'},
+              ),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const LogScreen()),
@@ -180,7 +194,8 @@ class SettingsScreen extends StatelessWidget {
             _Tile(
               icon: Icons.language_outlined,
               title: context.tr('language'),
-              subtitle: '${context.tr('language_korean')} (${store.language == 'ko' ? '●' : '○'})  ·  '
+              subtitle:
+                  '${context.tr('language_korean')} (${store.language == 'ko' ? '●' : '○'})  ·  '
                   '${context.tr('language_english')} (${store.language == 'en' ? '●' : '○'})',
               onTap: () => _pickLanguage(context, store),
             ),
@@ -296,7 +311,9 @@ class SettingsScreen extends StatelessWidget {
             TextField(
               controller: oldCtrl,
               obscureText: true,
-              decoration: InputDecoration(hintText: context.tr('current_password')),
+              decoration: InputDecoration(
+                hintText: context.tr('current_password'),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -320,11 +337,9 @@ class SettingsScreen extends StatelessWidget {
                   SnackBar(content: Text(context.tr('password_updated'))),
                 );
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(context.tr('check_pw')),
-                  ),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(context.tr('check_pw'))));
               }
             },
             child: Text(context.tr('save')),
@@ -501,9 +516,7 @@ class SettingsScreen extends StatelessWidget {
           child: TextField(
             controller: ctrl,
             maxLines: 6,
-            decoration: InputDecoration(
-              hintText: context.tr('paste_backup'),
-            ),
+            decoration: InputDecoration(hintText: context.tr('paste_backup')),
           ),
         ),
         actions: [
@@ -522,9 +535,13 @@ class SettingsScreen extends StatelessWidget {
                   SnackBar(content: Text(context.tr('restore_done'))),
                 );
               } catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(context.tr('invalid_backup', args: {'err': '$e'}))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      context.tr('invalid_backup', args: {'err': '$e'}),
+                    ),
+                  ),
+                );
               }
             },
             child: Text(context.tr('restore')),
@@ -589,7 +606,10 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Text(
                 context.tr('calendar_sync'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             Padding(
@@ -618,24 +638,30 @@ class SettingsScreen extends StatelessWidget {
                     activeColor: p.indigo,
                     secondary: const Icon(Icons.block_outlined),
                     title: Text(context.tr('cal_mode_off')),
-                    subtitle: Text(context.tr('cal_mode_off_hint'),
-                        style: const TextStyle(fontSize: 11)),
+                    subtitle: Text(
+                      context.tr('cal_mode_off_hint'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ),
                   RadioListTile<String>(
                     value: 'manual',
                     activeColor: p.indigo,
                     secondary: const Icon(Icons.touch_app_outlined),
                     title: Text(context.tr('cal_mode_manual')),
-                    subtitle: Text(context.tr('cal_mode_manual_hint'),
-                        style: const TextStyle(fontSize: 11)),
+                    subtitle: Text(
+                      context.tr('cal_mode_manual_hint'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ),
                   RadioListTile<String>(
                     value: 'auto',
                     activeColor: p.indigo,
                     secondary: const Icon(Icons.sync_outlined),
                     title: Text(context.tr('cal_mode_auto')),
-                    subtitle: Text(context.tr('cal_mode_auto_hint'),
-                        style: const TextStyle(fontSize: 11)),
+                    subtitle: Text(
+                      context.tr('cal_mode_auto_hint'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ),
                 ],
               ),
@@ -659,7 +685,10 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Text(
                 context.tr('language'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             Padding(
@@ -712,7 +741,10 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Text(
                 context.tr('screen_theme'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -818,10 +850,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               );
             },
-            child: Text(
-              context.tr('reset'),
-              style: TextStyle(color: p.danger),
-            ),
+            child: Text(context.tr('reset'), style: TextStyle(color: p.danger)),
           ),
         ],
       ),
@@ -845,10 +874,7 @@ class SettingsScreen extends StatelessWidget {
               if (!context.mounted) return;
               Navigator.pop(context);
             },
-            child: Text(
-              context.tr('reset'),
-              style: TextStyle(color: p.danger),
-            ),
+            child: Text(context.tr('reset'), style: TextStyle(color: p.danger)),
           ),
         ],
       ),
@@ -890,11 +916,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(
-        icon,
-        size: 20,
-        color: danger ? p.danger : p.indigo,
-      ),
+      leading: Icon(icon, size: 20, color: danger ? p.danger : p.indigo),
       title: Text(
         title,
         style: TextStyle(
@@ -907,11 +929,7 @@ class _Tile extends StatelessWidget {
         subtitle,
         style: TextStyle(fontSize: 11.5, color: p.inkSoft),
       ),
-      trailing: Icon(
-        Icons.chevron_right,
-        size: 18,
-        color: p.inkSoft,
-      ),
+      trailing: Icon(Icons.chevron_right, size: 18, color: p.inkSoft),
       onTap: onTap,
     );
   }
@@ -949,14 +967,14 @@ class _SyncPanel extends StatelessWidget {
                   notConfigured
                       ? Icons.cloud_off_outlined
                       : live
-                          ? Icons.cloud_done_outlined
-                          : Icons.cloud_queue_outlined,
+                      ? Icons.cloud_done_outlined
+                      : Icons.cloud_queue_outlined,
                   size: 18,
                   color: notConfigured
                       ? p.danger
                       : live
-                          ? p.teal
-                          : p.inkSoft,
+                      ? p.teal
+                      : p.inkSoft,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -980,15 +998,18 @@ class _SyncPanel extends StatelessWidget {
                   )
                 else
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: (notConfigured
-                              ? p.danger
-                              : live
+                      color:
+                          (notConfigured
+                                  ? p.danger
+                                  : live
                                   ? p.teal
                                   : p.inkSoft)
-                          .withValues(alpha: 0.12),
+                              .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -999,8 +1020,8 @@ class _SyncPanel extends StatelessWidget {
                         color: notConfigured
                             ? p.danger
                             : live
-                                ? p.teal
-                                : p.inkSoft,
+                            ? p.teal
+                            : p.inkSoft,
                       ),
                     ),
                   ),
@@ -1023,7 +1044,11 @@ class _SyncPanel extends StatelessWidget {
                   ko
                       ? 'Firebase 프로젝트를 연결하면 모든 기기에서 같은 자료를 봅니다.'
                       : 'Connect a Firebase project to share one dataset across devices.',
-                  style: TextStyle(fontSize: 10.5, color: p.danger, height: 1.35),
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: p.danger,
+                    height: 1.35,
+                  ),
                 ),
               ),
             if (store.syncEnabled && svc.pendingCount > 0 && !notConfigured)
@@ -1035,8 +1060,10 @@ class _SyncPanel extends StatelessWidget {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        context.tr('sync_pending_n',
-                            args: {'n': '${svc.pendingCount}'}),
+                        context.tr(
+                          'sync_pending_n',
+                          args: {'n': '${svc.pendingCount}'},
+                        ),
                         style: TextStyle(fontSize: 10.5, color: p.teal),
                       ),
                     ),
@@ -1075,7 +1102,9 @@ class _SyncPanel extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: p.teal,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       minimumSize: const Size(0, 30),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -1107,10 +1136,12 @@ class _NasPanel extends StatefulWidget {
 }
 
 class _NasPanelState extends State<_NasPanel> {
-  late final TextEditingController _url =
-      TextEditingController(text: context.read<Store>().nasUrl);
-  late final TextEditingController _key =
-      TextEditingController(text: context.read<Store>().nasSecret);
+  late final TextEditingController _url = TextEditingController(
+    text: context.read<Store>().nasUrl,
+  );
+  late final TextEditingController _key = TextEditingController(
+    text: context.read<Store>().nasSecret,
+  );
 
   bool _busy = false;
   bool _expanded = false;
@@ -1158,9 +1189,9 @@ class _NasPanelState extends State<_NasPanel> {
       case NasDiagnosis.notGateway:
         return ko
             ? '그 주소는 나스 로그인 화면입니다. 게이트웨이로 연결되는 '
-                '리버스 프록시(HTTPS 443 → localhost:8097)가 아직 없습니다.'
+                  '리버스 프록시(HTTPS 443 → localhost:8097)가 아직 없습니다.'
             : 'That address is the NAS login page. The reverse proxy to the '
-                'gateway (HTTPS 443 → localhost:8097) is not set up yet.';
+                  'gateway (HTTPS 443 → localhost:8097) is not set up yet.';
       case NasDiagnosis.badKey:
         return ko ? '공유 키가 맞지 않습니다 (X-Sync-Key)' : 'Wrong shared key';
       case NasDiagnosis.nasDown:
@@ -1168,11 +1199,13 @@ class _NasPanelState extends State<_NasPanel> {
             ? '게이트웨이는 살아 있지만 저장소에 접근하지 못합니다'
             : 'Gateway is up but cannot reach storage';
       case NasDiagnosis.timeout:
-        return ko ? '응답이 없습니다 — 나스가 잠들었거나 회선이 막혔습니다'
-                  : 'No answer — the NAS is asleep or blocked';
+        return ko
+            ? '응답이 없습니다 — 나스가 잠들었거나 회선이 막혔습니다'
+            : 'No answer — the NAS is asleep or blocked';
       case NasDiagnosis.unreachable:
-        return ko ? '주소에 닿지 않습니다 — 호스트·포트·방화벽을 확인하세요'
-                  : 'Cannot reach the host — check host, port and firewall';
+        return ko
+            ? '주소에 닿지 않습니다 — 호스트·포트·방화벽을 확인하세요'
+            : 'Cannot reach the host — check host, port and firewall';
     }
   }
 
@@ -1218,7 +1251,8 @@ class _NasPanelState extends State<_NasPanel> {
     // HTTPS page call an http:// address (mixed content). It looks like "the
     // NAS is broken" and no amount of retrying fixes it, so say it plainly
     // before the user types it in.
-    final mixedBlocked = kIsWeb &&
+    final mixedBlocked =
+        kIsWeb &&
         Uri.base.scheme == 'https' &&
         _url.text.trim().toLowerCase().startsWith('http://');
 
@@ -1238,8 +1272,11 @@ class _NasPanelState extends State<_NasPanel> {
               onTap: () => setState(() => _expanded = !_expanded),
               child: Row(
                 children: [
-                  Icon(Icons.dns_outlined,
-                      size: 18, color: active ? p.teal : p.inkSoft),
+                  Icon(
+                    Icons.dns_outlined,
+                    size: 18,
+                    color: active ? p.teal : p.inkSoft,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1253,14 +1290,19 @@ class _NasPanelState extends State<_NasPanel> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: (active ? p.teal : p.inkSoft)
-                          .withValues(alpha: 0.12),
+                      color: (active ? p.teal : p.inkSoft).withValues(
+                        alpha: 0.12,
+                      ),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      active ? context.tr('nas_active') : context.tr('nas_cloud'),
+                      active
+                          ? context.tr('nas_active')
+                          : context.tr('nas_cloud'),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -1269,8 +1311,11 @@ class _NasPanelState extends State<_NasPanel> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(_expanded ? Icons.expand_less : Icons.expand_more,
-                      size: 18, color: p.inkSoft),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: p.inkSoft,
+                  ),
                 ],
               ),
             ),
@@ -1295,9 +1340,9 @@ class _NasPanelState extends State<_NasPanel> {
                       child: Text(
                         ko
                             ? '동기화 서버 주소가 없습니다. 지금은 이 기기에만 저장되고 '
-                                '다른 기기와 공유되지 않습니다.'
+                                  '다른 기기와 공유되지 않습니다.'
                             : 'No sync server address. Changes stay on this device '
-                                'and are not shared with your other devices.',
+                                  'and are not shared with your other devices.',
                         style: TextStyle(
                           fontSize: 10.5,
                           color: p.danger,
@@ -1346,7 +1391,9 @@ class _NasPanelState extends State<_NasPanel> {
                       backgroundColor: p.teal,
                       foregroundColor: p.onAccent,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       minimumSize: const Size(0, 32),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -1357,7 +1404,9 @@ class _NasPanelState extends State<_NasPanel> {
                     style: TextButton.styleFrom(
                       foregroundColor: p.inkSoft,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       minimumSize: const Size(0, 32),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -1373,7 +1422,9 @@ class _NasPanelState extends State<_NasPanel> {
                       style: TextButton.styleFrom(
                         foregroundColor: p.danger,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         minimumSize: const Size(0, 32),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -1402,12 +1453,16 @@ class _NasPanelState extends State<_NasPanel> {
                   child: Text(
                     ko
                         ? '이 사이트는 https입니다. 브라우저는 https 페이지에서 '
-                            'http:// 주소로 접속하는 것을 막습니다. '
-                            'NAS를 https(역프록시·인증서)로 열거나, 안드로이드 앱에서 사용하세요.'
+                              'http:// 주소로 접속하는 것을 막습니다. '
+                              'NAS를 https(역프록시·인증서)로 열거나, 안드로이드 앱에서 사용하세요.'
                         : 'This site is https. Browsers block an https page from '
-                            'calling http://. Serve the NAS over https '
-                            '(reverse proxy + certificate) or use the Android app.',
-                    style: TextStyle(fontSize: 10.5, color: p.danger, height: 1.35),
+                              'calling http://. Serve the NAS over https '
+                              '(reverse proxy + certificate) or use the Android app.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: p.danger,
+                      height: 1.35,
+                    ),
                   ),
                 ),
             ],
@@ -1463,8 +1518,10 @@ class _NasField extends StatelessWidget {
             hintStyle: TextStyle(fontSize: 11.5, color: p.inkSoft),
             filled: true,
             fillColor: p.soft,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: p.line),

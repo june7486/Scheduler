@@ -149,6 +149,38 @@ class SurfaceSpec {
   /// Requires [showMeta] to be false — otherwise the information renders twice.
   final bool inlineMeta;
 
+  /// ── Table geometry ─────────────────────────────────────────────────────
+  ///
+  /// A *dense* list and a *table* are not the same thing, and confusing the two
+  /// is how "dense" themes end up as just "smaller lists".
+  ///
+  /// A compressed list still answers one question per row: *what*. A table
+  /// answers three at a glance: *what, where, how much* — because the columns
+  /// line up and the eye can run down one of them. That vertical scan is the
+  /// actual information gain, and it cannot be produced by shrinking fonts.
+  ///
+  /// These fields describe column geometry. All of them default to "not a
+  /// table", so every design that says nothing here keeps its old rendering.
+  /// A design either uses the table columns or the inline row, never both.
+
+  /// Draw the column header strip above the list.
+  ///
+  /// Without a header, aligned columns are just ragged text. The header is what
+  /// turns three text fragments into three *named* columns.
+  final bool showTableHeader;
+
+  /// Header strip height. Small on purpose: it is a label, not a title bar.
+  final double tableHeaderHeight;
+
+  /// Width of the category column. Zero means "no category column".
+  final double colCategory;
+
+  /// Width of the amount column, right-aligned so digits stack.
+  final double colAmount;
+
+  /// Width of the trailing state column (a completion mark, pin, recurrence).
+  final double colState;
+
   /// Draw the per-row delete button.
   ///
   /// Material's IconButton enforces a 48px (dense: 40px) minimum tap target, so
@@ -195,6 +227,11 @@ class SurfaceSpec {
     this.upperMeta = false,
     this.showDeleteButton = true,
     this.inlineMeta = false,
+    this.showTableHeader = false,
+    this.tableHeaderHeight = 18,
+    this.colCategory = 0,
+    this.colAmount = 0,
+    this.colState = 0,
   });
 
   /// The box shadow for this language at a given strength multiplier.
@@ -209,6 +246,10 @@ class SurfaceSpec {
       ),
     ];
   }
+
+  /// True when this design lays rows out as columns rather than as a line of
+  /// text with things appended to it.
+  bool get isTable => colCategory > 0 || colAmount > 0;
 
   /// A rough score for "how many rows fit on one screen", higher is denser.
   ///
@@ -227,7 +268,9 @@ class SurfaceSpec {
         (showAssignChips ? 32 : 0) +
         (rowDivider ? 1 : 0) +
         (showDeleteButton ? 12 : 0);
-    // inlineMeta 는 별도 줄을 쓰지 않으므로 점수를 깎지 않는다.
+    // 표 머리글은 한 번만 그리므로 '행당 비용'에 넣으면 안 된다. 넣으면
+    // 표 테마가 실제보다 훨씬 덜 조밀한 것처럼 점수가 깎인다.
+    // inlineMeta 도 별도 줄을 쓰지 않으므로 점수를 깎지 않는다.
     return 100 / perRow;
   }
 }
@@ -470,6 +513,12 @@ class AppDesigns {
         zebra: true, // 줄무늬로 가로 추적
         upperMeta: false,
         showDeleteButton: false,
+        showTableHeader: true,
+        tableHeaderHeight: 20,
+        colCategory: 46,
+        colAmount: 84,
+        colState: 14,
+        inlineMeta: false,
       ),
     ),
 
@@ -514,6 +563,12 @@ class AppDesigns {
         zebra: false,
         upperMeta: true, // 소문자 대신 대문자 = 로그 느낌 + 라인 높이 절약
         showDeleteButton: false,
+        showTableHeader: true,
+        tableHeaderHeight: 16,
+        colCategory: 40,
+        colAmount: 72,
+        colState: 12,
+        inlineMeta: false,
       ),
     ),
 
@@ -542,23 +597,27 @@ class AppDesigns {
         solidChips: false,
         tracking: 0,
         // --- 밀도 ---
-        // 이 테마의 결단: 정보를 **빼지 않고** 한 줄에 접는다.
-        // 카테고리 견본과 금액이 제목 옆으로 올라가므로 두 번째 줄이 사라져도
-        // 잃는 정보가 없다. "고밀도"라는 말이 "빈 화면"이 되지 않게 하는
-        // 유일한 방법이다.
+        // 이 테마의 결단: 두 번째 줄을 없애고 그 정보를 **열**로 세운다.
+        // 처음에는 메타를 그냥 지웠는데, 그러면 '정보 많은 테마'가 아니라
+        // '빈 미니멀 테마'가 된다. 정보는 빼는 게 아니라 자리를 옮기는 것.
         titleSize: 11,
         metaSize: 8.5,
         checkSize: 16,
         rowDivider: true,
         showAssignChips: false,
         showNote: false,
-        showMeta: false, // 두 번째 줄 없음 …
-        inlineMeta: true, // … 대신 제목 줄 우측에 붙인다
+        showMeta: false, // 두 번째 줄 없음 — 대신 열이 그 자리를 맡는다
         amountGutter: true,
         compactCategory: true,
         zebra: false,
         upperMeta: false,
         showDeleteButton: false,
+        showTableHeader: true,
+        tableHeaderHeight: 17,
+        colCategory: 38,
+        colAmount: 70,
+        colState: 0,
+        inlineMeta: false,
       ),
     ),
 
@@ -602,6 +661,12 @@ class AppDesigns {
         zebra: true,
         upperMeta: true,
         showDeleteButton: false,
+        showTableHeader: true,
+        tableHeaderHeight: 19,
+        colCategory: 44,
+        colAmount: 80,
+        colState: 15,
+        inlineMeta: false,
       ),
     ),
 
@@ -645,6 +710,12 @@ class AppDesigns {
         zebra: true,
         upperMeta: false,
         showDeleteButton: false,
+        showTableHeader: true,
+        tableHeaderHeight: 21,
+        colCategory: 42,
+        colAmount: 76,
+        colState: 13,
+        inlineMeta: false,
       ),
     ),
   };

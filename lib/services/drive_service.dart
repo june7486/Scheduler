@@ -5,7 +5,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'download_stub.dart'
-    if (dart.library.js_interop) 'download_web.dart' as downloader;
+    if (dart.library.js_interop) 'download_web.dart'
+    as downloader;
 
 /// Google Drive upload / backup helper.
 ///
@@ -82,8 +83,10 @@ class DriveService {
 
   /// Web fallback: open the Drive "upload" endpoint in a new tab.
   static Future<bool> uploadFileToDrive(String folderUrl) async {
-    final uri = Uri.https('drive.google.com', '/drive/u/0/',
-        {'usp': 'docs_upload', 'folder': folderUrl});
+    final uri = Uri.https('drive.google.com', '/drive/u/0/', {
+      'usp': 'docs_upload',
+      'folder': folderUrl,
+    });
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);

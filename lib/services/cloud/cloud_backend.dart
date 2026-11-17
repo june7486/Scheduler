@@ -175,8 +175,7 @@ class NullBackend implements CloudBackend {
     String workspaceId,
     CloudDoc doc, {
     Map<String, dynamic>? extra,
-  }) async =>
-      const CloudWriteResult(ok: false, error: 'no server configured');
+  }) async => const CloudWriteResult(ok: false, error: 'no server configured');
 
   /// Returns an already-cancelled subscription: nothing to watch, nothing to
   /// schedule, no timer left running in a local-only session.
@@ -186,8 +185,7 @@ class NullBackend implements CloudBackend {
     required void Function(CloudDoc doc) onRemote,
     required void Function(String reason) onError,
     int haveRev = 0,
-  }) =>
-      const _NullSubscription();
+  }) => const _NullSubscription();
 
   @override
   Future<CloudWriteResult> resetWorkspace(String workspaceId) async =>

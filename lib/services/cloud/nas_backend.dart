@@ -52,12 +52,9 @@ enum NasDiagnosis {
 /// * **`rev` and `gen` short-circuits.** An unchanged workspace answers ~40 bytes,
 ///   and a generation mismatch (the user wiped everything) forces a full sync.
 class NasBackend implements CloudBackend {
-  NasBackend({
-    required String baseUrl,
-    this.secret = '',
-    http.Client? client,
-  })  : _base = _normalise(baseUrl),
-        _client = client ?? http.Client();
+  NasBackend({required String baseUrl, this.secret = '', http.Client? client})
+    : _base = _normalise(baseUrl),
+      _client = client ?? http.Client();
 
   /// e.g. `https://sync.mydomain.net`, `http://192.216.0.20:8097`
   final String _base;
@@ -95,9 +92,9 @@ class NasBackend implements CloudBackend {
   bool get isConfigured => _base.isNotEmpty;
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json; charset=utf-8',
-        if (secret.isNotEmpty) 'X-Sync-Key': secret,
-      };
+    'Content-Type': 'application/json; charset=utf-8',
+    if (secret.isNotEmpty) 'X-Sync-Key': secret,
+  };
 
   Uri _uri(String path, [Map<String, String>? q]) {
     final u = Uri.parse('$_base$path');
@@ -434,8 +431,10 @@ class _NasLongPoller implements CloudSubscription {
       _timer = Timer(const Duration(milliseconds: 150), _tick);
       return;
     }
-    final secs = (_backoffBase.inSeconds * (1 << (_failures - 1)))
-        .clamp(_backoffBase.inSeconds, _backoffMax.inSeconds);
+    final secs = (_backoffBase.inSeconds * (1 << (_failures - 1))).clamp(
+      _backoffBase.inSeconds,
+      _backoffMax.inSeconds,
+    );
     _timer = Timer(Duration(seconds: secs), _tick);
   }
 

@@ -60,9 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await store.rememberAccount(id);
       await _session.login(store.currentUserId);
       if (!mounted) return false;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
       return true;
     }
     setState(() {
@@ -115,9 +115,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final store = context.read<Store>();
     await store.forgetAccount(u.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('forget_account_done'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.tr('forget_account_done'))));
   }
 
   Future<void> _clearCache() async {
@@ -125,9 +125,9 @@ class _LoginScreenState extends State<LoginScreen> {
     await _session.clearCache();
     await store.clearCache();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('cache_cleared'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.tr('cache_cleared'))));
   }
 
   void _showVersion() {
@@ -136,8 +136,10 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(context.tr('app_version')),
-        content: Text('${context.tr('installed_version')}: v${store.appVersion}\n'
-            '${context.tr('version_note')}'),
+        content: Text(
+          '${context.tr('installed_version')}: v${store.appVersion}\n'
+          '${context.tr('version_note')}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -178,7 +180,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(ctx.tr('cancel'))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.tr('cancel')),
+          ),
           TextButton(
             onPressed: () async {
               final store = context.read<Store>();
@@ -193,13 +197,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text(context
-                          .tr('id_created', args: {'id': idCtrl.text.trim()}))),
+                    content: Text(
+                      context.tr(
+                        'id_created',
+                        args: {'id': idCtrl.text.trim()},
+                      ),
+                    ),
+                  ),
                 );
               } else {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text(err)),
-                );
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(err)));
               }
             },
             child: Text(ctx.tr('create')),
@@ -277,7 +286,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1),
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 color: p.indigo.withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(4),
@@ -364,8 +375,10 @@ class _LoginScreenState extends State<LoginScreen> {
               top: false,
               child: Center(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 24,
+                  ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 380),
                     child: Column(
@@ -381,179 +394,211 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: p.indigo.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Icon(Icons.calendar_month_rounded,
-                              size: 38, color: p.indigo),
+                          child: Icon(
+                            Icons.calendar_month_rounded,
+                            size: 38,
+                            color: p.indigo,
+                          ),
                         ),
-                  const SizedBox(height: 22),
-                  Text(
-                    isKo ? 'June 스케줄러' : "June's Scheduler",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: p.ink,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    context.tr('sign_in_hint'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12.5, color: p.inkSoft),
-                  ),
-                  const SizedBox(height: 30),
-                  TextField(
-                    controller: _idCtrl,
-                    style: const TextStyle(fontSize: 13.5),
-                    decoration: InputDecoration(
-                      hintText: context.tr('id'),
-                      prefixIcon: const Icon(Icons.person_outline, size: 20),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _pwCtrl,
-                    focusNode: _pwFocus,
-                    obscureText: _obscure,
-                    style: const TextStyle(fontSize: 13.5),
-                    onSubmitted: (_) => _login(),
-                    decoration: InputDecoration(
-                      hintText: context.tr('password'),
-                      prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure ? Icons.visibility_off : Icons.visibility,
-                          size: 20,
+                        const SizedBox(height: 22),
+                        Text(
+                          isKo ? 'June 스케줄러' : "June's Scheduler",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: p.ink,
+                            letterSpacing: 0.2,
+                          ),
                         ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _error!,
-                      style: TextStyle(color: p.danger, fontSize: 12),
-                    ),
-                  ],
-                  const SizedBox(height: 22),
-                  SizedBox(
-                    height: 46,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _login,
-                      child: _loading
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: p.card),
-                            )
-                          : Text(context.tr('sign_in')),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: _openSignUp,
-                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 17),
-                    label: Text(context.tr('create_id'),
-                        style: const TextStyle(fontSize: 12.5)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: p.indigo,
-                      side: BorderSide(color: p.indigo),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    context.tr('session_kept'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: p.inkSoft),
-                  ),
-
-                  // ---- 이 기기에서 사용한 계정 (빠른 로그인) ----
-                  if (store.rememberedAccounts.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(height: 1, color: p.line),
+                        const SizedBox(height: 6),
+                        Text(
+                          context.tr('sign_in_hint'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12.5, color: p.inkSoft),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            context.tr('saved_accounts'),
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              color: p.inkSoft,
-                              letterSpacing: 0.2,
+                        const SizedBox(height: 30),
+                        TextField(
+                          controller: _idCtrl,
+                          style: const TextStyle(fontSize: 13.5),
+                          decoration: InputDecoration(
+                            hintText: context.tr('id'),
+                            prefixIcon: const Icon(
+                              Icons.person_outline,
+                              size: 20,
                             ),
                           ),
                         ),
-                        Expanded(
-                          child: Container(height: 1, color: p.line),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _pwCtrl,
+                          focusNode: _pwFocus,
+                          obscureText: _obscure,
+                          style: const TextStyle(fontSize: 13.5),
+                          onSubmitted: (_) => _login(),
+                          decoration: InputDecoration(
+                            hintText: context.tr('password'),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline,
+                              size: 20,
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                size: 20,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                            ),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _error!,
+                            style: TextStyle(color: p.danger, fontSize: 12),
+                          ),
+                        ],
+                        const SizedBox(height: 22),
+                        SizedBox(
+                          height: 46,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _login,
+                            child: _loading
+                                ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: p.card,
+                                    ),
+                                  )
+                                : Text(context.tr('sign_in')),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _openSignUp,
+                          icon: const Icon(
+                            Icons.person_add_alt_1_outlined,
+                            size: 17,
+                          ),
+                          label: Text(
+                            context.tr('create_id'),
+                            style: const TextStyle(fontSize: 12.5),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: p.indigo,
+                            side: BorderSide(color: p.indigo),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          context.tr('session_kept'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 11, color: p.inkSoft),
+                        ),
+
+                        // ---- 이 기기에서 사용한 계정 (빠른 로그인) ----
+                        if (store.rememberedAccounts.isNotEmpty) ...[
+                          const SizedBox(height: 22),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(height: 1, color: p.line),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                child: Text(
+                                  context.tr('saved_accounts'),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: p.inkSoft,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Container(height: 1, color: p.line),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          for (final u in store.rememberedAccounts)
+                            _savedAccountRow(store, u, isKo),
+                          const SizedBox(height: 8),
+                          Text(
+                            context.tr('saved_pw_note'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 10, color: p.inkSoft),
+                          ),
+                        ],
+
+                        const SizedBox(height: 28),
+                        const Divider(),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _clearCache,
+                                icon: const Icon(
+                                  Icons.cleaning_services_outlined,
+                                  size: 17,
+                                ),
+                                label: Text(
+                                  context.tr('clear_cache'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: p.inkSoft,
+                                  side: BorderSide(color: p.line),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _showVersion,
+                                icon: const Icon(Icons.info_outline, size: 17),
+                                label: Text(
+                                  context.tr('version'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: p.inkSoft,
+                                  side: BorderSide(color: p.line),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'v${store.appVersion}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 10.5, color: p.inkSoft),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    for (final u in store.rememberedAccounts)
-                      _savedAccountRow(store, u, isKo),
-                    const SizedBox(height: 8),
-                    Text(
-                      context.tr('saved_pw_note'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10, color: p.inkSoft),
-                    ),
-                  ],
-
-                  const SizedBox(height: 28),
-                  const Divider(),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _clearCache,
-                          icon: const Icon(Icons.cleaning_services_outlined, size: 17),
-                          label: Text(context.tr('clear_cache'),
-                              style: const TextStyle(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: p.inkSoft,
-                            side: BorderSide(color: p.line),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _showVersion,
-                          icon: const Icon(Icons.info_outline, size: 17),
-                          label: Text(context.tr('version'),
-                              style: const TextStyle(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: p.inkSoft,
-                            side: BorderSide(color: p.line),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'v${store.appVersion}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 10.5, color: p.inkSoft),
-                  ),
-                        ],
-                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }

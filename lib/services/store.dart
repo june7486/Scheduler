@@ -132,7 +132,6 @@ class Store extends ChangeNotifier {
 
   bool get usingNas => _nasUrl.isNotEmpty;
 
-
   /// Cross-device sync engine. Built on first use for the same reason.
   SyncService? _sync;
   SyncService get sync => _sync ??= SyncService(this, backend);
@@ -239,14 +238,8 @@ class Store extends ChangeNotifier {
           'title': ko ? '장보기 (예산 ₩50,000)' : 'Groceries (₩50,000 budget)',
           'amount': 50000,
         },
-        {
-          'cat': 'bank',
-          'title': ko ? '은행 업무 확인' : 'Check bank work',
-        },
-        {
-          'cat': 'scout',
-          'title': ko ? '스카우트 대장 미팅' : 'Scout leader meeting',
-        },
+        {'cat': 'bank', 'title': ko ? '은행 업무 확인' : 'Check bank work'},
+        {'cat': 'scout', 'title': ko ? '스카우트 대장 미팅' : 'Scout leader meeting'},
       ];
       for (final s in samples) {
         final t = Task(
@@ -350,7 +343,10 @@ class Store extends ChangeNotifier {
   ///
   /// [pw] is only remembered when the caller explicitly wants one-tap sign-in;
   /// a wrong or empty password is never stored.
-  Future<void> rememberAccount(String id, {bool rememberPassword = true}) async {
+  Future<void> rememberAccount(
+    String id, {
+    bool rememberPassword = true,
+  }) async {
     if (id.isEmpty) return;
     final next = [id, ..._remembered.where((e) => e != id)];
     // Keep the list short — a login screen with twenty chips is noise.
@@ -443,7 +439,9 @@ class Store extends ChangeNotifier {
     // The registry is the authority when it is reachable. Checking it first is
     // the whole point of central account management: a local row must not be
     // able to accept a password the other devices would reject.
-    var u = await _bounded<User?>(() => authenticateAgainstRegistry(trimmed, pw));
+    var u = await _bounded<User?>(
+      () => authenticateAgainstRegistry(trimmed, pw),
+    );
 
     if (u == null) {
       // Registry unreachable, or it does not know this id yet (an account made
@@ -497,9 +495,10 @@ class Store extends ChangeNotifier {
     try {
       final url = nasUrl;
       if (url.isEmpty) return 'notConfigured';
-      final d = await NasBackend(baseUrl: url, secret: nasSecret)
-          .diagnose()
-          .timeout(_registryTimeout);
+      final d = await NasBackend(
+        baseUrl: url,
+        secret: nasSecret,
+      ).diagnose().timeout(_registryTimeout);
       return d.name;
     } catch (_) {
       return 'unreachable';
@@ -691,10 +690,7 @@ class Store extends ChangeNotifier {
   }
 
   /// True when [record] describes an enabled account whose password is [pw].
-  static bool verifyAccountPassword(
-    Map<dynamic, dynamic> record,
-    String pw,
-  ) {
+  static bool verifyAccountPassword(Map<dynamic, dynamic> record, String pw) {
     if (record['enabled'] == false) return false;
     final id = '${record['id'] ?? ''}';
     if (id.isEmpty) return false;
@@ -731,8 +727,9 @@ class Store extends ChangeNotifier {
         if (!e.key.startsWith('accounts/')) continue;
         final raw = e.value;
         if (raw is! Map) continue;
-        out[e.key.substring('accounts/'.length)] =
-            Map<String, dynamic>.from(raw);
+        out[e.key.substring('accounts/'.length)] = Map<String, dynamic>.from(
+          raw,
+        );
       }
       return out;
     } catch (_) {
@@ -1294,8 +1291,7 @@ class Store extends ChangeNotifier {
     final oid = ownerId ?? _scopeId;
     return tasks
         .where(
-          (t) =>
-              t.ownerId == oid && t.isInCategory(categoryId) && t.completed,
+          (t) => t.ownerId == oid && t.isInCategory(categoryId) && t.completed,
         )
         .toList();
   }
@@ -1304,11 +1300,11 @@ class Store extends ChangeNotifier {
     final oid = ownerId ?? _scopeId;
     return tasks
         .where(
-          (t) =>
-              t.ownerId == oid && t.isInCategory(categoryId) && !t.completed,
+          (t) => t.ownerId == oid && t.isInCategory(categoryId) && !t.completed,
         )
         .length;
   }
+
   int openTaskCountForOwner(String ownerId) =>
       tasksForOwner(ownerId).where((t) => !t.completed).length;
 
@@ -1548,7 +1544,8 @@ class Store extends ChangeNotifier {
   ///
   /// A stale account row is harmless: the push that follows the pull carries it,
   /// and the merge is last-writer-wins on `updatedAt`.
-  int get pendingDataCount => pendingKeys.where((k) => !k.startsWith('accounts/')).length;
+  int get pendingDataCount =>
+      pendingKeys.where((k) => !k.startsWith('accounts/')).length;
 
   Future<void> _markPending(String entity, String boxKey) async {
     if (!syncEnabled) return;
@@ -1912,10 +1909,7 @@ class Store extends ChangeNotifier {
 
   /// Drops local records of [ownerId] that the server no longer has.
   /// Pending (unsent) edits are always kept.
-  Future<bool> pruneMissing(
-    String ownerId,
-    Set<String> serverKeys,
-  ) async {
+  Future<bool> pruneMissing(String ownerId, Set<String> serverKeys) async {
     final pending = pendingKeys;
     var changed = false;
     for (final e in _syncBoxes.entries) {
@@ -1952,8 +1946,7 @@ class Store extends ChangeNotifier {
     final box = _syncBoxes[entity];
     if (box == null) return false;
     final local = box.get(boxKey);
-    final remoteStamp =
-        (remote['updatedAt'] as num?)?.toInt() ?? 0;
+    final remoteStamp = (remote['updatedAt'] as num?)?.toInt() ?? 0;
     final localStamp = local is Map
         ? ((local['updatedAt'] as num?)?.toInt() ?? 0)
         : -1;
@@ -1970,7 +1963,8 @@ class Store extends ChangeNotifier {
     final id = incoming['id']?.toString() ?? '';
     if (id.isEmpty) return false;
 
-    final same = local is Map &&
+    final same =
+        local is Map &&
         _shallowEquals(Map<String, dynamic>.from(local), incoming);
     if (same) return false;
 
@@ -2073,7 +2067,8 @@ class Store extends ChangeNotifier {
   }
 
   /// Seed the recurring bills (rent & warehouse) for the current user.
-  Future<void> seedRecurringBillsIfEmpty() async {    final ownerId = _scopeId;
+  Future<void> seedRecurringBillsIfEmpty() async {
+    final ownerId = _scopeId;
     final mine = tasksForOwner(ownerId);
     final ko = language == 'ko';
     if (mine.any((t) => t.recurrence == 'monthly' && t.recurrenceDay == 12)) {
@@ -2300,8 +2295,10 @@ class Store extends ChangeNotifier {
   /// A design language is not a recolour: it changes the geometry, the
   /// decoration, the typography and the rhythm of every screen. The colour skin
   /// selects a palette *inside* that design.
-  String get designKey =>
-      _getPref<String>('design', (_users.get('__design__') as String?) ?? 'paper');
+  String get designKey => _getPref<String>(
+    'design',
+    (_users.get('__design__') as String?) ?? 'paper',
+  );
 
   Future<void> setDesignKey(String id) async {
     await _users.put('__design__', id);
@@ -2310,8 +2307,10 @@ class Store extends ChangeNotifier {
   }
 
   /// Active colour skin id (see [AppSkins.ids]). Defaults to 'midnight'.
-  String get skinKey =>
-      _getPref<String>('skin', (_users.get('__skin__') as String?) ?? 'midnight');
+  String get skinKey => _getPref<String>(
+    'skin',
+    (_users.get('__skin__') as String?) ?? 'midnight',
+  );
 
   Future<void> setSkinKey(String id) async {
     await _users.put('__skin__', id);
@@ -2321,8 +2320,10 @@ class Store extends ChangeNotifier {
 
   /// Hand-writing (pen) look for non-notebook designs. The paper design always
   /// uses it; here the user can also force it on/off elsewhere.
-  bool get handwritingKey =>
-      _getPref<bool>('handwriting', (_users.get('__handwriting__') as bool?) ?? true);
+  bool get handwritingKey => _getPref<bool>(
+    'handwriting',
+    (_users.get('__handwriting__') as bool?) ?? true,
+  );
 
   Future<void> setHandwritingKey(bool on) async {
     await _users.put('__handwriting__', on);
@@ -2343,9 +2344,10 @@ class Store extends ChangeNotifier {
   }
 
   /// Global text-size multiplier (0.85 – 1.6; 1.0 = normal).
-  double get fontScale =>
-      _getPref<double>('font_scale', ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0))
-          .clamp(0.85, 1.6);
+  double get fontScale => _getPref<double>(
+    'font_scale',
+    ((_users.get('__font_scale__') as num?)?.toDouble() ?? 1.0),
+  ).clamp(0.85, 1.6);
 
   Future<void> setFontScale(double v) async {
     final clamped = v.clamp(0.85, 1.6);
@@ -2358,8 +2360,7 @@ class Store extends ChangeNotifier {
   ///   'off'    — feature hidden, nothing happens on save (default).
   ///   'manual' — "Add to Calendar" appears in the task menu only.
   ///   'auto'   — every newly saved task is also pushed to Google Calendar.
-  String get calendarMode =>
-      (_users.get('__cal_mode__') as String?) ?? 'off';
+  String get calendarMode => (_users.get('__cal_mode__') as String?) ?? 'off';
 
   bool get calendarEnabled => calendarMode != 'off';
 

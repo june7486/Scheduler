@@ -50,9 +50,7 @@ class JuneSchedulerApp extends StatelessWidget {
           // Font family + text-size choice.
           setFontPrefs(s.fontKey, s.fontScale);
           return MaterialApp(
-            title: s.language == 'en'
-                ? "June's Scheduler"
-                : 'June 스케줄러',
+            title: s.language == 'en' ? "June's Scheduler" : 'June 스케줄러',
             debugShowCheckedModeBanner: false,
             navigatorKey: appNavKey,
             theme: AppTheme.build(s.skinKey, Brightness.light),
@@ -68,7 +66,9 @@ class JuneSchedulerApp extends StatelessWidget {
               // [effectiveFontScale] folds in the hand-writing legibility boost.
               final mq = MediaQuery.of(context);
               return MediaQuery(
-                data: mq.copyWith(textScaler: TextScaler.linear(effectiveFontScale)),
+                data: mq.copyWith(
+                  textScaler: TextScaler.linear(effectiveFontScale),
+                ),
                 child: SkinBackdrop(
                   child: Column(
                     children: [
@@ -142,9 +142,7 @@ class _GateState extends State<_Gate> {
   @override
   Widget build(BuildContext context) {
     if (_loggedIn == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return _loggedIn! ? const HomeScreen() : const LoginScreen();
   }

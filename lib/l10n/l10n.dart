@@ -137,7 +137,8 @@ class L10n {
 
     // 고밀도 계열
     'choose_design_dense': '고밀도 (한 화면에 더 많이)',
-    'choose_design_dense_hint': '목록에서 뺀 정보는 상세 화면에 그대로 있습니다. 밀도는 정보 삭제가 아니라 배치의 문제입니다.',
+    'choose_design_dense_hint':
+        '목록에서 뺀 정보는 상세 화면에 그대로 있습니다. 밀도는 정보 삭제가 아니라 배치의 문제입니다.',
     'design_ledger': '레저',
     'design_terminal': '터미널',
     'design_compact': '컴팩트',
@@ -299,6 +300,9 @@ class L10n {
     // Task editor
     'new_task': '새 할일',
     'title': '제목',
+    'col_category': '분류',
+    'col_task': '할 일',
+    'col_amount': '금액',
     'title_hint': '예: 월세 납부',
     'note': '메모',
     'note_hint': '세부 내용 (선택)',
@@ -595,7 +599,8 @@ class L10n {
     'font_dohyeon': 'Do Hyeon (display)',
     'font_black': 'Black Han Sans',
     'font_changed': 'Font changed.',
-    'font_hand_note': 'Hand-writing fonts are shown slightly larger for legibility',
+    'font_hand_note':
+        'Hand-writing fonts are shown slightly larger for legibility',
 
     // Google Calendar
     'calendar_grp': 'Google Calendar',
@@ -623,7 +628,8 @@ class L10n {
     'sync_join': 'Join by code',
     'sync_last': 'Last sync',
     'sync_connect': 'Connect auto-sync',
-    'sync_connect_hint': 'Enter the code from your PC so both devices show the same data.',
+    'sync_connect_hint':
+        'Enter the code from your PC so both devices show the same data.',
     'sync_server': 'Sync server (optional)',
     'sync_server_hint': 'Leave empty to use the default encrypted store',
     'sync_cancel': 'Cancel',
@@ -635,11 +641,14 @@ class L10n {
     'sync_e2e': 'Stored on server · end-to-end encrypted · no account',
     'sync_pending': 'Waiting to upload',
     'sync_pending_n': '{n} change(s) queued — uploads when online',
-    'sync_server_copy': 'Everything is stored on the server. This device only keeps a display cache.',
-    'sync_auto_note': 'Connects automatically when you sign in — nothing to set up.',
+    'sync_server_copy':
+        'Everything is stored on the server. This device only keeps a display cache.',
+    'sync_auto_note':
+        'Connects automatically when you sign in — nothing to set up.',
     'sync_stored_on_server': 'Stored on server',
     'sync_live': 'Live sync on',
-    'sync_offline_retry': 'Will save again automatically when the network returns.',
+    'sync_offline_retry':
+        'Will save again automatically when the network returns.',
     'nas_grp': 'My own NAS server',
     'nas_title': 'NAS address',
     'nas_hint': 'e.g. http://192.168.0.20:8099 · leave empty to use the cloud',
@@ -654,7 +663,8 @@ class L10n {
     'nas_active': 'Using my NAS',
     'nas_cloud': 'Using the cloud',
     'nas_clear': 'Clear NAS settings',
-    'nas_guide': 'Your data lives on your own land. See server/gateway/README to install.',
+    'nas_guide':
+        'Your data lives on your own land. See server/gateway/README to install.',
 
     // Google Drive
     'drive_grp': 'Google Drive (upload · backup)',
@@ -664,7 +674,8 @@ class L10n {
     'drive_upload_hint': 'Build a file with all current data and upload it',
     'drive_open': 'Open Drive folder',
     'drive_edit_link': 'Edit Google Drive link',
-    'drive_link_hint': 'Enter the Drive folder URL to upload & back up all data.',
+    'drive_link_hint':
+        'Enter the Drive folder URL to upload & back up all data.',
     'drive_link_saved': 'Drive link saved.',
     'drive_backup_done': 'Backup created. Save it to your Drive folder.',
     'drive_upload_done': 'Upload created. Save it to your Drive folder.',
@@ -704,6 +715,9 @@ class L10n {
 
     'new_task': 'New Task',
     'title': 'Title',
+    'col_category': 'Category',
+    'col_task': 'Task',
+    'col_amount': 'Amount',
     'title_hint': 'e.g. Pay rent',
     'note': 'Note',
     'note_hint': 'Details (optional)',
@@ -922,7 +936,3 @@ String catLabel(Category c) {
   if (c.isCustomLabel && s.isNotEmpty) return s;
   return catName(c.id, c.label);
 }
-
-
-
-

@@ -296,8 +296,7 @@ class AppSkins {
     ),
   };
 
-  static AppPalette lightFor(String id) =>
-      _light[id] ?? _light[defaultId]!;
+  static AppPalette lightFor(String id) => _light[id] ?? _light[defaultId]!;
 
   static AppPalette darkFor(String id) => _dark[id] ?? _dark[defaultId]!;
 
@@ -349,7 +348,12 @@ class AppFont {
   final String? family;
   final List<String> fallback;
   final bool hand;
-  const AppFont(this.id, {this.family, this.fallback = const [], this.hand = false});
+  const AppFont(
+    this.id, {
+    this.family,
+    this.fallback = const [],
+    this.hand = false,
+  });
 }
 
 class AppFonts {
@@ -382,9 +386,19 @@ class AppFonts {
   ];
 
   static const Map<String, AppFont> _byId = {
-    system: AppFont(system, family: null, fallback: [
-      'Segoe UI', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'NanumGothic', 'Roboto', 'Arial',
-    ]),
+    system: AppFont(
+      system,
+      family: null,
+      fallback: [
+        'Segoe UI',
+        'Malgun Gothic',
+        '맑은 고딕',
+        'Apple SD Gothic Neo',
+        'NanumGothic',
+        'Roboto',
+        'Arial',
+      ],
+    ),
     pen: AppFont(pen, family: 'NanumPen', hand: true),
     gaegu: AppFont(gaegu, family: 'Gaegu', hand: true),
     gothic: AppFont(gothic, family: 'NanumGothic'),
@@ -517,8 +531,7 @@ class AppTheme {
         : BorderSide(color: p.line, width: s.borderWidth);
 
     final theme = base.copyWith(
-      scaffoldBackgroundColor:
-          transparentCanvas ? Colors.transparent : p.bg,
+      scaffoldBackgroundColor: transparentCanvas ? Colors.transparent : p.bg,
       colorScheme: base.colorScheme.copyWith(
         brightness: brightness,
         primary: p.indigo,
@@ -533,7 +546,9 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         shape: s.headerRule
-            ? Border(bottom: BorderSide(color: p.line, width: s.borderWidth))
+            ? Border(
+                bottom: BorderSide(color: p.line, width: s.borderWidth),
+              )
             : null,
         titleTextStyle: TextStyle(
           color: s.headerAccentTitle ? p.indigo : p.ink,

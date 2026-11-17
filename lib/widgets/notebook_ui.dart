@@ -58,14 +58,25 @@ class _HighlighterPainter extends CustomPainter {
     final path = Path()
       ..moveTo(-3, y + thick * 0.30)
       ..quadraticBezierTo(
-          size.width * 0.2, y - thick * 0.28, size.width * 0.5, y)
+        size.width * 0.2,
+        y - thick * 0.28,
+        size.width * 0.5,
+        y,
+      )
       ..quadraticBezierTo(
-          size.width * 0.8, y + thick * 0.24, size.width + 3, y - thick * 0.12)
+        size.width * 0.8,
+        y + thick * 0.24,
+        size.width + 3,
+        y - thick * 0.12,
+      )
       ..lineTo(size.width + 3, y + thick)
-      ..quadraticBezierTo(size.width * 0.8, y + thick * 1.12,
-          size.width * 0.5, y + thick * 0.86)
       ..quadraticBezierTo(
-          size.width * 0.2, y + thick * 0.7, -3, y + thick)
+        size.width * 0.8,
+        y + thick * 1.12,
+        size.width * 0.5,
+        y + thick * 0.86,
+      )
+      ..quadraticBezierTo(size.width * 0.2, y + thick * 0.7, -3, y + thick)
       ..close();
     canvas.drawPath(path, fill);
 
@@ -78,7 +89,11 @@ class _HighlighterPainter extends CustomPainter {
     final p2 = Path()
       ..moveTo(0, y + thick * 0.62)
       ..quadraticBezierTo(
-          size.width * 0.5, y + thick * 0.34, size.width, y + thick * 0.66);
+        size.width * 0.5,
+        y + thick * 0.34,
+        size.width,
+        y + thick * 0.66,
+      );
     canvas.drawPath(p2, swipe);
   }
 
@@ -123,8 +138,10 @@ class _AsteriskPainter extends CustomPainter {
     for (var i = 0; i < rays; i++) {
       final a = (i / rays) * 2 * math.pi + (rnd.nextDouble() - 0.5) * 0.24;
       final wob = 0.9 + rnd.nextDouble() * 0.28;
-      final tip = Offset(c.dx + math.cos(a) * r * wob,
-          c.dy + math.sin(a) * r * wob);
+      final tip = Offset(
+        c.dx + math.cos(a) * r * wob,
+        c.dy + math.sin(a) * r * wob,
+      );
       final mid = Offset(
         c.dx + math.cos(a) * r * 0.4 + (rnd.nextDouble() - 0.5) * 2.0,
         c.dy + math.sin(a) * r * 0.4 + (rnd.nextDouble() - 0.5) * 2.0,
@@ -219,9 +236,13 @@ class WashiTape extends StatelessWidget {
           color: (color ?? p.indigo).withValues(alpha: 0.18),
           border: Border(
             top: BorderSide(
-                color: (color ?? p.indigo).withValues(alpha: 0.35), width: 0.7),
+              color: (color ?? p.indigo).withValues(alpha: 0.35),
+              width: 0.7,
+            ),
             bottom: BorderSide(
-                color: (color ?? p.indigo).withValues(alpha: 0.35), width: 0.7),
+              color: (color ?? p.indigo).withValues(alpha: 0.35),
+              width: 0.7,
+            ),
           ),
         ),
         child: child,
