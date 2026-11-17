@@ -62,6 +62,7 @@ class AppSkins {
 
   /// Ordered list of skin ids (also the picker order).
   static const List<String> ids = [
+    'white',
     'sage',
     'notebook',
     'midnight',
@@ -71,6 +72,28 @@ class AppSkins {
   ];
 
   static const Map<String, AppPalette> _light = {
+    // 0) White — a clean sheet of paper. No tint at all: every other skin has a
+    //    cast (green, cream, blue, coral…), and sometimes what you want is none.
+    //    Deliberately not pure #FFFFFF for the page: two whites stacked read as
+    //    a rendering mistake, so bg and card differ by 1.5%.
+    'white': AppPalette(
+      id: 'white',
+      emoji: '🤍',
+      indigo: Color(0xFF4A5B8C),
+      indigoDark: Color(0xFF36446B),
+      teal: Color(0xFF6E8CA0),
+      bg: Color(0xFFFAFAFA),
+      card: Color(0xFFFFFFFF),
+      ink: Color(0xFF1B1B1D),
+      inkSoft: Color(0xFF6E6E73),
+      line: Color(0xFFE2E2E5),
+      danger: Color(0xFFB23A2E),
+      soft: Color(0xFFF2F2F4),
+      paper: Color(0xFFFCFCFC),
+      tracker: Color(0xFFE8E8EB),
+      onAccent: Color(0xFFFFFFFF),
+    ),
+
     // 1) Sage — a quiet, natural paper aesthetic (default).
     'sage': AppPalette(
       id: 'sage',
@@ -187,6 +210,27 @@ class AppSkins {
   };
 
   static const Map<String, AppPalette> _dark = {
+    // White in the dark. A "white" skin at night cannot stay white — the honest
+    // translation is neutral graphite with no colour cast, so switching skins at
+    // night keeps the character (plain, unfussy) without blinding anyone.
+    'white': AppPalette(
+      id: 'white',
+      emoji: '🤍',
+      indigo: Color(0xFFAFBCD9),
+      indigoDark: Color(0xFF8F9DBF),
+      teal: Color(0xFF9FB4C4),
+      bg: Color(0xFF121214),
+      card: Color(0xFF1C1C1F),
+      ink: Color(0xFFF0F0F2),
+      inkSoft: Color(0xFFA0A0A6),
+      line: Color(0xFF303036),
+      danger: Color(0xFFE08A75),
+      soft: Color(0xFF252529),
+      paper: Color(0xFF1A1A1D),
+      tracker: Color(0xFF2A2A2F),
+      onAccent: Color(0xFF131315),
+    ),
+
     'sage': AppPalette(
       id: 'sage',
       emoji: '🌿',
@@ -417,6 +461,47 @@ class AppFonts {
 /// The palette currently in effect.
 AppPalette get p => AppSkins.forId(_skinId, _brightness);
 Brightness get globalBrightness => _brightness;
+
+/// Whether the chrome (top bar, tab strip, right rail) is drawn in its
+/// compressed, low-ornament form.
+///
+/// ## Why a global and not a per-widget flag
+/// "Minimal" is not a property of one widget — it is a decision about how much
+/// the frame around the list is allowed to speak. If the tab strip went minimal
+/// and the rail did not, the screen would look half-finished. One switch, read
+/// by every chrome widget, keeps them honest with each other.
+///
+/// Defaults to true. The UX request was "make the top menu and the right rail
+/// minimal", so minimal is the behaviour, not an opt-in.
+bool _minimalChrome = true;
+bool get minimalChrome => _minimalChrome;
+void setMinimalChrome(bool on) => _minimalChrome = on;
+
+/// A quiet surface for chrome (tab strip, rail, chips) that is correct in BOTH
+/// brightnesses on its own.
+///
+/// ## The bug this exists to kill
+/// Chrome used to be painted `p.card`. In a light palette that is white, which
+/// is fine; in a dark palette `p.card` is *also* a light surface if the palette
+/// and the MaterialApp disagree about brightness — and that disagreement is
+/// exactly what produced a stark white rail on a near-black list.
+///
+/// Rather than trust the palette, the chrome colour is now *derived* from the
+/// ink colour at a low alpha and composited over the page background. Ink is
+/// by definition the colour that contrasts with the page, so a 4.5% veil of it
+/// is guaranteed to be a subtle shift in the correct direction — lighter than
+/// the page in dark mode, darker than it in light mode. One expression, correct
+/// in every skin, with no per-palette maintenance.
+Color get chromeSurface => Color.alphaBlend(
+      p.ink.withValues(alpha: p.bg.computeLuminance() < 0.5 ? 0.10 : 0.045),
+      p.bg,
+    );
+
+/// Hairline used to separate chrome bands. Same derivation, stronger.
+Color get chromeLine => Color.alphaBlend(
+      p.ink.withValues(alpha: p.bg.computeLuminance() < 0.5 ? 0.16 : 0.09),
+      p.bg,
+    );
 
 /// The user's font choice (see [Store.fontKey]).
 String get currentFontKey => _fontKey;

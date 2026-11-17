@@ -181,6 +181,23 @@ class SurfaceSpec {
   /// Width of the trailing state column (a completion mark, pin, recurrence).
   final double colState;
 
+  /// Show multi-category assignment inside a **table** row.
+  ///
+  /// The dense designs used to turn `showAssignChips` off, and that was a
+  /// mistake in judgement: the strip was dropped because it cost 32px of row
+  /// height, but what it actually took away was the ability to file one task
+  /// under two categories — a *capability*, not a decoration. A dense view is
+  /// worth nothing if it cannot do what the comfortable one does.
+  ///
+  /// So the strip comes back in a compressed form: one 13px line of dot-marked
+  /// tokens instead of a 26px scrollable row of pills. Only the categories the
+  /// task is actually in are drawn (the rest live in the long-press menu), so a
+  /// row with no assignments stays exactly as short as before.
+  ///
+  /// `showAssignChips` and this are mutually exclusive: a table row never draws
+  /// the tall pill strip.
+  final bool miniChips;
+
   /// Draw the per-row delete button.
   ///
   /// Material's IconButton enforces a 48px (dense: 40px) minimum tap target, so
@@ -225,6 +242,7 @@ class SurfaceSpec {
     this.compactCategory = false,
     this.zebra = false,
     this.upperMeta = false,
+    this.miniChips = false,
     this.showDeleteButton = true,
     this.inlineMeta = false,
     this.showTableHeader = false,
@@ -505,7 +523,8 @@ class AppDesigns {
         metaSize: 9,
         checkSize: 20,
         rowDivider: true, // 헤어라인 한 줄이 여백을 대신한다
-        showAssignChips: false, // 칩 띠 제거 = 행당 32px 회수
+        showAssignChips: false, // 26px 필 띠 대신 miniChips(13px)를 쓴다
+        miniChips: true, // 분류 복수선택은 기능이다. 빼면 표가 반쪽이 된다.
         showNote: false,
         showMeta: true, // 분류·금액은 반드시 남긴다
         amountGutter: true, // 금액 우측 정렬 + 고정 폭
@@ -555,7 +574,8 @@ class AppDesigns {
         metaSize: 8,
         checkSize: 16,
         rowDivider: true,
-        showAssignChips: false,
+        showAssignChips: false, // 표 행은 필 띠 대신 miniChips 를 쓴다
+        miniChips: true,
         showNote: false,
         showMeta: true,
         amountGutter: true,
@@ -604,7 +624,8 @@ class AppDesigns {
         metaSize: 8.5,
         checkSize: 16,
         rowDivider: true,
-        showAssignChips: false,
+        showAssignChips: false, // 표 행은 필 띠 대신 miniChips 를 쓴다
+        miniChips: true,
         showNote: false,
         showMeta: false, // 두 번째 줄 없음 — 대신 열이 그 자리를 맡는다
         amountGutter: true,
@@ -653,7 +674,8 @@ class AppDesigns {
         metaSize: 8.5,
         checkSize: 17,
         rowDivider: true,
-        showAssignChips: false,
+        showAssignChips: false, // 표 행은 필 띠 대신 miniChips 를 쓴다
+        miniChips: true,
         showNote: false,
         showMeta: true,
         amountGutter: true,
@@ -702,7 +724,8 @@ class AppDesigns {
         metaSize: 9.5,
         checkSize: 19,
         rowDivider: true,
-        showAssignChips: false,
+        showAssignChips: false, // 표 행은 필 띠 대신 miniChips 를 쓴다
+        miniChips: true,
         showNote: false,
         showMeta: true, // 날짜/요일이 이 테마의 존재 이유
         amountGutter: false,

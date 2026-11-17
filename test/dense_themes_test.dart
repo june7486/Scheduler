@@ -133,6 +133,7 @@ void main() {
 
   group('실제 렌더 — 스펙 숫자가 화면에 반영되는가', () {
     late Category cat;
+    late Category cat2;
     late Task task;
 
     setUp(() {
@@ -142,16 +143,28 @@ void main() {
         emoji: '✅',
         colorValue: 0xFF4C6B8A,
       );
+      // 두 번째 분류. 복수선택이 실제로 그려지는지 보려면 둘이 있어야 한다.
+      cat2 = Category(
+        id: 'finance',
+        label: '금전출납',
+        emoji: '💰',
+        colorValue: 0xFFB5842F,
+      );
       task = Task(
         id: 't1',
         title: '도면 검토 — 3층 평면',
         categoryId: 'todo',
+        categoryIds: const ['todo', 'finance'],
         note: '구조팀 확인 필요',
         amount: 1250000,
       );
     });
 
-    Future<double> rowHeight(WidgetTester tester, String designId) async {
+    Future<double> rowHeight(
+      WidgetTester tester,
+      String designId, {
+      bool singleCategory = false,
+    }) async {
       setDesign(designId);
       setFontPrefs('system', 1.0);
       setHandwriting(false);
@@ -167,7 +180,9 @@ void main() {
                   key: key,
                   task: task,
                   category: cat,
-                  assignTargets: [cat],
+                  // 복수선택 줄을 확인하려면 후보가 둘 이상 있어야 한다.
+                  // singleCategory: true 면 예전처럼 하나만 넘긴다.
+                  assignTargets: singleCategory ? [cat] : [cat, cat2],
                   onToggle: () {},
                   onTap: () {},
                   onDelete: () {},
@@ -262,6 +277,42 @@ void main() {
           reason: '$id: 행 높이 ${h.toStringAsFixed(1)}px — 표 행이 한 줄이 아니다',
         );
       }
+    });
+
+    // ── 분류 복수선택 ──────────────────────────────────────────────────────
+    //
+    // 고밀도 테마가 칩 띠를 끈 것은 밀도를 위해서였는데, 그 대가로
+    // '한 일을 두 분류에 넣는 기능' 자체가 사라졌다. 밀도는 기능을 지울
+    // 이유가 되지 못한다. 그래서 압축된 한 줄로 되돌렸다.
+
+    testWidgets('고밀도 테마에서도 분류 복수선택이 보인다', (tester) async {
+      for (final id in AppDesigns.denseIds) {
+        final spec = AppDesigns.of(id).surface;
+        expect(spec.miniChips, isTrue,
+            reason: '$id: 분류 복수선택이 없으면 표가 반쪽이 된다');
+        // 필 띠(26px)와 압축 줄을 동시에 그리면 정보가 두 번 나온다.
+        expect(spec.showAssignChips, isFalse,
+            reason: '$id: 필 띠와 miniChips 는 배타적이다');
+      }
+    });
+
+    testWidgets('여러 분류에 속한 일은 표 행에 분류가 모두 보인다', (tester) async {
+      for (final id in AppDesigns.denseIds) {
+        await rowHeight(tester, id);
+        // 두 번째 분류 이름이 실제로 그려져야 한다 (첫 번째는 분류 열에 이미 있다).
+        expect(find.textContaining('금전출납'), findsWidgets,
+            reason: '$id: 두 번째 분류가 표 행에 나오지 않는다 — 복수선택이 죽었다');
+      }
+    });
+
+    testWidgets('분류가 하나뿐인 일에는 압축 줄이 붙지 않는다 (행 높이 회귀)', (tester) async {
+      // 한 분류짜리 일에 "이미 분류 열에 보이는 이름"을 또 쓰면 잡음이다.
+      // 그 잡음이 행 높이를 먹는지 확인한다.
+      final oneCat = AppDesigns.of('terminal').surface;
+      final hOne = await rowHeight(tester, 'terminal', singleCategory: true);
+      expect(hOne, lessThan(30),
+          reason: '한 분류짜리 행이 ${hOne.toStringAsFixed(1)}px — 압축 줄이 불필요하게 붙었다');
+      expect(oneCat.miniChips, isTrue);
     });
 
     testWidgets('표는 정보를 빼지 않는다 — 분류·금액·제목이 모두 보인다', (tester) async {

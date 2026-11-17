@@ -30,6 +30,35 @@ ThemeMode _themeModeFor(String key) => switch (key) {
   _ => ThemeMode.system,
 };
 
+/// The brightness the app will actually paint with, resolved *before* the
+/// widget tree is built.
+///
+/// ## Why this cannot wait for MaterialApp.builder
+/// Widgets read colours through the global `p` accessor, which resolves the
+/// palette from a global brightness. Until this fix, that global was only
+/// updated inside `MaterialApp.builder` — but builder runs *after* the subtree
+/// it wraps has already been built for that frame. First frame therefore had:
+///
+///   ThemeData  → dark   (MaterialApp read the same store value)
+///   p          → light  (the global had not been updated yet)
+///
+/// The result was the worst of both: `p.card` panels painted white while the
+/// scaffold painted near-black, and `p.ink` text stayed dark-on-dark. Dark mode
+/// looked broken in a way that no single colour constant could explain.
+///
+/// Resolving the brightness here, from the same source of truth MaterialApp
+/// uses, removes the race entirely.
+Brightness _resolveBrightness(Store s, BuildContext context) {
+  switch (_themeModeFor(s.themeModeKey)) {
+    case ThemeMode.light:
+      return Brightness.light;
+    case ThemeMode.dark:
+      return Brightness.dark;
+    case ThemeMode.system:
+      return View.of(context).platformDispatcher.platformBrightness;
+  }
+}
+
 class JuneSchedulerApp extends StatelessWidget {
   final Store store;
   const JuneSchedulerApp({super.key, required this.store});
@@ -47,8 +76,13 @@ class JuneSchedulerApp extends StatelessWidget {
           setSkin(s.skinKey);
           // Hand-writing (pen) preference for non-notebook skins.
           setHandwriting(s.handwritingKey);
+          // Compressed chrome (top bar / tab strip / right rail).
+          setMinimalChrome(s.minimalChromeKey);
           // Font family + text-size choice.
           setFontPrefs(s.fontKey, s.fontScale);
+          // Brightness MUST be resolved before anything below reads `p`.
+          // See [_resolveBrightness] for the failure this prevents.
+          setGlobalBrightness(_resolveBrightness(s, context));
           return MaterialApp(
             title: s.language == 'en' ? "June's Scheduler" : 'June 스케줄러',
             debugShowCheckedModeBanner: false,
@@ -61,6 +95,10 @@ class JuneSchedulerApp extends StatelessWidget {
             // The skin + language bar is pinned at the very top so both are
             // ALWAYS reachable, on every screen.
             builder: (context, child) {
+              // Keep the global brightness in step with what is actually being
+              // painted. The pre-build resolution above already covers the
+              // first frame; this covers a change that arrives mid-tree (and
+              // ThemeMode.system flipping while the app is open).
               setGlobalBrightness(Theme.of(context).brightness);
               // Apply the user's global text-size choice to the whole app.
               // [effectiveFontScale] folds in the hand-writing legibility boost.

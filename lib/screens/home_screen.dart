@@ -229,10 +229,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------------- Top filter tabs ----------------
+  //
+  // Minimal mode: the strip loses ~14px of height, the chips lose their
+  // individual borders (a row of twelve outlined boxes is a wall of frames, not
+  // a tab strip), and the selected chip is marked by fill alone. The surface is
+  // [chromeSurface] rather than `p.card` so it can never be a white band on a
+  // dark page.
   Widget _topTabBar(List<Category> topCats) {
+    final minimal = minimalChrome;
     return Container(
-      height: 44,
-      color: p.card,
+      height: minimal ? 30 : 44,
+      decoration: BoxDecoration(
+        color: minimal ? chromeSurface : p.card,
+        border: minimal
+            ? Border(bottom: BorderSide(color: chromeLine))
+            : null,
+      ),
       child: Row(
         children: [
           // ‹ — scroll the tab strip left
@@ -364,25 +376,33 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _topChip(String id, String emoji, String label, {Color? color}) {
     final selected = _topTab == id;
     final col = color ?? p.indigo;
+    final minimal = minimalChrome;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
+      padding: EdgeInsets.symmetric(vertical: minimal ? 3 : 7, horizontal: 3),
       child: GestureDetector(
         onTap: () => setState(() => _topTab = id),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.symmetric(horizontal: minimal ? 9 : 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? col.withValues(alpha: 0.14) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? col.withValues(alpha: 0.5) : p.line,
-            ),
+            color: selected
+                ? col.withValues(alpha: minimal ? 0.18 : 0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(minimal ? 6 : 8),
+            // 미니멀에서는 테두리를 없앤다. 열두 개짜리 탭 줄에 상자를 열두 개
+            // 그리면 '탭'이 아니라 '액자 벽'이 된다. 선택은 채움으로만 말한다.
+            border: minimal
+                ? null
+                : Border.all(
+                    color: selected ? col.withValues(alpha: 0.5) : p.line,
+                  ),
           ),
           child: Text(
             '$emoji $label',
+            maxLines: 1,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: minimal ? 11.5 : 12,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected ? ct(col) : p.inkSoft,
             ),
@@ -613,26 +633,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------------- Right rail (instant categorisation) ----------------
+  //
+  // ## Minimal mode
+  // The rail used to be a 78px column of emoji + two-line Korean label + count
+  // badge for every category. It is a *shortcut*, not a reading surface: you
+  // glance at it to hit a target, and the list on the left pays for its width
+  // on a phone.
+  //
+  // In minimal mode it becomes a 40px strip of coloured dots with the category
+  // colour underneath — the colour is the identity you actually aim by, and the
+  // name was mostly being re-read from the tab strip above. The full name is
+  // one long-press (or hover) away via tooltip, so nothing is lost that was
+  // being used, and the list gains ~38px of width.
   Widget _rightRail(Store store, List<Category> cats) {
+    final minimal = minimalChrome;
     return Container(
-      width: 78,
+      width: minimal ? 40 : 78,
+      // chromeSurface is derived from ink-over-bg, so it cannot end up a white
+      // slab on a dark page the way `p.card` could.
       decoration: BoxDecoration(
-        color: p.card,
-        border: Border(left: BorderSide(color: p.line)),
+        color: minimal ? chromeSurface : p.card,
+        border: Border(left: BorderSide(color: chromeLine)),
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Text(
-              _selectedTaskId == null
-                  ? context.tr('select_task_then_tab')
-                  : context.tr('assign_to'),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 9.5, color: p.inkSoft, height: 1.3),
+          if (!minimal)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Text(
+                _selectedTaskId == null
+                    ? context.tr('select_task_then_tab')
+                    : context.tr('assign_to'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 9.5, color: p.inkSoft, height: 1.3),
+              ),
             ),
-          ),
-          const Divider(height: 1),
+          if (!minimal) const Divider(height: 1),
           // ▲ — scroll the category rail up
           _railArrow(
             icon: Icons.keyboard_arrow_up,
@@ -643,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: ListView.builder(
               controller: _railScroll,
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: EdgeInsets.symmetric(vertical: minimal ? 2 : 4),
               itemCount: cats.length,
               itemBuilder: (_, i) {
                 final c = cats[i];
@@ -657,6 +693,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           orElse: () => _emptyTask(),
                         )
                         .isInCategory(c.id);
+                if (minimal) return _railDot(c, col, count, isCurrent);
                 return InkWell(
                   onTap: () => _railTap(store, c),
                   child: Container(
@@ -770,6 +807,54 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Task _emptyTask() => Task(id: '_', title: '', categoryId: '');
+
+  /// One category in the minimal rail: a colour bar you aim at.
+  ///
+  /// The bar (not a dot) is deliberate — stacked, the bars read as one column of
+  /// colour, which is easier to aim by than forty separate circles. A bar is
+  /// filled when the selected task is filed here and hollow when it is not, so
+  /// "is this task in here?" is answered without reading anything.
+  Widget _railDot(Category c, Color col, int count, bool isCurrent) {
+    return Tooltip(
+      message: '${c.emoji} ${catLabel(c)}${count > 0 ? '  ($count)' : ''}',
+      waitDuration: const Duration(milliseconds: 250),
+      child: InkWell(
+        onTap: () => _railTap(context.read<Store>(), c),
+        child: SizedBox(
+          height: 34,
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: isCurrent ? col : Colors.transparent,
+                    border: Border.all(color: col, width: 1.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                if (count > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 3),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 8,
+                        height: 1.0,
+                        fontWeight: FontWeight.w700,
+                        color: p.inkSoft,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// Small ▲ ▼ arrow used by the vertical category rail.
   Widget _railArrow({

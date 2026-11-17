@@ -256,8 +256,7 @@ class TaskRow extends StatelessWidget {
               ),
 
             // The per-row category strip. Its absence is worth ~32px of every
-            // row — the largest single density win available, which is why the
-            // dense designs all switch it off.
+            // row — the largest single density win available.
             if (sx.showAssignChips) ...[
               SizedBox(height: sx.titleSize < 13 ? 4 : 6),
               SizedBox(
@@ -270,6 +269,9 @@ class TaskRow extends StatelessWidget {
                 ),
               ),
             ],
+
+            // Table rows never draw the tall pill strip; the extra memberships
+            // ride inside the title line instead. See [_miniChips].
           ],
         ),
       ),
@@ -285,12 +287,81 @@ class TaskRow extends StatelessWidget {
     );
   }
 
-  /// The secondary line: category, amount, and (when the design asks for it)
-  /// nothing at all.
+  /// The categories this task is filed under **besides** the primary one.
   ///
+  /// The primary category already owns a whole column in a table row, so
+  /// repeating it would be noise. What is missing from the picture — and what
+  /// the user asked for — is the *second* membership: this task is also filed
+  /// under 금전출납.
+  List<Category> get _extraAssigned => [
+        for (final c in assignTargets)
+          if (c.id != category.id && task.isInCategory(c.id)) c,
+      ];
+
+  /// Additional category memberships, folded onto the title line.
+  ///
+  /// ## Why this is not a separate line
+  /// The first attempt gave the extra categories their own row under the table
+  /// line. It worked, and it cost +14.7px on a 26.7px row — a 55% height
+  /// increase in the *dense* themes. That is not "showing multi-select in dense
+  /// mode", it is quietly deleting dense mode to make room. Two user requests
+  /// cannot be satisfied by cancelling one of them.
+  ///
+  /// So the tokens ride on the title line instead: zero height cost, and when
+  /// space runs out they clip with an ellipsis rather than wrap. The title wins
+  /// the fight for width — that is the correct priority in a table whose whole
+  /// purpose is scanning many rows.
+  ///
+  /// A coloured dot leads each token: two categories that read alike
+  /// (은행업무 / 금전출납) are told apart by colour before the letters are read.
+  Widget _miniChips() {
+    final items = _extraAssigned;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0)
+            Text(
+              '·',
+              style: TextStyle(
+                fontSize: sx.metaSize - 1,
+                color: p.inkSoft,
+                height: 1.0,
+              ),
+            ),
+          if (i > 0) const SizedBox(width: 4),
+          Container(
+            width: (sx.metaSize * 0.40).clamp(3.0, 4.5),
+            height: (sx.metaSize * 0.40).clamp(3.0, 4.5),
+            margin: const EdgeInsets.only(right: 3),
+            decoration: BoxDecoration(
+              color: Color(items[i].colorValue),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Flexible(
+            child: Text(
+              catLabel(items[i]),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: sx.metaSize - 0.5,
+                height: 1.0,
+                color: p.inkSoft,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   /// `compactCategory` is the middle gear between a full `📁 이름` chip and no
   /// category information: a small colour swatch plus the first two characters,
   /// which still tells the categories apart at a glance.
+  ///
   /// A row laid out as **columns**, which is the whole point of a dense table.
   ///
   /// The difference from the ordinary row is not size, it is *structure*. An
@@ -409,6 +480,13 @@ class TaskRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+                // 두 번째 이후 분류. 제목 줄에 얹으므로 행 높이가 늘지 않는다.
+                // 표에서 '분류를 두 개에 넣는 기능'이 사라졌던 문제를 이렇게
+                // 되돌린다 — 줄을 늘리지 않고 정보만 더한다.
+                if (sx.miniChips && _extraAssigned.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Flexible(flex: 2, child: _miniChips()),
                 ],
               ],
             ),

@@ -2331,6 +2331,22 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Compressed chrome (top bar / tab strip / right rail).
+  ///
+  /// Default true: the request was "make the top menu and the right rail
+  /// minimal", so minimal is the shipped behaviour. Kept as a preference rather
+  /// than hard-coded so it can be turned back off without a rebuild.
+  bool get minimalChromeKey => _getPref<bool>(
+    'minimal_chrome',
+    (_users.get('__minimal_chrome__') as bool?) ?? true,
+  );
+
+  Future<void> setMinimalChromeKey(bool on) async {
+    await _users.put('__minimal_chrome__', on);
+    _putPref('minimal_chrome', on);
+    notifyListeners();
+  }
+
   /// Font family choice (see [AppFonts.ids]): 'system' (Windows / platform
   /// default, the app default), 'pen' (NanumPenScript), 'gaegu' (Gaegu),
   /// 'gothic' (NanumGothic), 'myeongjo', 'dodum', 'jua', 'dohyeon', 'black'.
