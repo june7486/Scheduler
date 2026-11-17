@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../services/session_service.dart';
 import '../services/store.dart';
 import '../theme/app_theme.dart';
+import 'guide_screen.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -338,6 +339,52 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// 「처음이신가요? 사용 안내」 / 「프로그램 소개」 한 줄.
+  ///
+  /// OutlinedButton 을 쓰지 않은 이유: 이 버튼은 로그인이 아니라 **옆길**이다.
+  /// 같은 테두리·같은 높이로 만들면 로그인 버튼과 형제처럼 보여서, 급한
+  /// 사람이 잘못 누른다. 그래서 테두리는 유지하되(누를 수 있다는 신호),
+  /// 채움 없이 아이콘 + 글자 + 화살표만 두고 높이를 조금 낮춘다.
+  Widget _guideRow({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(11),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: p.line),
+            color: p.soft.withValues(alpha: 0.45),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: p.indigo),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: p.ink,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 17, color: p.inkSoft),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Long-press a saved account to remove it from this device.
   void _confirmForget(User u) {
     showDialog(
@@ -494,6 +541,29 @@ class _LoginScreenState extends State<LoginScreen> {
                             side: BorderSide(color: p.indigo),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
+                        ),
+
+                        // ---- 처음 오신 분을 위한 두 문 ----
+                        //
+                        // 새 아이디 만들기 **바로 아래**에 둔다. 이 화면에서
+                        // 가장 곤란한 사람은 아이디가 없는 사람이고, 그 사람이
+                        // 다음에 품는 질문은 둘 중 하나다: "이거 어떻게 써?"
+                        // 또는 "이게 뭐야?". 그 질문이 생기는 자리에 답을 둔다.
+                        //
+                        // 아래쪽(캐시 삭제 옆)에 두면 안 된다. 거기는 이미
+                        // 로그인을 마친 사람이 지나가는 자리고, 정작 필요한
+                        // 사람은 거기까지 스크롤하지 않는다.
+                        const SizedBox(height: 8),
+                        _guideRow(
+                          icon: Icons.info_outline_rounded,
+                          label: context.tr('guide_new_here'),
+                          onTap: () => openGuide(context, GuideKind.howToUse),
+                        ),
+                        const SizedBox(height: 8),
+                        _guideRow(
+                          icon: Icons.eco_outlined,
+                          label: context.tr('guide_about'),
+                          onTap: () => openGuide(context, GuideKind.aboutProgram),
                         ),
                         const SizedBox(height: 10),
                         Text(

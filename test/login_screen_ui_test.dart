@@ -21,6 +21,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:june_scheduler/screens/login_screen.dart';
+import 'package:june_scheduler/screens/guide_screen.dart';
+import 'package:june_scheduler/l10n/l10n.dart';
 import 'package:june_scheduler/services/cloud/cloud_backend.dart';
 import 'package:june_scheduler/services/store.dart';
 import 'package:june_scheduler/theme/app_theme.dart';
@@ -141,5 +143,100 @@ void main() {
     expect(find.text('대표'), findsOneWidget);
     expect(find.byIcon(Icons.key_outlined), findsOneWidget,
         reason: '자리표시자 비밀번호는 저장되면 안 된다');
+  });
+
+  // ── 처음 오신 분을 위한 두 문 ──────────────────────────────────────────
+  //
+  // 이 버튼들은 "있으면 좋은 것"이 아니라, 계정이 아직 없는 사람이 앱을
+  // 쓸 수 있게 하는 유일한 설명이다. 리팩터링 과정에서 조용히 사라지는
+  // 일이 실제로 있을 수 있어서 존재와 동작을 함께 고정한다.
+
+  testWidgets('로그인 화면에 사용 안내·프로그램 소개가 보인다', (tester) async {
+    await tester.runAsync(openStore);
+    await pump(tester);
+
+    expect(find.text('처음이신가요? 사용 안내'), findsOneWidget,
+        reason: '처음 온 사람을 위한 안내 입구가 없다');
+    expect(find.text('프로그램 소개'), findsOneWidget);
+  });
+
+  testWidgets('두 항목 모두 스크롤 없이 로그인 버튼 아래에서 찾을 수 있다', (tester) async {
+    await tester.runAsync(openStore);
+    // 실제 폰에 가까운 크기. 로그인 폼 + 안내 두 줄이 한 화면에 들어와야
+    // "아이디가 없어 막힌 사람"이 그 자리에서 답을 본다.
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    await pump(tester);
+
+    final signIn = tester.getRect(find.widgetWithText(ElevatedButton, '로그인'));
+    final guide = tester.getRect(find.text('처음이신가요? 사용 안내'));
+    final about = tester.getRect(find.text('프로그램 소개'));
+
+    expect(guide.top, greaterThan(signIn.bottom),
+        reason: '안내는 로그인 버튼 아래에 있어야 한다');
+    expect(about.top, greaterThan(guide.top),
+        reason: '사용 안내가 먼저, 프로그램 소개가 다음');
+    expect(about.bottom, lessThan(844.0),
+        reason: '두 항목이 첫 화면 안에 들어와야 한다 (스크롤 없이)');
+  });
+
+  testWidgets('사용 안내를 누르면 안내 화면이 열린다', (tester) async {
+    await tester.runAsync(openStore);
+    await pump(tester);
+
+    await tester.tap(find.text('처음이신가요? 사용 안내'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(GuideScreen), findsOneWidget);
+    // 안내의 뼈대가 실제로 그려졌는지 (제목만 있고 본문이 비면 안 된다)
+    expect(find.text('June 스케줄러는 무엇인가요'), findsOneWidget);
+    expect(find.textContaining('www.scout.it.kr'), findsWidgets);
+  });
+
+  testWidgets('프로그램 소개를 누르면 소개 화면이 열린다', (tester) async {
+    await tester.runAsync(openStore);
+    await pump(tester);
+
+    await tester.tap(find.text('프로그램 소개'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(GuideScreen), findsOneWidget);
+    expect(find.text('누가 만들었나요'), findsOneWidget);
+  });
+
+  testWidgets('안내 화면은 스카우트 사이트로만 나가고, 스스로 닫힌다', (tester) async {
+    // 외부 브라우저를 실제로 열면 테스트 환경에서 실패하므로 막아 둔다.
+    // 요점은 "버튼이 있다"가 아니라 "화면이 자기 발로 닫힌다"이다.
+    await tester.runAsync(openStore);
+    await pump(tester);
+
+    await tester.tap(find.text('프로그램 소개'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(GuideScreen), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(GuideScreen), findsNothing);
+    expect(find.text('프로그램 소개'), findsOneWidget, reason: '로그인 화면으로 돌아와야 한다');
+  });
+
+  testWidgets('안내는 영어로도 번역되어 있다', (tester) async {
+    await tester.runAsync(openStore);
+    await tester.runAsync(() => store.setLanguage('en'));
+    // L10n.currentLang 은 앱 루트(main.dart)가 Store 를 보고 맞춰 주는 전역이다.
+    // 이 테스트는 main 을 거치지 않고 화면만 세우므로, 그 동기화를 여기서
+    // 대신 해 준다. 안 하면 store 는 영어인데 화면은 한국어로 그려진다.
+    L10n.currentLang = AppLang.en;
+    addTearDown(() => L10n.currentLang = AppLang.ko);
+    await pump(tester);
+
+    expect(find.text('First time here? How to use it'), findsOneWidget);
+    expect(find.text('What this program is'), findsOneWidget);
   });
 }

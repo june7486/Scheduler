@@ -97,6 +97,42 @@ class L10n {
     'version_note': '버전은 저장된 빌드 날짜·시간으로 정해집니다.',
     'session_kept': '아이디별 데이터는 따로 관리됩니다. 세션은 1시간 유지됩니다.',
 
+    // 처음 오신 분을 위한 안내 (로그인 버튼 바로 아래)
+    'guide_new_here': '처음이신가요? 사용 안내',
+    'guide_about': '프로그램 소개',
+    'guide_open_site': '스카우트 자료실 열기',
+    'guide_open_site_note': 'www.scout.it.kr',
+    'guide_what_title': 'June 스케줄러는 무엇인가요',
+    'guide_what_body':
+        '할 일을 한 줄씩 적고, 끝나면 체크하는 아주 평범한 목록입니다.\n'
+            '다만 세 가지를 더 붙였습니다.\n\n'
+            '· 마감일이 지나면 조용히 표시가 남습니다. 잔소리 대신 흔적만.\n'
+            '· 돈이 오가는 일은 금액을 함께 적어 둘 수 있습니다.\n'
+            '· 같은 아이디로 들어가면 아이폰·안드로이드·PC 어디서든 같은 목록이 보입니다.',
+    'guide_start_title': '3분이면 시작합니다',
+    'guide_start_1': '아이디를 하나 만듭니다. 다른 곳에 쓰지 않는 이름이면 충분합니다.',
+    'guide_start_2': '로그인하면 분류 14개가 미리 깔려 있습니다. 지우거나 이름을 바꿔도 됩니다.',
+    'guide_start_3': '아래쪽 + 단추로 할 일을 적습니다. 마감일·금액·메모는 원할 때만.',
+    'guide_start_4': '끝난 일은 동그라미를 누르면 취소선이 그어집니다. 기록은 지워지지 않습니다.',
+    'guide_start_5': '다른 기기에서 같은 아이디로 들어오면 목록이 따라옵니다.',
+    'guide_theme_title': '화면이 마음에 안 들면',
+    'guide_theme_body':
+        '오른쪽 위 아이콘을 누르면 디자인을 목록을 보면서 바로 바꿀 수 있습니다.\n'
+            '고밀도 테마(레저·터미널·컴팩트·매트릭스·크로노)는 목록을 표로 그립니다. '
+            '한 화면에 30~40줄이 들어가서, 하루치를 스크롤 없이 봅니다.',
+    'guide_data_title': '내 자료는 어디에 있나요',
+    'guide_data_body':
+        '기기에 먼저 저장하고, 로그인해 있는 동안 서버(NAS)와 주고받습니다.\n'
+            '인터넷이 끊겨도 적은 내용은 남고, 다시 연결되면 맞춰집니다.\n'
+            '비밀번호는 서버로 보내지 않고, 로그인 확인용 숫자로만 바꿔서 저장합니다.',
+    'guide_origin_title': '누가 만들었나요',
+    'guide_origin_body':
+        '건축사무소의 할 일과 스카우트 대장의 일정을 한 화면에서 굴리려고 만든 '
+            '개인용 도구입니다. 그래서 회계 프로그램처럼 보이지 않고, '
+            '종이 체크리스트처럼 생겼습니다.',
+    'guide_origin_link': '스카우트 자료는 www.scout.it.kr 에 있습니다.',
+    'guide_open_failed': '브라우저를 열지 못했습니다. 주소를 직접 입력해 주세요: {url}',
+
     // 빠른 로그인 (이 기기에서 사용한 계정)
     'saved_accounts': '이 기기에서 사용한 계정',
     'saved_accounts_hint': '이름을 누르면 바로 로그인합니다.',
@@ -521,6 +557,50 @@ class L10n {
     'saved_pw_note':
         'Passwords are stored on this device only and never sent to the server. Clear them on a shared device.',
     'cache_cleared': 'Cache cleared.',
+
+    // First-time guide (directly under the sign-in button)
+    'guide_new_here': 'First time here? How to use it',
+    'guide_about': 'What this program is',
+    'guide_open_site': 'Open the scout archive',
+    'guide_open_site_note': 'www.scout.it.kr',
+    'guide_what_title': 'What is June Scheduler',
+    'guide_what_body':
+        'An ordinary list: write a thing on a line, tick it when it is done.\n'
+            'Three things were added to that.\n\n'
+            '· When a due date passes, a quiet mark stays behind. A trace, not a nag.\n'
+            '· For anything involving money, you can write the amount beside it.\n'
+            '· Sign in with the same ID and iPhone, Android and PC all show the same list.',
+    'guide_start_title': 'Three minutes to get going',
+    'guide_start_1':
+        'Make one ID. Any name you do not use elsewhere is fine.',
+    'guide_start_2':
+        'You start with 14 categories already laid out. Delete them or rename them freely.',
+    'guide_start_3':
+        'Add a task with the + button. Due date, amount and note only when you want them.',
+    'guide_start_4':
+        'Tap the circle to strike a finished task through. Nothing is ever erased.',
+    'guide_start_5':
+        'Sign in from another device with the same ID and the list follows you.',
+    'guide_theme_title': 'If the screen does not suit you',
+    'guide_theme_body':
+        'Tap the icon at the top right to change the design while the list stays visible.\n'
+            'The dense themes (Ledger, Terminal, Compact, Matrix, Chrono) draw the list as a '
+            'table — 30 to 40 lines per screen, so a whole day fits without scrolling.',
+    'guide_data_title': 'Where do my notes live',
+    'guide_data_body':
+        'They are saved on the device first, then exchanged with the server (a NAS) while '
+            'you are signed in.\nIf the network drops, what you typed stays, and the two sides '
+            'catch up when it returns.\nPasswords are never sent; only a number derived from '
+            'them is stored for checking.',
+    'guide_origin_title': 'Who made this',
+    'guide_origin_body':
+        'A personal tool, built so that an architecture practice\'s to-do list and a scout '
+            'leader\'s schedule could run on one screen. That is why it does not look like '
+            'accounting software, and does look like a paper checklist.',
+    'guide_origin_link': 'Scout materials live at www.scout.it.kr.',
+    'guide_open_failed':
+        'Could not open the browser. Please enter the address yourself: {url}',
+
     'id_created': 'ID "{id}" created.',
     'language': 'Language',
     'display_grp': 'Display',
