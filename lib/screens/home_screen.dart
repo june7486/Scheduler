@@ -818,8 +818,15 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 늘어섰다. "빨강이 은행업무였나, 금전출납이었나"를 매번 기억해야 하고,
   /// 기억은 다음 화면에서 틀린다. **색은 이름을 대신하지 못한다.**
   ///
+  /// ## 색 막대도 이모지를 대신하지 못한다
+  /// 이름을 되살린 뒤에도 맨 앞의 색 막대는 여전히 자리만 차지했다.
+  /// 분류 14개에 색 14개를 배정하면 외워야 할 것이 하나 더 늘 뿐이고,
+  /// 정작 눈에 먼저 들어와야 하는 건 정보다. 그래서 막대를 걷어내고
+  /// 이모지(🏦 🎂 ⚜️)를 세웠다 — 그림은 읽지 않아도 되고, 글자는
+  /// 읽으면 되고, 색은 **현재 선택 표시에만** 조용히 쓴다.
+  ///
   /// 밀도는 글자를 없애서 만드는 게 아니라, 같은 글자를 더 작은 상자에
-  /// 넣어서 만든다. 그래서 이름을 되살린다 — 7px, 두 글자까지.
+  /// 넣어서 만든다. 그래서 이름은 그대로 둔다 — 7.5px, 두 글자까지.
   /// (한글 두 글자면 '은행/금전/개인/생일'처럼 실제로 구분된다.)
   Widget _railDot(Category c, Color col, int count, bool isCurrent) {
     final name = catLabel(c);
@@ -829,25 +836,45 @@ class _HomeScreenState extends State<HomeScreen> {
       waitDuration: const Duration(milliseconds: 250),
       child: InkWell(
         onTap: () => _railTap(context.read<Store>(), c),
-        child: SizedBox(
-          height: 34,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color:
+                isCurrent ? p.indigo.withValues(alpha: 0.13) : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: isCurrent
+                  ? p.indigo.withValues(alpha: 0.55)
+                  : Colors.transparent,
+              width: 1,
+            ),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 3.5,
-                    height: 13,
-                    decoration: BoxDecoration(
-                      color: isCurrent ? col : Colors.transparent,
-                      border: Border.all(color: col, width: 1.1),
-                      borderRadius: BorderRadius.circular(2),
+                  // 이모지가 정체성이다. 색 막대를 없앤 자리이고, 이제
+                  // "무슨 분류인지"가 색 암기 없이 바로 읽힌다.
+                  if (c.emoji.trim().isNotEmpty)
+                    Text(
+                      c.emoji,
+                      style: const TextStyle(fontSize: 11, height: 1.0),
+                    )
+                  else
+                    // 이모지 없는 사용자 분류: 작은 점 하나로 칸이 비는 것을 막는다.
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: col,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
                   if (count > 0) ...[
-                    const SizedBox(width: 2.5),
+                    const SizedBox(width: 1.5),
                     Text(
                       '$count',
                       style: TextStyle(
