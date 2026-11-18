@@ -648,7 +648,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _rightRail(Store store, List<Category> cats) {
     final minimal = minimalChrome;
     return Container(
-      width: minimal ? 40 : 78,
+      // 40px → 50px. 색 막대만으로는 어느 분류인지 알 수 없어서 이름(7.5px,
+      // 두 글자)을 되살렸고, 두 글자가 잘리지 않을 최소 폭이 필요하다.
+      // 78px(전체 이름)보다는 훨씬 좁으면서, 정체불명의 색 줄은 아니게.
+      width: minimal ? 50 : 78,
       // chromeSurface is derived from ink-over-bg, so it cannot end up a white
       // slab on a dark page the way `p.card` could.
       decoration: BoxDecoration(
@@ -808,48 +811,69 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Task _emptyTask() => Task(id: '_', title: '', categoryId: '');
 
-  /// One category in the minimal rail: a colour bar you aim at.
+  /// One category in the minimal rail.
   ///
-  /// The bar (not a dot) is deliberate — stacked, the bars read as one column of
-  /// colour, which is easier to aim by than forty separate circles. A bar is
-  /// filled when the selected task is filed here and hollow when it is not, so
-  /// "is this task in here?" is answered without reading anything.
+  /// ## 이름을 빼면 안 됐다
+  /// 첫 시도에서 색 막대만 남겼더니, 화면에는 정체불명의 색 줄 14개가
+  /// 늘어섰다. "빨강이 은행업무였나, 금전출납이었나"를 매번 기억해야 하고,
+  /// 기억은 다음 화면에서 틀린다. **색은 이름을 대신하지 못한다.**
+  ///
+  /// 밀도는 글자를 없애서 만드는 게 아니라, 같은 글자를 더 작은 상자에
+  /// 넣어서 만든다. 그래서 이름을 되살린다 — 7px, 두 글자까지.
+  /// (한글 두 글자면 '은행/금전/개인/생일'처럼 실제로 구분된다.)
   Widget _railDot(Category c, Color col, int count, bool isCurrent) {
+    final name = catLabel(c);
+    final short = name.characters.take(2).toString();
     return Tooltip(
-      message: '${c.emoji} ${catLabel(c)}${count > 0 ? '  ($count)' : ''}',
+      message: '${c.emoji} $name${count > 0 ? '  ($count)' : ''}',
       waitDuration: const Duration(milliseconds: 250),
       child: InkWell(
         onTap: () => _railTap(context.read<Store>(), c),
         child: SizedBox(
           height: 34,
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 4,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: isCurrent ? col : Colors.transparent,
-                    border: Border.all(color: col, width: 1.2),
-                    borderRadius: BorderRadius.circular(2),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 3.5,
+                    height: 13,
+                    decoration: BoxDecoration(
+                      color: isCurrent ? col : Colors.transparent,
+                      border: Border.all(color: col, width: 1.1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
-                if (count > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 3),
-                    child: Text(
+                  if (count > 0) ...[
+                    const SizedBox(width: 2.5),
+                    Text(
                       '$count',
                       style: TextStyle(
-                        fontSize: 8,
+                        fontSize: 7.5,
                         height: 1.0,
                         fontWeight: FontWeight.w700,
                         color: p.inkSoft,
                       ),
                     ),
-                  ),
-              ],
-            ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 1.5),
+              Text(
+                short,
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: TextStyle(
+                  fontSize: 7.5,
+                  height: 1.0,
+                  letterSpacing: -0.2,
+                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                  color: isCurrent ? ct(col) : p.inkSoft,
+                ),
+              ),
+            ],
           ),
         ),
       ),
