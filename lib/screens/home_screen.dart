@@ -280,6 +280,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           // ＋ 항목추가 — new tab/menu right where the tabs live
           _addItemButton(),
+          // ＋ 할 일 추가 — 상단에도 둔다 (하단 FAB 은 그대로 유지).
+          //
+          // ## 왜 둘 다인가
+          // 하단 FAB 은 "지금 목록에 한 줄 더" 라는 뜻이고, 손이 닿는 자리에
+          // 있어 편하다. 그런데 목록을 스크롤해 올라가 있으면 시야에서 멀고,
+          // PC 브라우저처럼 넓은 화면에서는 화면 반대편 구석에 있다.
+          // 목록을 읽는 눈은 위에 머무르므로, 추가 버튼도 거기 있어야 한다.
+          // 둘은 서로를 대체하지 않는다 — 하나는 근접성, 하나는 시야.
+          _addTaskButton(),
         ],
       ),
     );
@@ -339,6 +348,69 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The "할 일 추가" button pinned at the right of the tab bar.
+  ///
+  /// ## 왜 하단 FAB 을 없애지 않고 하나 더 두는가
+  /// 하단 FAB 은 *손*을 위한 자리다. 엄지가 닿고, 목록 맨 아래를 보고 있을 때
+  /// 바로 옆에 있다. 반대로 목록을 **읽는 눈**은 위쪽에 머문다. 목록이 길어져
+  /// 스크롤을 올려 놓으면 FAB 은 시야 밖 먼 구석이고, 데스크톱 브라우저처럼
+  /// 넓은 화면에서는 커서와 화면 반대편 끝이다. 그때 사람은 "추가하고 싶다"는
+  /// 생각과 "버튼을 찾는" 동작을 따로 해야 한다.
+  /// 그래서 둘은 서로의 대체물이 아니다 — 하나는 근접성, 하나는 시야다.
+  ///
+  /// ## 왜 [_addItemButton] 과 똑같이 생기면 안 되는가
+  /// 바로 옆에 똑같은 인디고 덩어리를 붙이면 두 버튼이 **하나의 넓은 버튼**으로
+  /// 읽힌다. 이 버튼은 채우지 않고 테두리만 인디고로 준다(tonal). 자주 쓰는
+  /// 동작이지만, 옆의 '항목추가'와는 다른 종류의 일이라는 것이 한눈에 보여야 한다.
+  ///
+  /// ## 좁은 화면
+  /// 480px 미만에서는 글자를 빼고 아이콘만 남긴다. 상단 바는 탭 목록이 주인공인
+  /// 곳이고, 버튼 두 개가 탭을 밀어내면 본말이 뒤집힌다. 뜻은 Tooltip 이 지고,
+  /// 하단 FAB 이 글자까지 달고 같은 일을 한다.
+  Widget _addTaskButton() {
+    final minimal = minimalChrome;
+    final narrow = MediaQuery.sizeOf(context).width < 480;
+    final label = context.tr('add_task');
+
+    final button = InkWell(
+      onTap: () => _openEditor(),
+      borderRadius: BorderRadius.circular(9),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: narrow ? 7 : 9,
+          vertical: minimal ? 5 : 6,
+        ),
+        decoration: BoxDecoration(
+          color: p.indigo.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: p.indigo.withValues(alpha: 0.55)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, size: 14, color: p.indigo),
+            if (!narrow) ...[
+              const SizedBox(width: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: p.indigo,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(message: label, child: button),
     );
   }
 
@@ -470,10 +542,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
         ),
         // ---------------- Completed section ----------------
+        //
+        // 완료 구역도 밀도를 따라간다. 목록이 표로 바뀌었는데 이 구역만
+        // 10px 여백에 12.5px 제목으로 남으면, 화면이 두 개의 앱처럼 보인다.
         Container(
           decoration: BoxDecoration(
-            color: p.card,
-            border: Border(top: BorderSide(color: p.line)),
+            color: chromeSurface,
+            border: Border(top: BorderSide(color: chromeLine)),
           ),
           child: Column(
             children: [
@@ -481,22 +556,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () =>
                     setState(() => _completedExpanded = !_completedExpanded),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 14,
-                    vertical: 10,
+                    vertical: sx.isTable ? 4 : 10,
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.check_circle_outline,
-                        size: 16,
+                        size: sx.isTable ? 13 : 16,
                         color: p.inkSoft,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         context.tr('completed'),
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: sx.isTable ? 11 : 12.5,
                           fontWeight: FontWeight.w700,
                           color: p.inkSoft,
                         ),
@@ -536,7 +611,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             final t = done[i];
                             final cat =
                                 store.categoryById(t.categoryId) ?? cats.first;
-                            return _completedRow(store, t, cat);
+                            return _completedRow(store, t, cat, i);
                           },
                         ),
                 ),
@@ -598,36 +673,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _completedRow(Store store, Task t, Category cat) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: p.line),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.check, size: 15, color: ct(Color(cat.colorValue))),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              t.title,
-              style: TextStyle(
-                fontSize: 12,
-                color: p.inkSoft,
-                decoration: TextDecoration.lineThrough,
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: () => store.deleteTask(t),
-            icon: Icon(Icons.delete_outline, size: 17, color: p.danger),
-            visualDensity: VisualDensity.compact,
-            tooltip: context.tr('delete'),
-          ),
-        ],
+  /// A completed task, drawn with the SAME row renderer as the active list.
+  ///
+  /// ## 두 가지 실수가 여기 있었고, 둘 다 고쳤다
+  ///
+  /// 1) 배경이 `Color(0xFFF7F8FC)` 로 **하드코딩**돼 있었다. 팔레트를 읽지
+  ///    않으니 다크모드에서도 이 줄만 순백으로 남고, 밝은 바탕 위의 밝은
+  ///    글자가 됐다. 이제 `p.card`/`p.line` 을 쓴다.
+  ///
+  /// 2) 완료된 일은 별도의 작은 위젯으로 그려서, 고밀도 테마를 골라도 이
+  ///    구역만 예전 모양 그대로였다. 같은 데이터를 두 가지 방식으로 그리면
+  ///    반드시 한쪽만 고치는 날이 온다 — 오늘이 그 날이었다.
+  ///
+  /// 그래서 `TaskRow` 를 그대로 쓴다. 완료 표시는 이미 `task.completed` 를
+  /// 읽어 체크 + 취소선으로 그리므로, 테마가 바뀌면 완료 구역도 같이 바뀐다.
+  Widget _completedRow(Store store, Task t, Category cat, int index) {
+    return GestureDetector(
+      onLongPress: () => _showTaskMenu(store, t),
+      child: TaskRow(
+        task: t,
+        category: cat,
+        assignTargets: store.enabledCategories,
+        stripeIndex: index,
+        onToggle: () => store.toggleComplete(t),
+        onTap: () => store.toggleComplete(t),
+        onDelete: () => _confirmDelete(store, t),
+        onAssign: (c) => store.toggleCategoryIn(t, c.id),
       ),
     );
   }
