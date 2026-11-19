@@ -205,16 +205,69 @@ void main() {
         topOf(tester, find.text(l), l),
     ];
 
-    expect(
-      withoutMinimal,
-      withMinimal,
-      reason: '테마를 바꾸자 패널의 항목 위치가 달라졌다. '
-          '이 패널은 테마를 *고르는* 자리이므로 크기가 흔들리면 안 된다',
-    );
+    // 정확히 같은 값을 요구하지 않고 0.5px 안쪽으로 본다. 의도는 "테마가
+    // 패널 구조를 바꾸지 않는다" 이지 소수점까지 같은 것이 아니다. 너무 엄격한
+    // 등식은 실기기 폭에서 이유 없이 깨진다.
+    for (var i = 0; i < withoutMinimal.length; i++) {
+      expect(
+        withoutMinimal[i],
+        closeTo(withMinimal[i], 0.5),
+        reason: '테마를 바꾸자 항목 위치가 '
+            '${withMinimal[i].toStringAsFixed(1)} → '
+            '${withoutMinimal[i].toStringAsFixed(1)} 로 움직였다. '
+            '이 패널은 테마를 *고르는* 자리이므로 크기가 흔들리면 안 된다',
+      );
+    }
     expect(
       tester.getRect(find.byType(Slider)).bottom,
-      sliderWithMinimal,
+      closeTo(sliderWithMinimal, 0.5),
       reason: '슬라이더 위치가 테마에 따라 움직인다',
+    );
+  });
+
+  testWidgets('디자인 선택기의 스킨 타일도 같은 압축 타일을 쓴다', (tester) async {
+    // 두 패널이 `_SkinTile` 을 공유한다. 한쪽만 고치면 다른 쪽이 예전 크기로
+    // 남아, 같은 앱 안에서 같은 선택지가 다르게 생기는 일이 생긴다.
+    await tester.runAsync(openStoreOnce);
+    L10n.currentLang = AppLang.ko;
+    setDesign('paper');
+    setFontPrefs('system', 1.0);
+    setHandwriting(false);
+    setMinimalChrome(true);
+    setGlobalBrightness(Brightness.light);
+
+    tester.view.physicalSize = const Size(390 * 3, 760 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<Store>.value(
+        value: store,
+        child: MaterialApp(
+          theme: AppTheme.build(AppSkins.defaultId, Brightness.light),
+          home: const Scaffold(body: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    showDesignPicker(tester.element(find.byType(Scaffold)), store);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(tester.takeException(), isNull, reason: '디자인 선택기가 터졌다');
+
+    final xs = <double>{};
+    for (final id in AppSkins.ids) {
+      final f = find.text(skinName(id));
+      expect(f, findsOneWidget, reason: '${skinName(id)} 타일이 없다');
+      xs.add((tester.getRect(f).left / 4).round() * 4.0);
+    }
+    expect(
+      xs.length,
+      3,
+      reason: '디자인 선택기의 스킨 타일이 ${xs.length}열이다 — '
+          '스킨 선택기와 같은 3열이어야 한다',
     );
   });
 }
