@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>June's Scheduler — 데이터 복구 도구</title>
+<style>
+  :root{
+    --indigo:#5B5BD6; --indigo-dark:#4444B0; --bg:#EEF0FB; --card:#fff;
+    --ink:#1E2138; --soft:#666B8A; --line:#D9DCF0; --ok:#2E7D5B; --warn:#B0513C;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:"Segoe UI","Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",Roboto,sans-serif;
+    background:linear-gradient(160deg,#EEF0FB 0%,#F6F7FE 45%,#EEF0FB 100%);
+    color:var(--ink); min-height:100vh; padding:22px 16px 60px;
+  }
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 6px;letter-spacing:-.2px}
+  .sub{color:var(--soft);font-size:13px;margin:0 0 20px;line-height:1.55}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;
+        box-shadow:0 1px 2px rgba(20,20,60,.05)}
+  .card h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:7px}
+  .badge{background:var(--indigo);color:#fff;border-radius:999px;font-size:10.5px;padding:2px 8px;font-weight:700}
+  button{
+    font:inherit;font-weight:700;font-size:13.5px;border:0;border-radius:10px;padding:11px 16px;
+    background:var(--indigo);color:#fff;cursor:pointer;transition:.15s;
+  }
+  button:hover{background:var(--indigo-dark)}
+  button.ghost{background:#fff;color:var(--indigo);border:1.5px solid var(--indigo)}
+  button.ghost:hover{background:#F3F4FE}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px}
+  .ok{color:var(--ok);font-weight:700}
+  .warn{color:var(--warn)}
+  .muted{color:var(--soft);font-size:12.5px;line-height:1.6}
+  pre{background:#0E1020;color:#DDE1F5;border-radius:10px;padding:12px;font-size:11.5px;
+      max-height:260px;overflow:auto;margin:11px 0 0;white-space:pre-wrap;word-break:break-all}
+  ol{padding-left:20px;margin:8px 0 0;font-size:12.8px;line-height:1.75;color:var(--soft)}
+  code{background:#EFF1FA;border-radius:5px;padding:1px 5px;font-size:12px}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;font-size:12.5px;margin-top:10px}
+  .kv div:nth-child(odd){color:var(--soft)}
+  .kv div:nth-child(even){font-weight:700;text-align:right}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛠 June's Scheduler — 데이터 복구 도구</h1>
+  <p class="sub">
+    예전 주소(<code>june7486.github.io</code>)에 저장된 일정 데이터를 찾아 백업 파일로 내려받습니다.<br>
+    <strong class="warn">※ 이 페이지는 june7486.github.io 주소에서 열어야 합니다.</strong>
+    (www.aqdesign.co.kr 에서 열면 예전 데이터가 보이지 않습니다 — 브라우저가 주소별로 데이터를 따로 보관하기 때문입니다.)
+  </p>
+
+  <div class="card">
+    <h2>1️⃣ 현재 접속 주소 <span class="badge" id="originBadge">확인 중</span></h2>
+    <div class="kv">
+      <div>현재 주소</div><div id="origin">-</div>
+      <div>복구 대상</div><div>june7486.github.io</div>
+    </div>
+    <p class="muted" id="originNote" style="margin-top:10px"></p>
+  </div>
+
+  <div class="card">
+    <h2>2️⃣ 저장된 데이터 찾기</h2>
+    <p class="muted">
+      브라우저에 저장된 June's Scheduler 데이터베이스를 모두 검색합니다.
+      찾은 데이터는 화면에만 표시되며 어디로도 전송되지 않습니다.
+    </p>
+    <div class="row">
+      <button id="scanBtn">🔍 데이터 찾기</button>
+      <button id="dlBtn" class="ghost" disabled>⬇ 백업 파일 내려받기</button>
+    </div>
+    <div id="scanResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>3️⃣ 복원 방법</h2>
+    <ol>
+      <li>위 <strong>⬇ 백업 파일 내려받기</strong>를 눌러 <code>june_scheduler_backup_….json</code> 파일을 저장합니다.</li>
+      <li><a href="https://www.aqdesign.co.kr/" target="_blank" rel="noopener"><strong>www.aqdesign.co.kr</strong></a> 로 이동해 로그인합니다.</li>
+      <li><strong>설정 → 데이터 → 파일에서 복원</strong> 을 눌러 방금 받은 파일을 선택합니다.</li>
+      <li>일정·탭·음성메모가 그대로 되살아납니다. 🎉</li>
+    </ol>
+    <p class="muted" style="margin-top:12px">
+      데이터를 찾지 못했다면, 예전 데이터를 입력했던 <strong>그 브라우저</strong>에서 이 페이지를 열었는지 확인해 주세요.
+      (시크릿 모드·다른 기기·브라우저 데이터 삭제 시에는 복구할 수 없습니다.)
+    </p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const origin = location.origin;
+  document.getElementById('origin').textContent = origin;
+  const badge = document.getElementById('originBadge');
+  const note = document.getElementById('originNote');
+  const isTarget = /^https:\/\/june7486\.github\.io$/.test(origin);
+  if (isTarget) {
+    badge.textContent = '정상';
+    badge.style.background = '#2E7D5B';
+    note.innerHTML = '✅ 올바른 주소입니다. 아래 <strong>데이터 찾기</strong>를 눌러 주세요.';
+  } else {
+    badge.textContent = '주의';
+    badge.style.background = '#B0513C';
+    note.innerHTML = '⚠️ 예전 데이터는 <code>june7486.github.io</code> 주소에 저장되어 있습니다. ' +
+      '아래 링크로 다시 열어 주세요.<br>' +
+      '<a href="https://june7486.github.io/scheduler-data-recover/recover.html" ' +
+      'style="color:#5B5BD6;font-weight:700">→ june7486.github.io 복구 페이지 열기</a>';
+  }
+
+  let found = null; // best candidate backup
+
+  // ---- IndexedDB enumeration -------------------------------------------
+  async function listDatabases(){
+    if (!indexedDB.databases) return null;      // unsupported
+    try { return await indexedDB.databases(); } catch(e){ return null; }
+  }
+
+  function openDb(name){
+    return new Promise(res => {
+      let req;
+      try { req = indexedDB.open(name); } catch(e){ return res(null); }
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => res(null);
+      req.onblocked = () => res(null);
+      setTimeout(()=>{ if(req.readyState!=='done'){} }, 1500);
+    });
+  }
+
+  function readStore(db, storeName){
+    return new Promise(res => {
+      let out = [];
+      let tx;
+      try { tx = db.transaction(storeName, 'readonly'); } catch(e){ return res(out); }
+      const st = tx.objectStore(storeName);
+      const req = st.openCursor();
+      req.onsuccess = (e) => {
+        const cur = e.target.result;
+        if (cur){ out.push({key: cur.key, value: cur.value}); cur.continue(); }
+        else res(out);
+      };
+      req.onerror = () => res(out);
+    });
+  }
+
+  async function dumpDatabase(name){
+    const db = await openDb(name);
+    if (!db) return null;
+    const stores = Array.from(db.objectStoreNames || []);
+    const data = {};
+    for (const s of stores){
+      data[s] = await readStore(db, s);
+    }
+    db.close();
+    return {name, stores, data};
+  }
+
+  // Hive boxes → the app's backup JSON shape.
+  function toBackup(dump){
+    const pick = (box) => {
+      const rows = dump.data[box] || [];
+      return rows.map(r => {
+        let v = r.value;
+        if (typeof v === 'string'){
+          try { v = JSON.parse(v); } catch(e){ /* keep string */ }
+        }
+        return v;
+      }).filter(v => v && typeof v === 'object');
+    };
+    const users = pick('users').filter(u => u && u.id && !String(u.id).startsWith('__'));
+    const backup = {
+      version: 'recovered',
+      exportedAt: new Date().toISOString(),
+      recoveredFrom: location.origin,
+      users: users,
+      tasks: pick('tasks'),
+      categories: pick('categories'),
+      logs: pick('logs'),
+      voices: pick('voices')
+    };
+    return backup;
+  }
+
+  function score(backup){
+    return (backup.tasks || []).length * 10 + (backup.categories || []).length * 2 +
+           (backup.users || []).length * 5 + (backup.voices || []).length * 3;
+  }
+
+  // ---- UI ---------------------------------------------------------------
+  const scanBtn = document.getElementById('scanBtn');
+  const dlBtn = document.getElementById('dlBtn');
+  const out = document.getElementById('scanResult');
+
+  scanBtn.addEventListener('click', async () => {
+    scanBtn.disabled = true;
+    out.innerHTML = '<p class="muted">🔍 검색 중…</p>';
+    dlBtn.disabled = true;
+    found = null;
+
+    let candidates = [];
+    const dbs = await listDatabases();
+    let names = [];
+    if (dbs && dbs.length){
+      names = dbs.map(d => d.name).filter(Boolean);
+    } else {
+      // Fallback for browsers without indexedDB.databases()
+      names = ['hive','hive_flutter','JuneScheduler','june_scheduler','flutter'];
+    }
+
+    let rows = '';
+    for (const name of names){
+      const dump = await dumpDatabase(name);
+      if (!dump) continue;
+      const hit = dump.stores.filter(s =>
+        ['users','tasks','categories','logs','voices'].includes(s) && (dump.data[s]||[]).length);
+      if (!hit.length) continue;
+      const backup = toBackup(dump);
+      const sc = score(backup);
+      candidates.push({name, score: sc, backup, counts: {
+        users:(backup.users||[]).length, tasks:(backup.tasks||[]).length,
+        categories:(backup.categories||[]).length, voices:(backup.voices||[]).length
+      }});
+      rows += `<div class="kv">
+        <div>DB</div><div><code>${name}</code></div>
+        <div>사용자</div><div>${(backup.users||[]).length}</div>
+        <div>일정(할일)</div><div>${(backup.tasks||[]).length}</div>
+        <div>탭/카테고리</div><div>${(backup.categories||[]).length}</div>
+        <div>음성메모</div><div>${(backup.voices||[]).length}</div>
+      </div><hr style="border:0;border-top:1px solid var(--line);margin:9px 0">`;
+    }
+
+    scanBtn.disabled = false;
+
+    if (!candidates.length){
+      out.innerHTML = `<p class="warn" style="font-weight:700;margin:10px 0 0">😢 저장된 데이터를 찾지 못했습니다.</p>
+        <p class="muted">이 브라우저에 예전 데이터가 없습니다. 예전에 사용하던 <strong>바로 그 브라우저</strong>에서
+        (시크릿 모드 아님) 이 페이지를 다시 열어 주세요.</p>`;
+      return;
+    }
+
+    candidates.sort((a,b) => b.score - a.score);
+    found = candidates[0].backup;
+
+    out.innerHTML = `<p class="ok" style="margin:10px 0 0">✅ 데이터를 찾았습니다!</p>
+      <div class="muted" style="margin-top:4px">가장 내용이 많은 항목을 복구 대상으로 선택했습니다.</div>${rows}
+      <pre>${JSON.stringify({tasks:found.tasks.length, categories:found.categories.length, users:found.users.length}, null, 2)}</pre>`;
+    dlBtn.disabled = false;
+  });
+
+  dlBtn.addEventListener('click', () => {
+    if (!found) return;
+    const stamp = new Date();
+    const p = n => String(n).padStart(2,'0');
+    const name = `june_scheduler_backup_${stamp.getFullYear()}${p(stamp.getMonth()+1)}${p(stamp.getDate())}_${p(stamp.getHours())}${p(stamp.getMinutes())}.json`;
+    const blob = new Blob([JSON.stringify(found, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.style.display='none';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+})();
+</script>
+</body>
+</html>
