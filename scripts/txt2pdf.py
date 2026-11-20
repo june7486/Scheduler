@@ -28,6 +28,10 @@ from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate,
 FONT_DIR = Path("/usr/share/fonts/truetype/nanum")
 FONT_R = FONT_DIR / "NanumGothic.ttf"
 FONT_B = FONT_DIR / "NanumGothicBold.ttf"
+# 고정폭 블록 전용. 나눔고딕은 비례폭이라 표의 열이 어긋납니다.
+# 나눔고딕코딩은 한글·영문 모두 고정폭이어서 열 맞춤이 됩니다.
+FONT_M = FONT_DIR / "NanumGothicCoding.ttf"
+FONT_MB = FONT_DIR / "NanumGothicCodingBold.ttf"
 
 EQ = "=" * 80
 DASH = "-" * 80
@@ -37,6 +41,16 @@ def register_fonts() -> None:
     if not FONT_R.exists():
         sys.exit(f"한글 폰트가 없습니다: {FONT_R}")
     pdfmetrics.registerFont(TTFont("Nanum", str(FONT_R)))
+    # 고정폭 폰트가 없으면 비례폭으로 대체합니다 (열은 어긋나지만 글자는 나옵니다).
+    mono = FONT_M if FONT_M.exists() else FONT_R
+    mono_b = FONT_MB if FONT_MB.exists() else mono
+    pdfmetrics.registerFont(TTFont("NanumMono", str(mono)))
+    pdfmetrics.registerFont(TTFont("NanumMonoB", str(mono_b)))
+    pdfmetrics.registerFontFamily("NanumMono", normal="NanumMono",
+                                  bold="NanumMonoB", italic="NanumMono",
+                                  boldItalic="NanumMonoB")
+    if not FONT_M.exists():
+        print(f"경고: 고정폭 폰트가 없어 비례폭으로 대체합니다: {FONT_M}")
     if FONT_B.exists():
         pdfmetrics.registerFont(TTFont("NanumB", str(FONT_B)))
         pdfmetrics.registerFontFamily("Nanum", normal="Nanum",
@@ -70,10 +84,10 @@ def styles() -> dict:
             "body", fontName="Nanum", fontSize=9.2, leading=14.6,
             alignment=TA_LEFT, textColor=colors.HexColor("#1a1a1a")),
         "mono": ParagraphStyle(
-            "mono", fontName="Nanum", fontSize=8.4, leading=12.4,
+            "mono", fontName="NanumMono", fontSize=8.4, leading=12.4,
             textColor=colors.HexColor("#1a1a1a")),
         "mono_small": ParagraphStyle(
-            "mono_small", fontName="Nanum", fontSize=8.2, leading=12.6,
+            "mono_small", fontName="NanumMono", fontSize=8.2, leading=12.6,
             textColor=colors.HexColor("#333333")),
     }
 
