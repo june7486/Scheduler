@@ -605,8 +605,16 @@ def do_deploy(cfg: dict, *, dry_run: bool, fail_inject: bool = False) -> int:
     say("━" * 62)
     say(f"  프로토콜 : {cfg['GABIA_PROTOCOL'].upper()}")
     say(f"  호스트   : {cfg['GABIA_HOST']}:{cfg['GABIA_PORT']}")
-    say(f"  계정     : {cfg['GABIA_USER']}")
+    say(f"  계정     : {cfg['GABIA_USER'] or '(없음)'}")
     say(f"  경로     : {cfg['GABIA_PATH']}")
+    # ## 침묵하지 않는 이유
+    # --dry-run 은 계정 없이도 돌아간다 (파일 목록만 확인하는 용도). 그런데
+    # 계정 칸이 조용히 비어 있으면 "준비됐다"고 오해하게 된다. 준비 상태와
+    # 미완 상태를 눈에 보이게 구분해 둔다.
+    if not cfg.get("GABIA_USER") or not cfg.get("GABIA_PASS"):
+        say("")
+        warn("계정 정보가 아직 없습니다 — 이 상태로는 실제 업로드가 되지 않습니다.")
+        say("       채울 곳:  .env.gabia  (템플릿: scripts/env.gabia.example)")
     say("")
 
     say("① 올릴 파일 목록 작성...")
