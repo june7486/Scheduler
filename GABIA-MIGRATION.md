@@ -24,6 +24,37 @@ DNS만 되돌리면 즉시 원상복구됩니다. 그러니 5국면은 **최소 
 
 ---
 
+## 0-1. ⚠️ 이전 전에 반드시 — 배포본 누출 검사
+
+이전 절차보다 **먼저** 처리해야 할 것이 있습니다. 2026-11-20 에 확인한 사실:
+
+```
+build/web/main.dart.js 오프셋 2,920,179
+  "https://sync.june7558.direct.quickconnect.to"
+```
+
+현재 배포본에는 NAS 주소가 들어 있고, 그 번들은 공개 서빙됩니다.
+**가비아로 그대로 옮기면 같은 노출이 새 서버로 이사만 합니다.**
+
+이전 전에:
+
+```bash
+python3 scripts/check_bundle_secrets.py --strict   # 차단 대상 0건이어야 함
+```
+
+0건이 아니면 **`SYNC_URL` / `SYNC_KEY` 없이 다시 빌드**하세요. 설정 화면에
+주소 입력란이 있으므로 심지 않아도 동작합니다.
+
+```bash
+flutter build web --release --base-href "/" \
+  --dart-define=BUILD_ID="$(date +%Y.%m.%d.%H%M)"
+```
+
+`scripts/auto_deploy.sh` 는 이 검사를 자동으로 돌리고, 실패하면 배포하지
+않습니다. 자세한 배경은 `INCIDENT-2026-11-20.md` 를 보세요.
+
+---
+
 ## 1. 국면 1 — 파일 올리기 (DNS 손대지 않음)
 
 ### 1-1. 가비아 FTP 정보 확인
