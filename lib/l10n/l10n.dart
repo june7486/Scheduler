@@ -464,6 +464,15 @@ class L10n {
     'clear_log': '기록 지우기',
     'no_activity': '아직 활동 기록이 없습니다.',
 
+    // Update
+    'update_available_title': '새 버전이 준비되었습니다',
+    'update_no_notes': '새 빌드가 배포되었습니다.',
+    'update_build_info': '지금: {current}  →  새 빌드: {remote}',
+    'update_data_safe': '일정과 설정은 브라우저에 그대로 남습니다. 업데이트해도 사라지지 않습니다.',
+    'update_reload_notice': '업데이트하면 화면이 한 번 새로고침됩니다. 하던 입력이 있다면 먼저 저장하세요.',
+    'update_later': '나중에',
+    'update_now': '지금 업데이트',
+
     // Voice
     'voice_title': '음성 메모',
     'recording_limited': '웹에서는 녹음이 제한될 수 있습니다. 아래에 메모를 입력하세요.',
@@ -924,6 +933,17 @@ class L10n {
         'Tip: Open "Print / Export" from the top bar to preview and choose tabs, no-two-line, line spacing, orientation, font size and design mode.',
     'clear_log': 'Clear log',
     'no_activity': 'No activity yet.',
+
+    // Update
+    'update_available_title': 'A new version is ready',
+    'update_no_notes': 'A new build has been deployed.',
+    'update_build_info': 'Now: {current}  →  New: {remote}',
+    'update_data_safe':
+        'Your schedules and settings stay in this browser. Updating does not remove them.',
+    'update_reload_notice':
+        'Updating will reload the page once. Save any typing first.',
+    'update_later': 'Later',
+    'update_now': 'Update now',
 
     'voice_title': 'Voice Note',
     'recording_limited':

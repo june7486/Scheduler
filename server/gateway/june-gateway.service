@@ -1,0 +1,124 @@
+# =============================================================================
+# June Scheduler 게이트웨이 — systemd 유닛
+# =============================================================================
+# 허브 설계자 협의(2026-11-20)가 요구한 것 중 "실제 호스트에서 127.0.0.1
+# 바인딩 확인"에 해당하는 조치입니다. Node 코드는 HOST 기본값이 127.0.0.1 이지만,
+# 그건 코드의 기본값일 뿐이고 서버에서 무슨 일이 일어나는지는 이 유닛이 정합니다.
+#
+#   PORT=8097 node server/gateway/server.js
+#
+# 위 한 줄로는 loopback 바인딩이 보장되지 않습니다. 환경변수를 아무도 넣어주지
+# 않으면 그냥 코드 기본값에 기대게 되고, 누군가 셸 프로필에 HOST=0.0.0.0 을 넣어
+# 두면 조용히 인터넷에 열립니다. 그래서 여기서 **명시적으로** 박아둡니다.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 설치
+# ─────────────────────────────────────────────────────────────────────────────
+#   sudo useradd --system --home /srv/june7486 --shell /usr/sbin/nologin june
+#   sudo install -d -o june -g june /srv/june7486/sites/scheduler/{data,logs}
+#   sudo install -m 644 june-gateway.service /etc/systemd/system/
+#   sudo install -m 600 -o june -g june .env /srv/june7486/sites/scheduler/.env
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now june-gateway
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# 설치 직후 반드시 확인 (이게 이 파일의 존재 이유)
+# ─────────────────────────────────────────────────────────────────────────────
+#   # ① loopback 에만 있는가 — 127.0.0.1 은 200, 외부 IP 는 실패해야 정상
+#   curl -sS -m 3 http://127.0.0.1:8097/health
+#   curl -sS -m 3 "http://$(hostname -I | awk '{print $1}'):8097/health" \
+#     && echo "❌ 외부에서 닿습니다 — 즉시 확인" || echo "✅ 외부에서 안 닿음"
+#
+#   # ② 실제 바인딩 주소 (LISTEN 열의 0.0.0.0 이면 잘못된 것)
+#   ss -tlnp | grep 8097
+#
+#   # ③ 준비 상태
+#   curl -sS -i http://127.0.0.1:8097/readyz | head -1
+#
+#   # ④ 재부팅 후에도 살아나는가
+#   sudo systemctl is-enabled june-gateway
+# =============================================================================
+
+[Unit]
+Description=June Scheduler sync gateway
+Documentation=file:///srv/june7486/sites/scheduler/app/server/gateway/README.md
+After=network-online.target
+Wants=network-online.target
+
+# 연속 재시작이 너무 잦으면 systemd 가 포기합니다. 설정 오류로 무한 루프에
+# 빠졌을 때 로그만 부풀리는 것을 막는 안전장치입니다.
+#
+# ## 이 두 줄이 [Unit] 에 있는 이유
+# StartLimit* 는 [Unit] 소속입니다. [Service] 에 적으면 systemd 가
+# "Unknown key" 로 무시하고 넘어갑니다 — 오류로 죽지 않아서 조용히
+# 적용되지 않습니다. 실제로 그렇게 적었다가 systemd-analyze verify 에
+# 잡혀서 옮겼습니다. 재시작 폭주를 막는다고 믿었는데 아무 일도
+# 일어나지 않는 상태였습니다.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=june
+Group=june
+WorkingDirectory=/srv/june7486/sites/scheduler/app
+
+# ── 실행 명령 ──────────────────────────────────────────────────────────────
+# EnvironmentFile 로 .env 를 읽되, 아래 Environment= 가 그것을 덮어씁니다.
+# 순서가 중요합니다: 나중에 선언된 것이 이깁니다. 그래서 HOST 를 맨 뒤에 둡니다.
+# .env 에 HOST=0.0.0.0 이 실수로 들어 있어도 여기서 127.0.0.1 로 되돌립니다.
+EnvironmentFile=-/srv/june7486/sites/scheduler/.env
+Environment=NODE_ENV=production
+Environment=PORT=8097
+Environment=HOST=127.0.0.1
+Environment=STORAGE=local
+Environment=DATA_DIR=/srv/june7486/sites/scheduler/data
+
+ExecStart=/usr/bin/node server/gateway/server.js
+
+# ── 재시작 정책 ────────────────────────────────────────────────────────────
+# always = 비정상 종료뿐 아니라 정상 종료에도 다시 띄웁니다.
+# 게이트웨이는 "떠 있는 것이 정상"인 데몬이므로 이게 맞습니다.
+Restart=always
+RestartSec=3
+
+# ── 로그 ──────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=june-gateway
+
+# ── 보안 강화 ──────────────────────────────────────────────────────────────
+# 게이트웨이는 파일시스템 전체가 필요 없습니다. 데이터 디렉터리 하나면 됩니다.
+# 읽기 전용 루트 + 필요한 곳만 쓰기 허용이 원칙입니다.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+
+# ProtectSystem=strict 가 루트를 읽기 전용으로 만들므로, 쓰기가 필요한
+# 두 곳만 명시적으로 열어줍니다. 이 줄이 없으면 첫 쓰기에서 EROFS 로 죽습니다.
+ReadWritePaths=/srv/june7486/sites/scheduler/data
+ReadWritePaths=/srv/june7486/sites/scheduler/logs
+
+# 네트워크는 AF_INET/AF_INET6/UNIX 만. NAS(STORAGE=dsm) 를 쓰면 그대로 동작합니다.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# NAS 저장 모드에서 HTTPS 로 붙을 때 필요한 최소 권한
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# ── 리소스 ────────────────────────────────────────────────────────────────
+# 롱폴(wait 최대 20초) 요청이 쌓여도 이 정도면 충분합니다.
+# 이 값을 넘기면 OOM killer 가 아니라 자기 자신이 정리되도록 MemoryMax 를 씁니다.
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
