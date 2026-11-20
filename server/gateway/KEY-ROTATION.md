@@ -17,7 +17,7 @@ BUILD_ARGS+=(--dart-define=SYNC_KEY="${SYNC_KEY}")
 
 ```
 build/web/main.dart.js  offset 2,916,684
-  x:"46c8b41d…(64자)…"
+  x:"<64자 hex>"
 ```
 
 그 파일은 `https://www.aqdesign.co.kr/`에서 누구나 내려받습니다. 즉:
@@ -54,14 +54,14 @@ NAS의 `.env`를 엽니다.
 
 ```bash
 # 회전 전 상태 (예시)
-SYNC_SECRET=46c8b41d…(옛 키)
+SYNC_SECRET=<옛 키>
 ```
 
 이렇게 바꿉니다:
 
 ```bash
 SYNC_SECRET=<NEW_KEY>
-SYNC_SECRET_PREVIOUS=46c8b41d…(옛 키 그대로)
+SYNC_SECRET_PREVIOUS=<옛 키 그대로>
 ```
 
 재시작합니다.
@@ -90,7 +90,7 @@ curl -s -o /dev/null -w "new=%{http_code}\n" \
 
 # 옛 키 → 200 (이게 200이 아니면 절대 다음 단계로 가지 마세요)
 curl -s -o /dev/null -w "old=%{http_code}\n" \
-  -H "X-Sync-Key: 46c8b41d…" \
+  -H "X-Sync-Key: $OLD_KEY" \
   "http://127.0.0.1:8097/api/state?ws=TESTWS0001"
 ```
 
@@ -129,7 +129,7 @@ BUILD_ID="$(date +%Y.%m.%d.%H%M)" \
 curl -s https://www.aqdesign.co.kr/main.dart.js -o /tmp/check.js
 # 새 키가 있으면 1, 옛 키가 있으면 1 (배포 직후엔 둘 다 아닐 수 있음 — 캐시)
 grep -c "<NEW_KEY>" /tmp/check.js   # 1 이어야 함
-grep -c "46c8b41d"  /tmp/check.js   # 0 이어야 함
+grep -c "$OLD_KEY" /tmp/check.js   # 0 이어야 함
 ```
 
 ---
@@ -168,7 +168,7 @@ sed -i '/^SYNC_SECRET_PREVIOUS=/d' .env
 ```bash
 # 옛 키 → 401 이어야 함
 curl -s -o /dev/null -w "old_after=%{http_code}\n" \
-  -H "X-Sync-Key: 46c8b41d…" \
+  -H "X-Sync-Key: $OLD_KEY" \
   "http://127.0.0.1:8097/api/state?ws=TESTWS0001"
 
 # 새 키 → 200 이어야 함

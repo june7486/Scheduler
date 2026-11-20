@@ -82,8 +82,12 @@ SYNC_SECRET='long-random-string' node server.js
 | `NAS_FOLDER` | — | `dsm` 필수. 절대 경로 |
 | `NAS_INSECURE` | `1`(아니오) | `0` = 인증서 검증 |
 | `SYNC_SECRET` | (없음) | 앱이 `X-Sync-Key`로 보내는 공유 키. **공인 인터넷에서는 필수** |
+| `SYNC_SECRET_PREVIOUS` | (없음) | **키 교체 중에만** 쓰는 옛 키. 두 키를 동시에 수용합니다. [KEY-ROTATION.md](KEY-ROTATION.md) |
+| `HOST` | `127.0.0.1` | 바인딩 인터페이스. `0.0.0.0` 은 방화벽을 직접 관리할 때만 |
+| `CORS_ORIGINS` | (없음) | 교차 출처 허용 목록 (쉼표 구분). 비우면 같은 출처만 |
 | `CACHE_MS` | `8000` | 문서를 RAM에서 재사용하는 시간 |
-| `BASE_PATH` | (없음) | 리버스 프록시 하위 경로 (예: `/scheduler-sync`) |
+| `READY_CACHE_MS` | `5000` | `/readyz` 판정을 재사용하는 시간 |
+| `BASE_PATH` | (없음) | 리버스 프록시 하위 경로 (예: `/scheduler-sync`). **Nginx 환경에서는 비우세요** |
 
 ---
 
@@ -179,7 +183,18 @@ WantedBy=multi-user.target
 ```bash
 # 살아 있나? (키 없이 열립니다 — 자격증명 노출 방지)
 curl https://sync.aqdesign.co.kr/health
-# → {"ok":true,"service":"june-nas-gateway","storage":"local","nas":true,"time":…}
+# → {"ok":true,"service":"june-nas-gateway","nas":true}
+#   service: 우리 게이트웨이인지 (DSM 로그인 페이지가 200 으로 답한 것과 구분)
+#   nas    : 저장소에 쓸 수 있는지. STORAGE=local 이면 "데이터 폴더가 쓰기 가능"
+
+# 쓸 수 있는 상태인가? (프록시/모니터가 묻는 질문)
+curl -i https://sync.aqdesign.co.kr/readyz
+# 준비됨   → 200 {"ready":true}
+# 미준비   → 503 {"ready":false,"reason":"config|auth|storage"}
+#
+# /health 와 /readyz 를 나눠 둔 이유: 재부팅 직후 공유 폴더가 아직 마운트되지
+# 않은 상태에서는 프로세스가 살아 있고 /health 는 200 입니다. 그런데 저장은
+# 전부 실패합니다. /readyz 가 그 상태를 503 으로 드러냅니다.
 
 # 읽기
 curl -H "X-Sync-Key: $KEY" "https://sync.aqdesign.co.kr/api/state?ws=ACCYOURWORKSPACE"

@@ -64,8 +64,15 @@ case "${1:-start}" in
   status)
     if running; then
       echo "✅ running  pid=$(cat "$PIDFILE")"
-      curl -s -m 3 "http://127.0.0.1:${PORT:-8097}/health" || true
+      printf '   /health : '; curl -s -m 3 "http://127.0.0.1:${PORT:-8097}/health" || true
       echo
+      # Readiness is a *separate* question from liveness, and the one that
+      # matters after a reboot: a process can be up while the share is not
+      # mounted yet, in which case every save fails and nothing looks wrong.
+      printf '   /readyz : '; curl -s -m 5 -o /tmp/jg_readyz.$$ -w '%{http_code}' \
+        "http://127.0.0.1:${PORT:-8097}/readyz" 2>/dev/null || true
+      printf ' '; cat /tmp/jg_readyz.$$ 2>/dev/null || true; echo
+      rm -f /tmp/jg_readyz.$$
     else
       echo "⛔ not running"
       exit 1
@@ -113,8 +120,29 @@ sleep 2
 
 if running; then
   echo "✅ 시작했습니다. pid=$(cat "$PIDFILE")"
-  curl -s -m 3 "http://127.0.0.1:${PORT:-8097}/health" || true
+  printf '   /health : '; curl -s -m 3 "http://127.0.0.1:${PORT:-8097}/health" || true
   echo
+
+  # ## Why the launcher also asks /readyz
+  # `/health` answers "the process is alive". That is not the question after a
+  # reboot, when the NAS share may not be mounted yet: the process starts, the
+  # port opens, /health says 200, and every save fails silently until somebody
+  # notices days later. `/readyz` writes a scratch file and reports 503.
+  #
+  # A 503 here is not a reason to exit non-zero — the gateway is running and
+  # will become ready on its own once the mount appears (the verdict is cached
+  # for READY_CACHE_MS, so it re-probes). It *is* a reason to say so loudly.
+  ready_code=$(curl -s -m 5 -o /tmp/jg_readyz.$$ -w '%{http_code}' \
+    "http://127.0.0.1:${PORT:-8097}/readyz" 2>/dev/null || echo "000")
+  ready_body=$(cat /tmp/jg_readyz.$$ 2>/dev/null || true)
+  rm -f /tmp/jg_readyz.$$
+  if [ "$ready_code" = "200" ]; then
+    printf '   /readyz : %s %s\n' "$ready_code" "$ready_body"
+  else
+    printf '   /readyz : %s %s\n' "$ready_code" "$ready_body"
+    echo "   ⚠️  아직 준비되지 않았습니다. 저장소가 마운트되었는지 확인하세요."
+    echo "      (프로세스는 살아 있으므로 마운트되면 자동으로 준비 상태가 됩니다)"
+  fi
 else
   echo "❌ 시작 실패. 로그:"
   tail -20 "$LOG"

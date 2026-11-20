@@ -490,9 +490,20 @@ test('after the retired key is removed it stops working immediately', async () =
     // SYNC_SECRET_PREVIOUS deliberately absent — rotation finished
   });
   try {
-    const leaked = '46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d';
+    // ## Why the retired key is not written out here
+    // The first draft of this test pasted the real leaked key as a literal, to
+    // "prove" it no longer works. That is self-defeating: it re-published the
+    // credential inside the very file that asserts the credential is dead, in a
+    // public repository. A retired key has to be *unrecoverable* from the repo,
+    // which means the test cannot quote it.
+    //
+    // What is actually being pinned is the behaviour — "a key that is not the
+    // current one is refused" — and any wrong key proves that. `notCurrent` is
+    // deliberately the right length and shape so the check cannot pass merely
+    // because the input was malformed.
+    const notCurrent = 'f'.repeat(64);
     const res = await get(gw.port, '/api/state?ws=TESTWS0001', {
-      'X-Sync-Key': leaked,
+      'X-Sync-Key': notCurrent,
     });
     assert.strictEqual(
       res.status,
