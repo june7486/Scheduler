@@ -557,3 +557,110 @@ test('a malformed key header is refused without throwing', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Derivable workspace ids and the destructive verbs
+// ---------------------------------------------------------------------------
+//
+// `Store.workspaceCodeFor()` maps account id → workspace id with plain SHA-256,
+// and that code is in a public repo. The shared key is also public (compiled
+// into main.dart.js). Individually each is defensible; together they would let a
+// stranger compute a workspace id and erase it.
+//
+// Changing the derivation would orphan every existing document, so the fix is on
+// the destructive verbs: a wipe only lands on an account-shaped workspace id.
+
+/** POST helper — `get` above is GET-only and these routes need a body. */
+function post(port, urlPath, body, headers = {}) {
+  const raw = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path: urlPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(raw),
+          ...headers,
+        },
+      },
+      (res) => {
+        let out = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (out += c));
+        res.on('end', () =>
+          resolve({ status: res.statusCode, headers: res.headers, body: out })
+        );
+      }
+    );
+    req.on('error', reject);
+    req.end(raw);
+  });
+}
+
+test('reset is refused for a workspace id that is not account-shaped', async () => {
+  const dir = tempDataDir();
+  const key = 'k'.repeat(48);
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: key,
+  });
+  try {
+    const auth = { 'X-Sync-Key': key };
+
+    // Account-shaped: the derivation's own output shape. Allowed, because the
+    // wipe flow a real client performs has to keep working.
+    const ok = await post(gw.port, '/api/reset', { ws: 'ACC57DFBBA5C9FE10468296BE0DA575' }, auth);
+    assert.strictEqual(ok.status, 200);
+
+    // Not account-shaped: nothing legitimate wipes such a workspace, and an
+    // attacker cannot reach a stranger's document this way.
+    const refused = await post(gw.port, '/api/reset', { ws: 'SOMETHINGELSE0001' }, auth);
+    assert.strictEqual(refused.status, 403);
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a wipe shaped as a push is refused for a non-account workspace', async () => {
+  // Without this, the reset guard is decorative: the client's "I am the newest
+  // generation, with nothing in it" push reaches the same end state one call
+  // later. The two must agree or neither means anything.
+  const dir = tempDataDir();
+  const key = 'k'.repeat(48);
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: key,
+  });
+  try {
+    const auth = { 'X-Sync-Key': key };
+
+    const wipe = await post(
+      gw.port,
+      '/api/push',
+      { ws: 'SOMETHINGELSE0001', gen: 5, entities: {} },
+      auth
+    );
+    assert.strictEqual(wipe.status, 403, 'gen>0 with no entities is a wipe');
+
+    // A genuine first write must still work — that is how a new device seeds its
+    // own document, and blocking it would break sign-up on a clean NAS.
+    const seed = await post(
+      gw.port,
+      '/api/push',
+      { ws: 'SOMETHINGELSE0001', gen: 0, entities: { a1: { v: 1, updatedAt: 1 } } },
+      auth
+    );
+    assert.strictEqual(seed.status, 200, 'an ordinary first write must not be blocked');
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

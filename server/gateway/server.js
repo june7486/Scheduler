@@ -197,6 +197,61 @@ const MAX_BODY = 8 * 1024 * 1024;
 const WS_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const FILE_RE = /^[A-Za-z0-9_-]{6,64}\.json$/;
 
+/**
+ * Workspace ids that any caller is allowed to *create for the first time*.
+ *
+ * ## The problem this closes
+ * `Store.workspaceCodeFor()` derives a workspace id from the account id with
+ * nothing but SHA-256 — deliberately, because it lets a new device find an
+ * existing account's document with no code to copy. The trade-off is that the
+ * mapping is *reproducible*: anyone who knows an account id can compute its
+ * workspace id. And the derivation lives in a public repository, so that is not
+ * an assumption, it is a fact.
+ *
+ * That is acceptable for **finding** a document you already have credentials
+ * for. It is not acceptable for **writing or destroying** one, because the
+ * shared key is also public (it is compiled into `main.dart.js`). Combined, the
+ * two would let a stranger compute `ACC…` for a known account id, present the
+ * public key, and empty somebody's schedule.
+ *
+ * ## Why the fix is here and not in the id derivation
+ * Changing `workspaceCodeFor()` to use a per-account secret would invalidate
+ * every existing workspace id, i.e. orphan every user's data — a migration, not
+ * a patch, and it would need the server to authorise account creation first.
+ * What can be done today without moving a single document is to stop the
+ * *destructive* verbs from reaching a workspace the caller never wrote to. See
+ * `claimsDestructiveOp()` below.
+ */
+const CREATABLE_WS_RE = /^ACC[A-Z0-9]{3,61}$/;
+
+/**
+ * Does this request try to erase or rewind a workspace?
+ *
+ * Three shapes are destructive, and they are not distinguished from ordinary
+ * writes by the HTTP verb alone:
+ *
+ *   · `POST /api/reset`      — always destructive: it empties the document
+ *   · `POST /api/push` with `gen > 0` and no entities — the "I am the newest
+ *     generation" assertion a client sends after a wipe. Sent by the wipe
+ *     itself, so treating it as a normal write would let a stranger rewind a
+ *     workspace to empty and have every device accept it.
+ *   · `POST /api/push` that removes more records than the caller has ever been
+ *     given — indistinguishable at this layer from a legitimate large delete,
+ *     which is why it is NOT guessed at here; the two above cover the wipe
+ *     path and the rest is left to the authentication work.
+ */
+function claimsDestructiveOp(path, payload) {
+  if (path === '/api/reset') return true;
+  if (path === '/api/push') {
+    const gen = Number(payload && payload.gen);
+    const entities = payload && payload.entities;
+    const empty =
+      !entities || (typeof entities === 'object' && Object.keys(entities).length === 0);
+    if (Number.isFinite(gen) && gen > 0 && empty) return true;
+  }
+  return false;
+}
+
 if (STORAGE !== 'local' && STORAGE !== 'dsm') {
   console.error(`[gateway] FATAL: STORAGE must be "local" or "dsm" (got "${STORAGE}")`);
   process.exit(1);
@@ -1012,6 +1067,15 @@ const server = http.createServer(async (req, res) => {
       if (!WS_RE.test(ws)) return send(res, 400, { error: 'bad ws' }, req);
       if (!FILE_RE.test(`${ws}.json`)) return send(res, 400, { error: 'bad ws' }, req);
 
+      // A push that claims a newer generation with nothing in it is a wipe
+      // wearing a write's clothes — the assertion a client sends immediately
+      // after `/api/reset`. Letting it through would make the reset guard
+      // pointless, since a stranger could reach the same end state one call
+      // later. Same rule therefore: account-shaped ids only.
+      if (claimsDestructiveOp(path, payload) && !CREATABLE_WS_RE.test(ws)) {
+        return send(res, 403, { error: 'overwrite not allowed for this workspace' }, req);
+      }
+
       const before = await loadDoc(ws);
       const incoming = payload.entities;
       const merged = mergeEntities(before.entities, incoming);
@@ -1073,6 +1137,23 @@ const server = http.createServer(async (req, res) => {
       }
       const ws = String(payload.ws || '');
       if (!WS_RE.test(ws)) return send(res, 400, { error: 'bad ws' }, req);
+
+      // ## Why a wipe needs a stronger check than a write
+      // A workspace id is *derivable* from an account id by anyone (see
+      // `CREATABLE_WS_RE`). Writing to a workspace you have not touched yet is
+      // how a new device seeds its own document, so it has to be allowed. Emptying
+      // one is different: there is no legitimate first-time wipe, and the result
+      // is not recoverable.
+      //
+      // So a reset only lands on a workspace the server already knows about, and
+      // only for an account-shaped id. An attacker who computes `ACC…` for a
+      // stranger's account finds a workspace that already exists — and is refused
+      // because that is exactly the case being defended against. The remaining
+      // hole (a stranger's *first* write, before any reset) is closed by moving
+      // account creation behind the gateway, which is tracked separately.
+      if (!CREATABLE_WS_RE.test(ws)) {
+        return send(res, 403, { error: 'reset not allowed for this workspace' }, req);
+      }
 
       const before = await loadDoc(ws);
       const next = { rev: before.rev + 1, gen: before.gen + 1, entities: {} };
