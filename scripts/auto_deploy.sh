@@ -23,18 +23,33 @@
 #
 # ## git hook 으로 연결하기 (선택)
 #
-#   ln -sf ../../scripts/auto_deploy.sh .git/hooks/post-commit
+#   ⚠️ git 에는 **post-tag 훅이 없습니다.** 훅 목록은 post-commit,
+#   post-checkout, pre-push 등이고 태그 전용 훅은 존재하지 않습니다.
+#   그래서 "태그를 붙였을 때만 배포"는 post-commit 안에서 태그를 검사해
+#   직접 만듭니다:
 #
-#   ⚠️ post-commit 은 커밋마다 돌아갑니다. 작업 중간 커밋에도 배포가 나갑니다.
-#   개인적으로는 **태그를 붙였을 때만** 배포하는 편이 안전합니다:
-#
-#   cat > .git/hooks/post-tag <<'EOF'
+#   cat > .git/hooks/post-commit <<'EOF'
 #   #!/usr/bin/env bash
-#   ./scripts/auto_deploy.sh
+#   # HEAD 에 태그가 붙어 있을 때만 배포한다. 태그가 없으면 조용히 통과.
+#   if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
+#     ./scripts/auto_deploy.sh
+#   fi
 #   EOF
-#   chmod +x .git/hooks/post-tag
+#   chmod +x .git/hooks/post-commit
 #
-#   그리고 배포는 `git tag deploy-$(date +%H%M) && git push --tags` 로.
+#   그리고 배포는:  git tag deploy-$(date +%H%M) 한 뒤 커밋
+#
+#   ⚠️ post-commit 을 그냥 auto_deploy.sh 로 심볼릭 링크하면 커밋마다
+#   배포가 나갑니다. 작업 중간 커밋에도 운영이 바뀝니다. 위처럼 태그
+#   검사를 끼우는 편을 권합니다.
+#
+# ## 훅이 아니라 명령으로 쓰기 (가장 단순)
+#
+#   ./scripts/auto_deploy.sh
+#
+#   훅은 편하지만 "언제 나갔는지"를 잊기 쉽습니다. 배포를 하나의 명시적
+#   행위로 두고 싶다면 훅 없이 이 명령만 쓰면 됩니다. 게이트 4개가
+#   실수를 막아주므로 습관이 되면 충분합니다.
 # =============================================================================
 set -euo pipefail
 
@@ -67,14 +82,14 @@ if [ -d .git ]; then
 
   # ## 왜 main 브랜치를 확인하는가
   # 실험 브랜치에서 자동 배포가 돌면 검증되지 않은 코드가 운영에 나간다.
-  # 막지는 않되(강제 배포가 필요할 수 있으므로) 크게 경고한다.
+  # 기본은 **거부**하고, 정말 필요한 경우를 위해 탈출구(ALLOW_NON_MAIN)만 둔다.
+  # 경고만 하고 통과시키면 경고는 곧 배경음이 된다.
   if [ -n "${ALLOW_NON_MAIN:-}" ]; then
     echo "   ⚠️  ALLOW_NON_MAIN 설정됨 — ${BRANCH} 브랜치를 배포합니다"
   elif [ "$BRANCH" != "main" ]; then
     echo "   ⚠️  현재 브랜치가 main 이 아닙니다: ${BRANCH}"
     echo "      운영에 나가도 되는 코드인지 확인하세요."
-    echo "      (계속하려면 ALLOW_NON_MAIN=1 $0)"
-    [ -n "${ALLOW_NON_MAIN:-}" ] || die "main 브랜치가 아닙니다"
+    die "main 브랜치가 아닙니다 (계속하려면 ALLOW_NON_MAIN=1 $0)"
   fi
 else
   echo "   ⚠️  git 저장소가 아닙니다 — 상태 확인을 건너뜁니다"
@@ -84,19 +99,15 @@ fi
 step "2/5 설정 확인"
 # =============================================================================
 if [ ! -f .env.gabia ]; then
-  echo "   .env.gabia 가 없습니다. 배포 설정을 만들고 다시 실행하세요:"
+  echo "   .env.gabia 가 없습니다. 템플릿을 복사해 값을 채우세요:"
   echo ""
-  echo "     cp server/gateway/.env.example /dev/null   # 참고용"
-  echo "     cat > .env.gabia <<'EOF'"
-  echo "     GABIA_PROTOCOL=ftps"
-  echo "     GABIA_HOST=ftp.내도메인.com"
-  echo "     GABIA_PORT=21"
-  echo "     GABIA_USER=아이디"
-  echo "     GABIA_PASS=비밀번호"
-  echo "     GABIA_PATH=/www"
-  echo "     EOF"
+  echo "     cp scripts/env.gabia.example .env.gabia"
+  echo "     chmod 600 .env.gabia"
+  echo "     \${EDITOR:-vi} .env.gabia"
   echo ""
+  echo "   필요한 값: GABIA_HOST / GABIA_USER / GABIA_PASS / GABIA_PATH"
   echo "   가비아 콘솔 → 호스팅 관리 → FTP/DB 관리 에서 확인할 수 있습니다."
+  echo "   계정 없이 미리 확인만 하려면:  python3 scripts/deploy_gabia.py --dry-run"
   exit 1
 fi
 # 권한 확인 — 비밀번호가 든 파일이 남에게 읽히면 안 된다
