@@ -57,6 +57,22 @@ BUILD_ARGS+=(--dart-define=BUILD_ID="${BUILD_ID}")
 
 if [ -n "${SYNC_URL:-}" ]; then
   echo "   · SYNC_URL = ${SYNC_URL}"
+  # ## 심어두면 편하지만, 동시에 공개됩니다
+  # --dart-define 은 이 주소를 main.dart.js 안에 문자열 리터럴로 심습니다.
+  # 그러면 배포본을 내려받는 누구나 NAS 주소를 알게 됩니다. 2026-11-20 에
+  # 실제로 확인한 일입니다: 공개 번들에서
+  #   "https://sync.june7558.direct.quickconnect.to"
+  # 가 그대로 읽혔고, 그 주소의 DSM 에 해외 IP 가 로그인을 시도했습니다.
+  #
+  # 주소는 비밀이 될 수 없지만(브라우저가 어차피 접속해야 하므로), "어디를
+  # 두드리면 되는지"를 공짜로 알려주는 것은 다릅니다. 설정 화면에 주소
+  # 입력란이 있으므로 심지 않아도 동작합니다. 공개 배포본에는 심지 않는
+  # 편이 낫습니다.
+  if [ "${EMBED_SYNC_URL:-0}" != "1" ]; then
+    echo "   ⚠️  SYNC_URL 이 공개 번들에 포함됩니다. 공개 배포라면 생략을 권합니다."
+    echo "      생략: SYNC_URL 을 넘기지 마세요 (설정 화면에서 입력 가능)"
+    echo "      그래도 심으려면: EMBED_SYNC_URL=1"
+  fi
   BUILD_ARGS+=(--dart-define=SYNC_URL="${SYNC_URL}")
 fi
 if [ -n "${SYNC_KEY:-}" ]; then

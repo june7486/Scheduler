@@ -179,6 +179,29 @@ if [ -f scripts/optimize_web.py ]; then
   python3 scripts/optimize_web.py || echo "   (경량화 실패 — 원본 그대로 진행)"
 fi
 
+# =============================================================================
+step "4-1/5 배포본 누출 검사"
+# =============================================================================
+# ## 왜 빌드 직후에 검사하는가
+# --dart-define 은 값을 main.dart.js 안에 문자열 리터럴로 심는다. 그래서
+# "빌드에 심었다"가 "전 세계에 공개했다"와 같아지는 경우가 있다.
+# 2026-11-20 에 실제로 그랬다 — 공개 번들에서 NAS 주소가 그대로 읽혔고
+# 그 주소의 DSM 에 해외 IP 가 로그인을 시도했다.
+#
+# 경고문만으로는 부족하다. 사람은 경고를 읽지 않는다. 빌드 결과물을 직접
+# 열어보는 검사가 있어야 한다. 0.6초면 끝나므로 게이트로 쓰기에 부담없다.
+if [ -f scripts/check_bundle_secrets.py ]; then
+  if python3 scripts/check_bundle_secrets.py --strict; then
+    echo "   ✅ 누출 없음"
+  else
+    die "배포본에 주소·키가 포함되어 있습니다 — 배포하지 않습니다.
+     허용하려면:  python3 scripts/check_bundle_secrets.py --allow <값>
+     또는 SYNC_URL 없이 빌드하세요 (설정 화면에서 입력 가능)"
+  fi
+else
+  echo "   ⚠️  검사 스크립트가 없습니다 — 누출 검사를 건너뜁니다"
+fi
+
 echo "   ✅ 빌드 완료 ($(du -sh build/web | cut -f1))"
 
 if [ "$MODE" = "build" ]; then
