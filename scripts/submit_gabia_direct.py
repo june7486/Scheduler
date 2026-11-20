@@ -440,10 +440,15 @@ def scan_zip_targets_for_secrets(rep: Report) -> list[str]:
             continue
 
         # 개인키 헤더 — 있으면 즉시 실패
-        for marker in ("-----BEGIN RSA PRIVATE KEY-----",
-                       "-----BEGIN OPENSSH PRIVATE KEY-----",
-                       "-----BEGIN PRIVATE KEY-----"):
-            if marker in txt:
+        #
+        # ## 왜 문자열을 쪼개서 만드는가
+        # 이 스크립트 자신도 ZIP 에 들어갑니다. 헤더를 통짜 리터럴로 적으면
+        # **검사기가 자기 자신을 개인키로 신고**합니다. (실제로 그랬고,
+        # 패키징이 통째로 막혔습니다.) 쪼개면 패턴은 같게 동작하고
+        # 자기 오탐은 사라집니다. 값 대신 해시를 쓰는 것과 같은 이유입니다.
+        _d = "-" * 5
+        for label in ("RSA PRIVATE KEY", "OPENSSH PRIVATE KEY", "PRIVATE KEY"):
+            if f"{_d}BEGIN {label}{_d}" in txt:
                 hits.append(f"{arc} ← 개인키 헤더")
                 rep.fail(f"개인키가 ZIP 에 포함됩니다: {arc}")
                 bad(f"개인키: {arc}")
