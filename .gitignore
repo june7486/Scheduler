@@ -53,3 +53,7 @@ server/gateway/data/
 
 # 생성된 PDF (원본 .txt 에서 언제든 재생성 가능)
 docs/*.pdf
+
+# 파이썬 바이트코드 — 스캐너 문자열이 .pyc 에 남을 수 있습니다
+__pycache__/
+*.pyc
