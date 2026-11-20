@@ -32,5 +32,18 @@ android/*.jks
 # public repository — the exact mistake the rotation was meant to undo.
 .sync_key
 
+# Gabia deployment credentials. Same reasoning as above, larger blast radius:
+# an FTP password in a public repository is a hosted-site takeover, not just a
+# shared key. `scripts/auto_deploy.sh` also refuses to run if this file is
+# tracked, because once a secret is in the history, deleting the file is not
+# enough.
+.env.gabia
+.env.sync
+
+# Deployment history: rollback snapshots (can be hundreds of MB) and the
+# manifest of each release. Kept on disk for recovery, never committed — a
+# snapshot of somebody's site has no business in a source repository.
+.deploy/
+
 # Gateway runtime state
 server/gateway/data/
