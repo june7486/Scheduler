@@ -1,0 +1,20 @@
+June's Scheduler — 테스트 결과
+================================
+실행: 2026-11-20 (커밋 9c56a5f)
+명령: flutter test
+
+결과: 86 passed / 6 skipped / 0 failed
+요약줄: "All tests passed!"
+
+환경
+----
+Flutter   3.35.4 (stable, revision d693b4b9db)
+Dart SDK  ^3.9.2 (pubspec.yaml)
+앱 버전   1.0.0+1
+플랫폼    linux (샌드박스)
+
+비고
+----
+- skip 6건은 NAS 실연결이 필요한 테스트입니다. 이번 제출 범위와 무관합니다.
+- 테스트는 실제 일정/캘린더 계정을 쓰지 않습니다 (가상 데이터).
+- 이 파일은 제출 도구(submit_gabia.py)가 증빙으로 함께 올립니다.
