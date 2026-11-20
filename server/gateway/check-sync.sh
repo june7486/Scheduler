@@ -13,7 +13,14 @@
 
 set -uo pipefail
 
-URL="${1:-https://sync.june7558.direct.quickconnect.to}"
+# 기본값으로 실제 주소를 박아두지 않습니다. 이 스크립트는 배포물에
+# 포함될 수 있고, 그러면 주소가 다시 유통됩니다. 인자나 환경변수로 받습니다.
+URL="${1:-${SYNC_URL:-}}"
+if [ -z "$URL" ]; then
+  printf '사용법: %s <URL> [KEY]   또는   SYNC_URL=... %s [KEY]\n' "$0" "$0" >&2
+  printf '예: %s https://sync.example.com <KEY>\n' "$0" >&2
+  exit 1
+fi
 KEY="${2:-}"
 URL="${URL%/}"
 

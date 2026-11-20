@@ -1,20 +1,18 @@
-June's Scheduler — 테스트 결과
-================================
-실행: 2026-11-20 (커밋 9c56a5f)
+실행: 2026-11-20 (커밋 4c291f7)
 명령: flutter test
-
-결과: 86 passed / 6 skipped / 0 failed
+결과: 95 passed / 6 skipped / 0 failed
 요약줄: "All tests passed!"
-
-환경
-----
 Flutter   3.35.4 (stable, revision d693b4b9db)
 Dart SDK  ^3.9.2 (pubspec.yaml)
 앱 버전   1.0.0+1
-플랫폼    linux (샌드박스)
 
-비고
-----
-- skip 6건은 NAS 실연결이 필요한 테스트입니다. 이번 제출 범위와 무관합니다.
-- 테스트는 실제 일정/캘린더 계정을 쓰지 않습니다 (가상 데이터).
-- 이 파일은 제출 도구(submit_gabia.py)가 증빙으로 함께 올립니다.
+새로 추가된 검사 (test/virtual_schedule_test.dart, 9건):
+- 가상 일정 저장·재조회 왕복 (모든 필드 보존, 멱등성)
+- 반복 일정 none/daily/weekly/monthly 실제 보존, 기본값, monthly recurrenceDay
+- 시간대: dueDate 에 Z·오프셋 접미사가 붙지 않음, 자정·연말·윤일 경계에서 날짜 밀림 없음
+- updatedAt 이 epoch 밀리초 정수로 유지
+
+주의: 위 검사는 전부 메모리 안의 가상 데이터입니다.
+실제 일정·캘린더 계정·OAuth 토큰을 쓰지 않습니다.
+
+이전 기록: 86 passed / 6 skipped / 0 failed (커밋 9c56a5f)

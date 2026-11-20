@@ -53,7 +53,7 @@ SYNC_SECRET='long-random-string' node server.js
 
 # 다른 장비에서 돌리는 경우
 STORAGE=dsm \
-NAS_HOST=june7558.direct.quickconnect.to NAS_PORT=5001 \
+NAS_HOST=<NAS-호스트>.direct.quickconnect.to NAS_PORT=5001 \
 NAS_USER=scheduler NAS_PASS='********' \
 NAS_FOLDER=/92_Scheduler/sync NAS_INSECURE=0 \
 SYNC_SECRET='long-random-string' node server.js

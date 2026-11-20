@@ -215,7 +215,7 @@ DSM → **제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 
 | 항목 | 값 |
 |---|---|
 | 프로토콜 | **HTTPS** |
-| 호스트 이름 | **`sync.june7558.direct.quickconnect.to`** (권장 — 아래 설명) |
+| 호스트 이름 | **`sync.<NAS-호스트>.direct.quickconnect.to`** (권장 — 아래 설명) |
 | 포트 | **443** |
 | HSTS 활성화 | 끔 (나중에) |
 
@@ -228,13 +228,13 @@ DSM → **제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 
 | 포트 | **8097** |
 
 **호스트 이름은 quickconnect 주소를 권장합니다.** 이유는 인증서입니다.
-`*.june7558.direct.quickconnect.to` 는 이미 유효한 인증서가 발급되어 있어서,
+`*.<NAS-호스트>.direct.quickconnect.to` 는 이미 유효한 인증서가 발급되어 있어서,
 DNS 레코드를 새로 만들 필요도, 인증서를 따로 받을 필요도 없습니다.
 `sync.aqdesign.co.kr` 같은 새 이름을 쓰려면 **DNS 레코드 추가 + 인증서 발급**이
 한 번 더 필요합니다.
 
 **호스트 이름 칸에는 주소만 넣습니다** — `https://` 나 `/` 를 붙이지 마세요.
-`sync.june7558.direct.quickconnect.to` 가 전부입니다.
+`sync.<NAS-호스트>.direct.quickconnect.to` 가 전부입니다.
 
 **사용자 지정 헤더** (중요 — 없으면 앱이 400/리다이렉트를 받습니다):
 
@@ -251,12 +251,12 @@ DNS 레코드를 새로 만들 필요도, 인증서를 따로 받을 필요도 �
 "가끔 동기화가 멈추는" 증상의 원인이 됩니다.
 
 **인증서**: `제어판 → 보안 → 인증서` 에서 위 호스트 이름에 대해
-`*.june7558.direct.quickconnect.to` 인증서를 지정합니다.
+`*.<NAS-호스트>.direct.quickconnect.to` 인증서를 지정합니다.
 
 확인 (외부에서):
 
 ```bash
-curl https://sync.june7558.direct.quickconnect.to/health
+curl https://sync.<NAS-호스트>.direct.quickconnect.to/health
 # {"ok":true,"service":"june-nas-gateway","storage":"local","nas":true,...}
 ```
 
@@ -272,7 +272,7 @@ curl https://sync.june7558.direct.quickconnect.to/health
 ```bash
 cd /home/user/flutter_app
 
-SYNC_URL="https://sync.june7558.direct.quickconnect.to" \
+SYNC_URL="https://sync.<NAS-호스트>.direct.quickconnect.to" \
 SYNC_KEY="$(cat .sync_key)" \
 GH_REPO="june7486/Scheduler" \
 CUSTOM_DOMAIN="www.aqdesign.co.kr" \

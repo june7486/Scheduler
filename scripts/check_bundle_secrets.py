@@ -11,8 +11,12 @@
 2026-11-20 에 실제로 이랬다:
 
     build/web/main.dart.js 오프셋 2,920,179
-      "https://sync.june7558.direct.quickconnect.to"
+      "https://sync.<호스트>.direct.quickconnect.to"
     가 그대로 읽혔고, 그 주소의 DSM 에 해외 IP 가 로그인을 시도했다.
+
+> 이 문서에서 호스트 이름을 지운 이유: 이 스크립트도 제출 패키지에
+> 들어간다. 사고를 설명하려고 실제 주소를 적어두면, 그 패키지가 다시
+> 같은 주소를 유통시킨다. 검사 패턴은 아래 코드에 일반형으로 들어 있다.
 
 스크립트에 경고문을 넣는 것만으로는 부족하다. 사람은 경고를 읽지 않는다.
 빌드 결과물을 **직접 열어보는** 검사가 있어야 한다.
@@ -104,7 +108,7 @@ def _scan_ddns(data: bytes) -> dict[str, int]:
             if idx < 0:
                 break
             start = idx + 1
-            # 뒤로 훑어 라벨을 확장한다 (june7558.direct.quickconnect.to)
+            # 뒤로 훑어 라벨을 확장한다 (<호스트>.direct.quickconnect.to)
             lo = idx
             while lo > 0 and data[lo - 1] in _LABEL:
                 lo -= 1

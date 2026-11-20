@@ -47,3 +47,6 @@ android/*.jks
 
 # Gateway runtime state
 server/gateway/data/
+
+# 가비아 제출 산출물 (로컬 검증용, 커밋하지 않음)
+/dist/

@@ -110,7 +110,7 @@ cd /home/user/flutter_app
 printf '%s' "<NEW_KEY>" > .sync_key
 chmod 600 .sync_key
 
-SYNC_URL="https://sync.june7558.direct.quickconnect.to" \
+SYNC_URL="https://sync.<NAS-호스트>.direct.quickconnect.to" \
 SYNC_KEY="$(cat .sync_key)" \
 GH_REPO="june7486/Scheduler" \
 CUSTOM_DOMAIN="www.aqdesign.co.kr" \
