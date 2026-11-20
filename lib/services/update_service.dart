@@ -50,11 +50,9 @@ import 'web_update_stub.dart'
 /// 실패해도 앱은 그대로 쓸 수 있어야 합니다. 그래서 모든 예외를 삼키고
 /// "확인 못 함"으로 끝냅니다.
 class UpdateService {
-  UpdateService({
-    http.Client? client,
-    String? baseUrl,
-  })  : _client = client ?? http.Client(),
-        _baseUrl = baseUrl;
+  UpdateService({http.Client? client, String? baseUrl})
+    : _client = client ?? http.Client(),
+      _baseUrl = baseUrl;
 
   final http.Client _client;
   final String? _baseUrl;
@@ -86,9 +84,28 @@ class UpdateService {
   /// 배포 위치 기준 상대경로입니다. GitHub Pages 든 가비아 Nginx 든
   /// 앱이 서빙되는 곳 옆에 `version.json` 이 있으므로 그대로 동작합니다.
   /// (절대 주소를 박으면 이전할 때마다 코드를 고쳐야 합니다)
+  ///
+  /// ## 캐시 무력화 쿼리가 붙어 있는 이유
+  /// Flutter 가 만든 서비스 워커는 `version.json` 을 **자기 캐시 목록에
+  /// 넣습니다** (`RESOURCES` 상수). 그리고 목록에 있는 파일은
+  /// *캐시 우선*으로 응답합니다. 즉 그냥 `version.json` 을 요청하면
+  /// 브라우저는 **서비스 워커가 들고 있는 옛 사본**을 받습니다.
+  ///
+  /// 그러면 이 기능이 정확히 반대로 동작합니다 — 새 빌드가 배포되어도
+  /// 앱은 영원히 "최신입니다"라고 답합니다. 2026-11-20 시험에서 실제로
+  /// 이 증상이 나왔습니다(캐시된 0900, 서버는 1000).
+  ///
+  /// 서비스 워커는 자기 목록에 **없는** URL 이면 가로채지 않고
+  /// 브라우저에 넘깁니다. 그래서 매번 다른 쿼리를 붙이면 요청이
+  /// 목록 밖이 되어 네트워크로 나갑니다. `Cache-Control: no-cache`
+  /// 헤더만으로는 부족합니다 — 그건 HTTP 캐시에만 유효하고, 서비스
+  /// 워커의 캐시 우선 전략은 그 헤더를 보지 않습니다.
   Uri get _versionUri {
     final base = _baseUrl ?? _defaultBase();
-    return Uri.parse('$base/version.json');
+    final plain = Uri.parse('$base/version.json');
+    return plain.replace(
+      queryParameters: {'_': DateTime.now().millisecondsSinceEpoch.toString()},
+    );
   }
 
   String _defaultBase() {
@@ -138,8 +155,21 @@ class UpdateService {
     String? notes;
 
     try {
+      // ## 두 겹으로 캐시를 피합니다
+      // 1) URL 에 매번 다른 쿼리 (_=...) — 서비스 워커의 RESOURCES 목록
+      //    밖으로 나가므로 워커가 가로채지 않습니다.
+      // 2) Cache-Control: no-cache — 그 사이에 낀 HTTP 캐시까지 막습니다.
+      //
+      // 둘 중 하나만으로는 부족합니다. 쿼리만 붙이면 중간 프록시가 같은
+      // 쿼리를 재사용할 수 있고, 헤더만 붙이면 서비스 워커가 먼저 답합니다.
       final res = await _client
-          .get(_versionUri, headers: {'Cache-Control': 'no-cache'})
+          .get(
+            _versionUri,
+            headers: {
+              'Cache-Control': 'no-cache, no-store, max-age=0',
+              'Pragma': 'no-cache',
+            },
+          )
           .timeout(const Duration(seconds: 6));
 
       if (res.statusCode != 200) return null;

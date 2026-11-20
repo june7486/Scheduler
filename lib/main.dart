@@ -6,9 +6,11 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/session_service.dart';
 import 'services/store.dart';
+import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/skin_backdrop.dart';
 import 'widgets/skin_lang_bar.dart';
+import 'widgets/update_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -143,10 +145,22 @@ class _Gate extends StatefulWidget {
 class _GateState extends State<_Gate> {
   bool? _loggedIn;
 
+  /// 시작 시 한 번만 만드는 업데이트 확인기.
+  ///
+  /// `_check()` 안에서 매번 새로 만들면 http.Client 가 쌓입니다.
+  /// 필드로 들고 있다가 dispose 에서 닫습니다.
+  UpdateService? _updates;
+
   @override
   void initState() {
     super.initState();
     _check();
+  }
+
+  @override
+  void dispose() {
+    _updates?.dispose();
+    super.dispose();
   }
 
   Future<void> _check() async {
@@ -170,11 +184,59 @@ class _GateState extends State<_Gate> {
         await session.logout();
         if (!mounted) return;
         setState(() => _loggedIn = false);
+        _scheduleUpdateCheck();
         return;
       }
     }
     if (!mounted) return;
     setState(() => _loggedIn = logged);
+
+    // ## 업데이트 확인은 "그린 다음"입니다
+    // 화면을 먼저 띄우고(위 setState), 그 다음 프레임에서 조용히 확인합니다.
+    // 확인을 await 로 기다리면 네트워크가 느릴 때 스피너만 보게 됩니다.
+    // 업데이트 확인은 부가 기능이므로 앱 시작을 절대 붙잡으면 안 됩니다.
+    _scheduleUpdateCheck();
+  }
+
+  /// 첫 프레임이 실제로 그려진 뒤에 업데이트를 확인합니다.
+  ///
+  /// `showDialog` 는 Navigator 가 필요합니다. initState 시점에는 아직
+  /// 위젯이 트리에 올라오기 전이라 push 가 실패할 수 있습니다. 그래서
+  /// 프레임 콜백으로 미룹니다.
+  void _scheduleUpdateCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _checkForUpdate();
+    });
+  }
+
+  Future<void> _checkForUpdate() async {
+    // BUILD_ID 없이 만들어진 빌드(개발 빌드)나 웹이 아니면 check() 가
+    // 즉시 null 을 돌려줍니다. 여기서 따로 분기하지 않아도 됩니다.
+    final service = _updates ??= UpdateService();
+    final UpdateCheck? check;
+    try {
+      check = await service.check();
+    } catch (_) {
+      // check() 는 내부에서 모든 예외를 삼키지만, 만약을 대비한 이중 안전망.
+      return;
+    }
+
+    if (!mounted) return;
+    if (check == null || !check.available) return;
+
+    final go = await UpdateDialog.show(context, check);
+
+    // 사용자가 팝업을 열어둔 사이 위젯이 사라졌을 수 있습니다.
+    if (!mounted) return;
+
+    if (go) {
+      // 선택한 빌드는 "건너뛰기"가 아닙니다. 기록을 남기지 않고 새로고침만.
+      await UpdateService.applyUpdate();
+    } else {
+      // "나중에" — 이 빌드에 대해서는 3일간 다시 묻지 않습니다.
+      await service.snooze(check.remoteBuild);
+    }
   }
 
   @override
