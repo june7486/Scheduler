@@ -110,7 +110,35 @@ if [ -n "$CUSTOM_DOMAIN" ]; then
   printf '%s' "$CUSTOM_DOMAIN" > build/web/CNAME
 fi
 
-# ---- 4) 배포용 임시 브랜치(gh-pages) 구성 --------------------------------
+# ----- 4) 배포본 누출 검사 (배포 전 마지막 관문) ---------------------------
+# ## 왜 빌드 직후에 검사하는가
+# --dart-define 은 값을 main.dart.js 안에 문자열 리터럴로 심습니다. 그래서
+# "빌드에 심었다"가 "전 세계에 공개했다"와 같아지는 경우가 있습니다.
+# 2026-11-20 에 실제로 그랬습니다 — 공개 번들에서 NAS 주소가 그대로 읽혔고
+# 그 주소의 DSM 에 해외 IP 가 로그인을 시도했습니다.
+#
+# ## auto_deploy.sh 가 아니라 여기에도 두는 이유
+# 실제로 손이 가는 스크립트는 이 파일입니다. 검사가 다른 파일에만 있으면
+# 쓰이지 않는 문은 없는 것과 같습니다.
+echo "③-2 배포본 누출 검사..."
+if [ "${SKIP_SECRET_SCAN:-0}" = "1" ]; then
+  echo "   ⚠️  SKIP_SECRET_SCAN=1 — 누출 검사를 건너뜁니다 (권장하지 않음)"
+elif [ -f "$PROJECT_DIR/scripts/check_bundle_secrets.py" ]; then
+  if python3 "$PROJECT_DIR/scripts/check_bundle_secrets.py" --strict; then
+    echo "   ✅ 누출 없음"
+  else
+    echo "" >&2
+    echo "❌ 배포본에 주소·키가 포함되어 있습니다. 배포하지 않습니다." >&2
+    echo "   허용하려면 : python3 scripts/check_bundle_secrets.py --allow <값>" >&2
+    echo "   원인 제거  : SYNC_URL / SYNC_KEY 없이 빌드 (설정 화면에서 입력 가능)" >&2
+    echo "   강제 진행  : SKIP_SECRET_SCAN=1 (권장하지 않음)" >&2
+    exit 1
+  fi
+else
+  echo "   ⚠️  검사 스크립트가 없습니다 — 누출 검사를 건너뜁니다"
+fi
+
+# ---- 5) 배포용 임시 브랜치(gh-pages) 구성 --------------------------------
 echo "④ gh-pages 브랜치 구성 (build/web 내용만)..."
 DEPLOY_DIR="$(mktemp -d)"
 cp -r build/web/. "$DEPLOY_DIR"/
@@ -122,8 +150,7 @@ git -c user.name="deploy" -c user.email="deploy@local" \
     commit -q -m "Deploy June's Scheduler web build ($(date -u +%Y-%m-%dT%H:%MZ))"
 
 # ---- 5) 푸시 --------------------------------------------------------------
-echo "⑤ GitHub로 푸시..."
-git remote add origin "https://github.com/${GH_REPO}.git"
+echo "⑤ GitHub로 푸시..."git remote add origin "https://github.com/${GH_REPO}.git"
 git push -f origin gh-pages
 
 echo
