@@ -127,6 +127,48 @@ const NAS_INSECURE = process.env.NAS_INSECURE !== '0'; // file:// + self-signed
 /** Shared secret the app sends as `X-Sync-Key`. Empty ⇒ open (LAN only). */
 const SYNC_SECRET = (process.env.SYNC_SECRET || '').trim();
 
+/**
+ * Keys the gateway also accepts while a rotation is in flight.
+ *
+ * ## Why a single key cannot be rotated safely
+ * The key is not stored anywhere the server can change it: `deploy_pages.sh`
+ * passes it through `--dart-define`, which splices it into `main.dart.js` *as a
+ * string literal*. So the moment a new key is published, every browser that
+ * loads the new bundle sends the new key — and every browser that still has the
+ * old `main.dart.js` cached (which is most of them, for as long as GitHub Pages
+ * and the browser cache say so) sends the old one.
+ *
+ * With one accepted key that window is a hard outage: whichever side you change
+ * second, half the clients get 401 until the cache drains. Users do not report
+ * "I am in the rotation window"; they report "동기화가 안 됩니다", and there is no
+ * way to tell the two apart from the outside.
+ *
+ * ## What this does instead
+ * Both keys are accepted for as long as `SYNC_SECRET_PREVIOUS` is set — long
+ * enough for every cached bundle to expire — and then it is removed. The order
+ * is what makes it safe, and it is the reverse of what feels natural:
+ *
+ *   1. Set `SYNC_SECRET_PREVIOUS=<old>` and `SYNC_SECRET=<new>` on the gateway.
+ *      Both work now. Nothing breaks. (This is the step people skip.)
+ *   2. Publish a bundle built with the new key. Old tabs keep working.
+ *   3. Wait out the cache. Watch the gateway log for the old-key counter to sit
+ *      at zero.
+ *   4. Remove `SYNC_SECRET_PREVIOUS`. Now the old key is dead.
+ *
+ * ## Why not just accept every key
+ * Because then the key would not be a filter at all — and the point of the key
+ * is not secrecy (it is in the bundle; it never was secret) but to stop a
+ * mistyped or stale client from writing to a workspace it does not own. Two
+ * keys bound that risk; an unbounded list would not.
+ */
+const SYNC_SECRET_PREVIOUS = (process.env.SYNC_SECRET_PREVIOUS || '').trim();
+
+/** Every key the gateway currently honours, current first.
+ *
+ * Empty ⇒ no auth (loopback-only default; `/readyz` refuses this beyond
+ * loopback). `SYNC_SECRET` alone ⇒ the normal single-key deployment. */
+const ACCEPTED_KEYS = [SYNC_SECRET, SYNC_SECRET_PREVIOUS].filter(Boolean);
+
 /** How long a document may be served from RAM before re-checking the NAS. */
 const CACHE_MS = Number(process.env.CACHE_MS || 8000);
 
@@ -595,13 +637,55 @@ function send(res, status, obj, req) {
   res.end(raw);
 }
 
-function authorized(req) {
-  if (!SYNC_SECRET) return true;
-  const got = req.headers['x-sync-key'] || '';
-  const a = Buffer.from(got);
-  const b = Buffer.from(SYNC_SECRET);
-  if (a.length !== b.length) return false;
+/**
+ * How many requests arrived with the *retired* key during a rotation.
+ *
+ * The only reliable way to know the cache has drained. `SYNC_SECRET_PREVIOUS`
+ * is supposed to be removed when this stops moving — without it there is no
+ * signal, and "wait a few days" is a guess.
+ */
+let previousKeyHits = 0;
+
+/**
+ * Constant-time comparison of two strings of possibly different length.
+ *
+ * ## Why this is not just `===`
+ * A byte-by-byte compare that returns on the first mismatch leaks, through its
+ * running time, how much of the guess was right. The key is 64 hex characters,
+ * so an attacker who can time the endpoint can recover it one nibble at a time.
+ * `crypto.timingSafeEqual` cannot be given unequal-length buffers (it throws),
+ * so equalising the length first is not a nicety — it is what makes the call
+ * legal. Comparing the SHA-256 of each side keeps the work independent of where
+ * the inputs differ.
+ */
+function keyEquals(got, want) {
+  if (typeof got !== 'string' || typeof want !== 'string' || !want) return false;
+  const a = crypto.createHash('sha256').update(got, 'utf8').digest();
+  const b = crypto.createHash('sha256').update(want, 'utf8').digest();
   return crypto.timingSafeEqual(a, b);
+}
+
+function authorized(req) {
+  // No configured key ⇒ open. Only ever appropriate on loopback, and `/readyz`
+  // says so out loud (`reason: "auth"`) if someone exposes it anyway.
+  if (ACCEPTED_KEYS.length === 0) return true;
+
+  const got = req.headers['x-sync-key'];
+  const supplied = typeof got === 'string' ? got : '';
+
+  // Check *all* keys rather than stopping at the first match: returning early
+  // would make the current and previous keys take measurably different time.
+  let ok = false;
+  for (const key of ACCEPTED_KEYS) {
+    if (keyEquals(supplied, key)) ok = true;
+  }
+  if (!ok) return false;
+
+  // Count use of the retired key so the operator knows when to drop it.
+  if (SYNC_SECRET_PREVIOUS && keyEquals(supplied, SYNC_SECRET_PREVIOUS)) {
+    previousKeyHits += 1;
+  }
+  return true;
 }
 
 const hits = new Map();
@@ -733,9 +817,11 @@ async function readiness() {
     // 2. authentication shape — a key is mandatory the moment we leave loopback
   } else {
     const onLoopback = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
-    if (!onLoopback && !SYNC_SECRET) {
+    if (!onLoopback && ACCEPTED_KEYS.length === 0) {
       verdict = { ready: false, reason: 'auth' };
-    } else if (SYNC_SECRET && SYNC_SECRET.length < 16) {
+    } else if (ACCEPTED_KEYS.some((k) => k.length < 16)) {
+      // A short key in *either* slot is a misconfiguration, not a grace period:
+      // the retired key is still a door while it is accepted.
       verdict = { ready: false, reason: 'auth' };
       // 3. the dependency the *current* storage mode needs — and only it
     } else {
@@ -1040,7 +1126,15 @@ async function selftest() {
 
   console.log('\n[june-gateway] self-test\n');
   line(true, 'storage', STORAGE_LABEL);
-  line(true, 'auth', SYNC_SECRET ? 'shared key required' : 'OPEN (LAN only!)');
+  line(
+    ACCEPTED_KEYS.length > 0,
+    'auth',
+    ACCEPTED_KEYS.length === 0
+      ? 'OPEN (LAN only!)'
+      : SYNC_SECRET_PREVIOUS
+        ? 'current + previous key accepted (rotation in progress)'
+        : 'shared key required'
+  );
 
   if (STORAGE === 'dsm') {
     try {
@@ -1101,7 +1195,38 @@ if (process.argv.includes('--selftest')) {
     // was 0.0.0.0, and that is precisely how a gateway ends up published.
     console.log(`[june-gateway] listening on ${HOST}:${PORT}`);
     console.log(`[june-gateway] storage=${STORAGE_LABEL}`);
-    console.log(`[june-gateway] auth=${SYNC_SECRET ? 'key required' : 'OPEN (loopback only!)'}`);
+    console.log(
+      `[june-gateway] auth=${
+        ACCEPTED_KEYS.length === 0 ? 'OPEN (loopback only!)' : 'key required'
+      }`
+    );
+    if (SYNC_SECRET_PREVIOUS) {
+      // Rotation in progress. Say so, and say the *order*, because the easy
+      // mistake is to publish the new bundle first and drop the old key last
+      // (which is right) — or the reverse (which is an outage).
+      console.log(
+        '[june-gateway] rotation=on — the previous key is still accepted. ' +
+          'Publish a bundle built with the new key, let the cache drain, then ' +
+          'remove SYNC_SECRET_PREVIOUS. The log reports retired-key hits every ' +
+          '60 s; when that sits at 0, the cache has drained.'
+      );
+
+      // The only reliable "is it safe to drop the old key yet?" signal. It goes
+      // to the log rather than `/readyz` on purpose: `/readyz` is public and its
+      // reply is a contract ({"ready":true}); a request counter is neither.
+      let lastReported = -1;
+      setInterval(() => {
+        if (previousKeyHits !== lastReported) {
+          lastReported = previousKeyHits;
+          console.log(
+            `[june-gateway] retiredKeyHits=${previousKeyHits} — ` +
+              (previousKeyHits === 0
+                ? 'no client is using the old key; safe to remove SYNC_SECRET_PREVIOUS'
+                : 'clients still on a cached bundle; do NOT remove the old key yet')
+          );
+        }
+      }, 60000).unref();
+    }
     console.log(
       `[june-gateway] cors=${CORS_ORIGINS.length ? CORS_ORIGINS.join(' , ') : 'same-origin only'}`
     );
@@ -1111,7 +1236,7 @@ if (process.argv.includes('--selftest')) {
           'firewall or a reverse proxy that you control.'
       );
     }
-    if (!SYNC_SECRET && HOST !== '127.0.0.1' && HOST !== '::1' && HOST !== 'localhost') {
+    if (ACCEPTED_KEYS.length === 0 && HOST !== '127.0.0.1' && HOST !== '::1' && HOST !== 'localhost') {
       console.warn(
         '[june-gateway] WARNING: no SYNC_SECRET and listening beyond loopback — ' +
           'anyone who can reach this port can read and write every workspace.'

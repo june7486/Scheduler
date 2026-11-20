@@ -423,3 +423,137 @@ test('/api/* still demands the shared key', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Key rotation
+// ---------------------------------------------------------------------------
+//
+// These exist because the key cannot be changed atomically. It is compiled into
+// `main.dart.js`, so at any instant the population of open tabs is split between
+// two keys and there is nothing the server can do to synchronise them. The tests
+// below pin the *only* ordering that does not produce an outage.
+
+test('during rotation both the current and the retired key are accepted', async () => {
+  // The step that gets skipped. If `SYNC_SECRET_PREVIOUS` is not honoured, then
+  // publishing a new bundle logs out every user whose old bundle is still
+  // cached — which is most of them.
+  const dir = tempDataDir();
+  const current = 'c'.repeat(48);
+  const previous = 'p'.repeat(48);
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: current,
+    SYNC_SECRET_PREVIOUS: previous,
+  });
+  try {
+    const withCurrent = await get(gw.port, '/api/state?ws=TESTWS0001', {
+      'X-Sync-Key': current,
+    });
+    assert.strictEqual(withCurrent.status, 200, 'current key must work');
+
+    const withPrevious = await get(gw.port, '/api/state?ws=TESTWS0001', {
+      'X-Sync-Key': previous,
+    });
+    assert.strictEqual(
+      withPrevious.status,
+      200,
+      'a cached bundle still sending the old key must keep working — this is ' +
+        'the entire point of the rotation window'
+    );
+
+    // A third key is still refused: the window accepts exactly two, not "any".
+    const withOther = await get(gw.port, '/api/state?ws=TESTWS0001', {
+      'X-Sync-Key': 'x'.repeat(48),
+    });
+    assert.strictEqual(withOther.status, 401, 'an unrelated key must still fail');
+
+    // And the operator can see the rotation is in progress.
+    assert.match(gw.log(), /rotation=on/);
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('after the retired key is removed it stops working immediately', async () => {
+  // Step 4 of the rotation, and the reason the window must eventually close:
+  // the whole exercise is pointless if the leaked key keeps being honoured.
+  const dir = tempDataDir();
+  const current = 'c'.repeat(48);
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: current,
+    // SYNC_SECRET_PREVIOUS deliberately absent — rotation finished
+  });
+  try {
+    const leaked = '46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d';
+    const res = await get(gw.port, '/api/state?ws=TESTWS0001', {
+      'X-Sync-Key': leaked,
+    });
+    assert.strictEqual(
+      res.status,
+      401,
+      'the retired key must be dead once SYNC_SECRET_PREVIOUS is removed'
+    );
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('/readyz refuses a config where either key is too short', async () => {
+  // A short *retired* key is still a door. Readiness must not report "ready"
+  // just because the new key is strong.
+  const dir = tempDataDir();
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: 'c'.repeat(48),
+    SYNC_SECRET_PREVIOUS: 'short',
+  });
+  try {
+    const res = await get(gw.port, '/readyz');
+    assert.strictEqual(res.status, 503);
+    assert.deepStrictEqual(JSON.parse(res.body), { ready: false, reason: 'auth' });
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a malformed key header is refused without throwing', async () => {
+  // `crypto.timingSafeEqual` throws on unequal-length buffers, and an attacker
+  // controls the header length. A throw inside the request handler would be a
+  // one-request denial of service; this pins that it cannot happen.
+  const dir = tempDataDir();
+  const key = 'k'.repeat(48);
+  const gw = await startGateway({
+    PORT: String(pickPort()),
+    STORAGE: 'local',
+    DATA_DIR: dir,
+    SYNC_SECRET: key,
+  });
+  try {
+    for (const probe of ['', 'k', 'k'.repeat(47), 'k'.repeat(49), 'k'.repeat(2000)]) {
+      const res = await get(gw.port, '/api/state?ws=TESTWS0001', {
+        'X-Sync-Key': probe,
+      });
+      assert.strictEqual(
+        res.status,
+        401,
+        `a ${probe.length}-byte key must be refused cleanly, not crash`
+      );
+    }
+    // The server is still alive and still honouring the real key.
+    const ok = await get(gw.port, '/api/state?ws=TESTWS0001', { 'X-Sync-Key': key });
+    assert.strictEqual(ok.status, 200);
+  } finally {
+    gw.child.kill('SIGKILL');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -60,7 +60,19 @@ if [ -n "${SYNC_URL:-}" ]; then
   BUILD_ARGS+=(--dart-define=SYNC_URL="${SYNC_URL}")
 fi
 if [ -n "${SYNC_KEY:-}" ]; then
-  echo "   · SYNC_KEY = (설정됨)"
+  echo "   · SYNC_KEY = (설정됨, ${#SYNC_KEY}자)"
+  # 길이만 확인합니다. 16자 미만이면 게이트웨이의 /readyz 가 503 auth 로 거부하므로,
+  # 여기서 막지 않으면 "빌드는 성공했는데 앱만 동기화 실패"로 나타납니다.
+  if [ "${#SYNC_KEY}" -lt 16 ]; then
+    echo "   ⚠️  SYNC_KEY 가 너무 짧습니다 (${#SYNC_KEY}자). 게이트웨이가 거부합니다." >&2
+    echo "      64자 hex 생성: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"" >&2
+  fi
+  # ## 이 키는 비밀이 아닙니다
+  # --dart-define 은 문자열을 main.dart.js 안에 리터럴로 심습니다. 배포본을
+  # 내려받는 누구나 읽을 수 있습니다. 실제 방어선은 게이트웨이를 프록시 뒤
+  # loopback 에만 두는 것과 계정 인증입니다.
+  # 회전 절차: server/gateway/KEY-ROTATION.md
+  echo "   · SYNC_KEY 는 main.dart.js 에 평문으로 포함됩니다 (비밀 아님). 회전은 KEY-ROTATION.md 참고."
   BUILD_ARGS+=(--dart-define=SYNC_KEY="${SYNC_KEY}")
 fi
 flutter build web "${BUILD_ARGS[@]}"

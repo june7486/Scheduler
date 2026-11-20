@@ -21,3 +21,16 @@ android/*.jks
 # Misc
 .DS_Store
 *.log
+
+# Shared sync key, kept out of the command line so it never reaches shell history
+# or a process listing. See server/gateway/KEY-ROTATION.md.
+#
+# This one line matters more than it looks: the rotation procedure tells the
+# operator to `printf` the key into `.sync_key` and pass it as
+# `SYNC_KEY="$(cat .sync_key)"`. Without this ignore rule that file would be
+# picked up by a later `git add -A` and the freshly rotated key would land in a
+# public repository — the exact mistake the rotation was meant to undo.
+.sync_key
+
+# Gateway runtime state
+server/gateway/data/
