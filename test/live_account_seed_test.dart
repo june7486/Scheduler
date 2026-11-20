@@ -26,7 +26,28 @@ void main() {
   HttpOverrides.global = null;
 
   const url = 'http://127.0.0.1:8097';
-  const key = '46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d';
+
+  /// The gateway's shared key, supplied from outside the repo — same rule as the
+  /// password below.
+  ///
+  /// ## Why this is not a literal any more
+  /// It used to be a string constant here, on the reasoning that a test file is
+  /// "not production". That reasoning was wrong twice over. First, this file is
+  /// *tracked*, and the repository is public, so the constant published the key
+  /// to everyone who could read GitHub. Second — the part that makes the first
+  /// merely academic — the same value reached the browser bundle through
+  /// `--dart-define=SYNC_KEY`, so the constant was never the only copy and
+  /// rotating it here alone would have changed nothing.
+  ///
+  /// Reading it from the environment means a fresh clone has no key at all, and
+  /// the live tests skip instead of shipping a credential:
+  ///   SYNC_KEY='…' MASTER_PW='…' flutter test test/live_account_seed_test.dart
+  final key = Platform.environment['SYNC_KEY'] ?? '';
+
+  /// The master account's real password, also supplied from outside the repo.
+  ///
+  /// Empty means "not available here", and the live tests skip rather than
+  /// fail — see the note above [gatewayUp].
   final masterPw = Platform.environment['MASTER_PW'] ?? '';
 
   /// Where the two live tests need a gateway. Probed once, in [setUpAll].

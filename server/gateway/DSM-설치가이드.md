@@ -89,11 +89,12 @@ cat .env
 ```ini
 STORAGE=local
 DATA_DIR=/volume1/92_Scheduler/scheduler-sync/data
-SYNC_SECRET=46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d
+SYNC_SECRET=<직접 생성한 64자리 hex>
 ```
 
 - `DATA_DIR` 은 없으면 자동 생성됩니다.
 - `SYNC_SECRET` 은 앱 빌드에 넣을 키입니다. **바꾸려면** 새로 만들고 7단계에서 다시 빌드하세요.
+- **이 문서에는 키를 적지 않습니다.** 저장소가 공개라 그 순간 키가 공개됩니다.
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -272,7 +273,7 @@ curl https://sync.june7558.direct.quickconnect.to/health
 cd /home/user/flutter_app
 
 SYNC_URL="https://sync.june7558.direct.quickconnect.to" \
-SYNC_KEY="46c8b41d49fce507fd0b61908c4de356a7b920bbfc2ee5f9f86b32a5934fe26d" \
+SYNC_KEY="$(cat .sync_key)" \
 GH_REPO="june7486/Scheduler" \
 CUSTOM_DOMAIN="www.aqdesign.co.kr" \
 ./deploy_pages.sh custom
@@ -280,6 +281,17 @@ CUSTOM_DOMAIN="www.aqdesign.co.kr" \
 
 `deploy_pages.sh` 는 두 값을 `--dart-define` 으로 넘기고, 빌드 후
 `scripts/optimize_web.py` 로 폰트 subsetting 까지 자동 수행합니다.
+
+> **⚠️ `SYNC_KEY` 는 비밀이 아닙니다.**
+> `--dart-define` 은 컴파일 시점에 문자열을 **코드 안에 리터럴로 삽입**합니다.
+> `main.dart.js` 를 열면 키가 그대로 보이고, 그 파일은 누구나 내려받을 수 있습니다.
+> 즉 이 키는 "접근을 막는 자물쇠"가 아니라 "실수로 남의 서버에 쓰는 걸 막는 라벨"입니다.
+>
+> 실제 방어선은 두 가지입니다.
+> 1. 게이트웨이를 인터넷에 직접 노출하지 않는다 (리버스 프록시 뒤 + `HOST=127.0.0.1`).
+> 2. 사용자 데이터는 **워크스페이스 ID 별로 분리**하고, 신뢰는 `SYNC_KEY` 가 아니라 계정 인증에서 얻는다.
+>
+> 키를 바꾸면 **반드시 재배포**해야 합니다. 이전 `main.dart.js` 는 계속 유효한 키를 들고 있으니까요.
 
 > **주소를 빌드에 심지 않으면 앱은 로컬 전용으로 동작합니다.** 겉보기에는
 > 로그인이 되지만, 계정 명부도 동기화도 기기 안에서만 일어납니다. 빌드 결과물에

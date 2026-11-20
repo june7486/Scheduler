@@ -49,6 +49,52 @@ const path = require('path');
 const PORT = Number(process.env.PORT || 8097);
 
 /**
+ * The interface the gateway binds to.
+ *
+ * ## Why this is not `0.0.0.0` any more
+ * It used to be hard-coded to `0.0.0.0` — every interface — on the theory that
+ * a firewall would keep the outside out. That is a single layer of defence, and
+ * it is the wrong one to rely on: an operator who starts the process on a
+ * machine without a firewall, or behind a NAT that forwards the port, publishes
+ * the gateway to the internet without ever seeing a warning. The gateway is
+ * designed to sit *behind* a reverse proxy, so the only interface it has any
+ * business listening on is the loopback one.
+ *
+ * `HOST` exists for the one legitimate exception: running the gateway where a
+ * proxy lives in a different network namespace (a container sidecar, a
+ * separate machine on a private network). Anyone who sets it is making an
+ * explicit, visible decision instead of getting one by default.
+ *
+ *   HOST=127.0.0.1   default — only this machine can reach it
+ *   HOST=::1         IPv6 loopback
+ *   HOST=0.0.0.0     every interface — only behind a firewall you control
+ */
+const HOST = (process.env.HOST || '127.0.0.1').trim();
+
+/**
+ * Exact origins allowed to call the gateway cross-origin, comma separated.
+ *
+ * ## Why `Access-Control-Allow-Origin: *` had to go
+ * `*` is usually defended with "a browser will not send cookies to a wildcard
+ * origin, so nobody can act as the user". That reasoning does not apply here:
+ * this gateway authenticates with a **header** (`X-Sync-Key`), not a cookie. A
+ * wildcard therefore meant every site on the internet could call it and read
+ * the reply.
+ *
+ * An empty list means "no cross-origin callers" — which is the correct default
+ * once the app is served from the same origin as the gateway (Nginx proxies
+ * `/api/` on the site's own host). Same-origin requests are unaffected by CORS
+ * regardless of this setting, so an empty list cannot break the normal
+ * deployment.
+ *
+ *   CORS_ORIGINS=https://www.aqdesign.co.kr,https://www.june7486.com
+ */
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+/**
  * Where the workspace JSON files actually live.
  *
  *   local — a plain directory on the machine running the gateway (fastest).
@@ -494,8 +540,24 @@ function wakeWaiters(ws) {
 
 // ---------------- HTTP surface ----------------
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function cors(req, res) {
+  // Echo the caller's origin back only when it is on the allow-list.
+  //
+  // ## Why not `*`
+  // This gateway authenticates with the `X-Sync-Key` header rather than a
+  // cookie, so the usual "a wildcard cannot use credentials" argument does not
+  // protect it: any page could call the gateway and read the answer. Echoing a
+  // specific allowed origin gives the same "callable from our own site" result
+  // without handing that ability to every site in the world.
+  //
+  // `Vary: Origin` matters because the response now depends on the Origin
+  // header; without it a shared cache can serve one origin's answer to another.
+  const origin = req && req.headers ? req.headers.origin : '';
+  if (origin && CORS_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Sync-Key');
   res.setHeader('Access-Control-Max-Age', '86400');
@@ -573,8 +635,122 @@ function readBody(req) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Reachability vs. readiness
+// ---------------------------------------------------------------------------
+
+/**
+ * Cheap "is the backend there?" probe — what `/health` answers.
+ *
+ * ## Why this is not the readiness check
+ * `/health` is polled often and is published as frozen JSON on GitHub Pages, so
+ * it has to stay a single fast question. Under `local` we therefore only look at
+ * the data directory; under `dsm` we reuse the cached session. Neither branch
+ * writes anything.
+ *
+ * Every branch is **mode-specific by construction**: under `local` we never call
+ * the DSM API, under `dsm` we never touch the local disk. `STORAGE=local` must
+ * not report itself down because a NAS somewhere else is unreachable.
+ */
+async function reachable() {
+  if (STORAGE === 'local') {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.accessSync(DATA_DIR, fs.constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    return (await sid()) != null;
+  } catch {
+    return false;
+  }
+}
+
+/** How long a readiness verdict may be reused.
+ *
+ * A probe running every second must not cost a NAS login or a disk write every
+ * second, so the verdict is memoised for a few seconds. Kept short (5 s) on
+ * purpose: a stale "ready" is exactly the state that keeps a broken node in a
+ * load balancer's rotation. */
+const READY_CACHE_MS = Number(process.env.READY_CACHE_MS || 5000);
+
+let readyCache = null;
+let readyAt = 0;
+
+/**
+ * Can the filesystem behind `STORAGE=local` actually accept a write?
+ *
+ * A directory that merely *looks* writable is not the same as a writable
+ * filesystem: `W_OK` can succeed on a read-only remount, a full volume, or a
+ * quota-exhausted share, and the failure then lands on the user's next save
+ * instead of on the probe. So we write one scratch file, read it back, and
+ * delete it.
+ *
+ * The leading dot keeps it out of the workspace filename grammar (`FILE_RE`
+ * requires the name to start with `[A-Za-z0-9_-]`), so the probe file can never
+ * be mistaken for — or enumerated as — somebody's data.
+ */
+function writableProbe() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const probe = path.join(DATA_DIR, '.readyz.tmp');
+    const token = `${process.pid}-${Date.now()}`;
+    fs.writeFileSync(probe, token, { mode: 0o600 });
+    const back = fs.readFileSync(probe, 'utf8');
+    fs.unlinkSync(probe);
+    return back === token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The `/readyz` verdict: `{ready}` or `{ready:false, reason}`.
+ *
+ * Reason is one of three coarse tokens — `config`, `auth`, `storage` — never a
+ * path, host or credential. A probe log stays useful without turning into a map
+ * of the machine.
+ */
+async function readiness() {
+  const now = Date.now();
+  if (readyCache && now - readyAt < READY_CACHE_MS) return readyCache;
+
+  let verdict;
+  // 1. settings this process cannot run without
+  if (STORAGE !== 'local' && STORAGE !== 'dsm') {
+    verdict = { ready: false, reason: 'config' };
+  } else if (!Number.isFinite(PORT) || PORT <= 0) {
+    verdict = { ready: false, reason: 'config' };
+  } else if (STORAGE === 'dsm' && (!NAS_HOST || !NAS_USER || !NAS_PASS)) {
+    verdict = { ready: false, reason: 'config' };
+  } else if (STORAGE === 'dsm' && !NAS_FOLDER.startsWith('/')) {
+    verdict = { ready: false, reason: 'config' };
+  } else if (STORAGE === 'dsm' && !(Number.isFinite(NAS_PORT) && NAS_PORT > 0)) {
+    verdict = { ready: false, reason: 'config' };
+    // 2. authentication shape — a key is mandatory the moment we leave loopback
+  } else {
+    const onLoopback = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
+    if (!onLoopback && !SYNC_SECRET) {
+      verdict = { ready: false, reason: 'auth' };
+    } else if (SYNC_SECRET && SYNC_SECRET.length < 16) {
+      verdict = { ready: false, reason: 'auth' };
+      // 3. the dependency the *current* storage mode needs — and only it
+    } else {
+      const ok = STORAGE === 'local' ? writableProbe() : (await reachable());
+      verdict = ok ? { ready: true } : { ready: false, reason: 'storage' };
+    }
+  }
+
+  readyCache = verdict;
+  readyAt = now;
+  return verdict;
+}
+
 const server = http.createServer(async (req, res) => {
-  cors(res);
+  cors(req, res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -594,36 +770,64 @@ const server = http.createServer(async (req, res) => {
   // --- liveness. Deliberately says nothing sensitive: it is published as
   // static JSON so the web app can decide "NAS or local" before first paint.
   if (path === '/health') {
-    // With local storage there is no session to check, so "reachable" is simply
-    // "the data directory is writable" — the same thing the next push needs.
-    let up;
-    if (STORAGE === 'local') {
-      try {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        fs.accessSync(DATA_DIR, fs.constants.W_OK);
-        up = true;
-      } catch {
-        up = false;
-      }
-    } else {
-      try {
-        up = (await sid()) != null;
-      } catch {
-        up = false;
-      }
-    }
+    // `reachable()` picks the probe that matches the storage mode, so a local
+    // deployment never asks the NAS and vice versa.
+    const up = await reachable();
+    // ## What may appear in this answer
+    // `/health` is unauthenticated by design — it is the credential-free
+    // up/down bit the web app reads before first paint. That means everything
+    // here is world-readable, so it carries only what the *client* needs:
+    //
+    //   service — the client uses this to tell "our gateway" from DSM's own
+    //             login page answering 200 on the same host. Removing it would
+    //             break that check.
+    //   nas     — the client maps `nas:false` to "storage down". The name is a
+    //             historical artefact; under STORAGE=local it means "the data
+    //             directory is writable", which is what a push needs anyway.
+    //
+    // `storage` and `time` were removed: `storage` described internal
+    // configuration (useful to someone probing, not to a client that never
+    // reads it — verified: no client code touches `body['storage']`), and
+    // `time` served nothing. Availability belongs on `/readyz`, which is allowed
+    // to say 503; this endpoint stays a single cheap "is it there" bit.
     return send(
       res,
       200,
       {
         ok: true,
         service: 'june-nas-gateway',
-        storage: STORAGE,
         nas: up,
-        time: Date.now(),
       },
       req
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // `/readyz` — "may I take traffic right now?"  //
+  // Deliberately NOT folded into `/health`. `/health` answers "is the process
+  // alive" and is *published as static JSON* for first-paint decisions; a
+  // storage probe inside it would make that frozen copy lie in one direction or
+  // the other. `/readyz` answers the question a reverse proxy asks before it
+  // forwards a user here, so it is allowed to say 503.
+  //
+  // Unauthenticated on purpose: the thing asking is Nginx or a container probe,
+  // and it has no `X-Sync-Key`. That is safe because the answer carries no data
+  // and no topology — see `readiness()` for why the reason is a 3-word enum.
+  //
+  // What it never does, per the coordination spec:
+  //   * no workspace enumeration — that is an O(n) NAS round trip, and this is
+  //     probed every few seconds
+  //   * no mutation of user data — the writability check is one dot-prefixed
+  //     scratch file the workspace grammar cannot match
+  //   * no detailed paths, hosts, or credentials in the reply
+  //
+  //   ready    → 200 {"ready":true}
+  //   not yet  → 503 {"ready":false,"reason":"config|auth|storage"}
+  //
+  // `Cache-Control: no-store` is already applied to every reply by `cors()`.
+  if (path === '/readyz') {
+    const verdict = await readiness();
+    return send(res, verdict.ready ? 200 : 503, verdict, req);
   }
 
   if (!authorized(req)) return send(res, 401, { error: 'bad key' }, req);
@@ -892,10 +1096,27 @@ async function selftest() {
 if (process.argv.includes('--selftest')) {
   selftest();
 } else {
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[june-gateway] listening on :${PORT}`);
+  server.listen(PORT, HOST, () => {
+    // Say the interface out loud. "listening on :8097" hid the fact that it
+    // was 0.0.0.0, and that is precisely how a gateway ends up published.
+    console.log(`[june-gateway] listening on ${HOST}:${PORT}`);
     console.log(`[june-gateway] storage=${STORAGE_LABEL}`);
-    console.log(`[june-gateway] auth=${SYNC_SECRET ? 'key required' : 'OPEN'}`);
+    console.log(`[june-gateway] auth=${SYNC_SECRET ? 'key required' : 'OPEN (loopback only!)'}`);
+    console.log(
+      `[june-gateway] cors=${CORS_ORIGINS.length ? CORS_ORIGINS.join(' , ') : 'same-origin only'}`
+    );
+    if (HOST === '0.0.0.0' || HOST === '::') {
+      console.warn(
+        '[june-gateway] WARNING: bound to every interface. Only do this behind a ' +
+          'firewall or a reverse proxy that you control.'
+      );
+    }
+    if (!SYNC_SECRET && HOST !== '127.0.0.1' && HOST !== '::1' && HOST !== 'localhost') {
+      console.warn(
+        '[june-gateway] WARNING: no SYNC_SECRET and listening beyond loopback — ' +
+          'anyone who can reach this port can read and write every workspace.'
+      );
+    }
   });
 
   process.on('SIGTERM', () => {
