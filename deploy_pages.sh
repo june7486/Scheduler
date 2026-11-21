@@ -110,6 +110,72 @@ if [ -n "$CUSTOM_DOMAIN" ]; then
   printf '%s' "$CUSTOM_DOMAIN" > build/web/CNAME
 fi
 
+# ----- 3-3) version.json 에 빌드 식별자 심기 (업데이트 알림의 필수 조건) -----
+# ## 이 단계가 없으면 업데이트 알림이 영원히 동작하지 않습니다
+#
+# 앱은 `version.json` 의 `build` 값과 자기 안의 `BUILD_ID` 를 비교해서
+# "새 빌드가 떴나"를 판단합니다 (lib/services/update_service.dart).
+#
+# 그런데 Flutter 가 만드는 기본 version.json 에는 `build` 가 **없습니다**:
+#   {"app_name":"...","version":"1.0.0","build_number":"1"}
+#
+# `--dart-define=BUILD_ID` 는 앱 안에만 심기지 파일로 나오지 않습니다.
+# 그래서 이 단계를 빠뜨리면:
+#   · 앱 안  : BUILD_ID = 2026.11.21.0100
+#   · 서버   : build 필드 자체가 없음
+#   · 결과   : check() 가 null 을 돌려주고, 사용자는 영원히 "최신입니다"
+#
+# 2026-11-21 확인: 운영 서버(www.aqdesign.co.kr)의 version.json 에
+# 실제로 `build` 가 없었습니다. 배포는 됐지만 알림은 0% 동작 상태였습니다.
+#
+# ## 왜 여기(누출 검사 바로 앞)에 두는가
+# ① 빌드가 끝난 뒤여야 build/web 이 존재합니다.
+# ② 누출 검사보다 앞이어야 version.json 도 검사 대상에 포함됩니다.
+# ③ gh-pages 커밋보다 앞이어야 파일이 실제로 배포본에 들어갑니다.
+echo "③-3 version.json 에 build=${BUILD_ID} 심기..."
+if [ -f "$PROJECT_DIR/scripts/write_version_json.py" ]; then
+  # --notes 는 선택. 배포할 때 UPDATE_NOTES="..." 로 넘기면 팝업에 표시됩니다.
+  # ## --build-dir 을 반드시 명시합니다
+  # 이 스크립트의 기본값은 "이 파일 기준 ../build/web" 입니다. 지금은
+  # 맞지만, 나중에 배포 디렉터리를 바꾸거나 스크립트를 옮기면 조용히
+  # 엉뚱한 곳에 씁니다. 실제로 시험 중에 그 일이 났습니다 — 검사 장치가
+  # 잡아서 망정이지, 없었으면 "심었다"고 보고하고 빈 파일을 배포했습니다.
+  if [ -n "${UPDATE_NOTES:-}" ]; then
+    python3 "$PROJECT_DIR/scripts/write_version_json.py" \
+      --build-id "$BUILD_ID" --notes "$UPDATE_NOTES" \
+      --build-dir "$PROJECT_DIR/build/web"
+  else
+    python3 "$PROJECT_DIR/scripts/write_version_json.py" \
+      --build-id "$BUILD_ID" --build-dir "$PROJECT_DIR/build/web"
+  fi
+
+  # ## 심었는지 반드시 확인합니다
+  # 스크립트가 조용히 실패하면 위의 모든 설명이 무용지물이 됩니다.
+  # 실제로 파일을 다시 읽어 값이 같은지 봅니다.
+  if ! python3 - "$PROJECT_DIR/build/web/version.json" "$BUILD_ID" <<'PYCHECK'
+import json, sys
+path, want = sys.argv[1], sys.argv[2]
+try:
+    got = json.load(open(path, encoding="utf-8")).get("build")
+except Exception as e:
+    print(f"   ❌ version.json 을 읽을 수 없습니다: {e}", file=sys.stderr)
+    sys.exit(1)
+if got != want:
+    print(f"   ❌ build 불일치: 파일={got!r} 기대={want!r}", file=sys.stderr)
+    sys.exit(1)
+PYCHECK
+  then
+    echo "❌ version.json 에 빌드 식별자를 심지 못했습니다. 배포를 중단합니다." >&2
+    echo "   이 상태로 배포하면 앱이 새 빌드를 영원히 못 알아챕니다." >&2
+    exit 1
+  fi
+  echo "   ✅ version.json build=${BUILD_ID} 확인"
+else
+  echo "❌ scripts/write_version_json.py 가 없습니다. 배포를 중단합니다." >&2
+  echo "   이 파일이 없으면 업데이트 알림이 동작하지 않습니다." >&2
+  exit 1
+fi
+
 # ----- 4) 배포본 누출 검사 (배포 전 마지막 관문) ---------------------------
 # ## 왜 빌드 직후에 검사하는가
 # --dart-define 은 값을 main.dart.js 안에 문자열 리터럴로 심습니다. 그래서

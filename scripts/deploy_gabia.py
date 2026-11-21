@@ -470,6 +470,33 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def read_build_id_from_bundle(build_dir: Path) -> str:
+    """main.dart.js 에 심긴 BUILD_ID 를 읽습니다.
+
+    ## 왜 정규식인가
+    `--dart-define=BUILD_ID=2026.11.21.0200` 은 그대로 문자열 리터럴이
+    되어 번들에 들어갑니다. 3.8MB 파일에서 날짜 모양을 찾는 것이 가장
+    확실합니다. 가장 많이 나온 값을 고릅니다 — 한 번만 나오면 그 값,
+    여러 번이면 앱이 실제로 쓰는 값이 다수입니다.
+
+    못 찾으면 빈 문자열. 그러면 호출하는 쪽이 경고합니다.
+    """
+    import re
+    from collections import Counter
+
+    js = build_dir / "main.dart.js"
+    if not js.exists():
+        return ""
+    try:
+        blob = js.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+    found = re.findall(r"20\d{2}\.\d{2}\.\d{2}\.\d{4}", blob)
+    if not found:
+        return ""
+    return Counter(found).most_common(1)[0][0]
+
+
 def build_manifest(root: Path) -> list[dict]:
     """
     올릴 파일 목록 + 크기 + 해시 + 업로드 순서.
@@ -630,6 +657,47 @@ def do_deploy(cfg: dict, *, dry_run: bool, fail_inject: bool = False) -> int:
         ok(".htaccess 적용 (wasm MIME, index.html no-cache)")
     else:
         warn(".htaccess 원본을 찾지 못했습니다 — wasm MIME 이 빠져 흰 화면이 될 수 있습니다")
+
+    # ## version.json 에 빌드 식별자를 심습니다 (업데이트 알림의 필수 조건)
+    # 이 스크립트는 **이미 빌드된** build/web 을 올립니다. 그래서 앱에 심긴
+    # BUILD_ID 를 번들에서 읽어 version.json 에 같은 값을 씁니다.
+    #
+    # ## 왜 번들에서 읽는가 (시각으로 만들면 안 되는 이유)
+    # `flutter build web --dart-define=BUILD_ID=...` 는 빌드 시점 값을
+    # main.dart.js 안에 문자열로 심습니다. 배포 시점에 새 시각을 만들어
+    # version.json 에 쓰면 **앱 안의 값과 파일의 값이 어긋납니다.** 그러면
+    # 앱은 자기가 최신인데도 영원히 "새 버전 있음" 이라고 말합니다.
+    #
+    # ## 이게 없으면 어떻게 되는가
+    # Flutter 기본 version.json 에는 `build` 가 없습니다. 그러면
+    # UpdateService.check() 가 null 을 돌려주고, 사용자는 새 빌드가 나가도
+    # 영원히 알지 못합니다. 2026-11-21 에 실제로 그 상태였습니다.
+    build_id = read_build_id_from_bundle(BUILD_DIR)
+    if not build_id:
+        warn(
+            "번들에서 BUILD_ID 를 찾지 못했습니다 — version.json 을 심지 않습니다. "
+            "업데이트 알림이 동작하지 않습니다."
+        )
+        warn("  해결: flutter build web --dart-define=BUILD_ID=<값> 으로 다시 빌드하십시오")
+    else:
+        vw = PROJECT_DIR / "scripts" / "write_version_json.py"
+        rel = subprocess.run(
+            [sys.executable, str(vw), "--build-id", build_id,
+             "--build-dir", str(BUILD_DIR)],
+            capture_output=True, text=True,
+        )
+        if rel.returncode != 0:
+            warn("version.json 주입 실패: " + (rel.stderr or "").strip()[:200])
+        else:
+            # 심었는지 실제 파일을 다시 읽어 확인합니다.
+            try:
+                got = json.loads((BUILD_DIR / "version.json").read_text(encoding="utf-8")).get("build")
+            except Exception:
+                got = None
+            if got == build_id:
+                ok(f"version.json ← build={build_id} (앱 번들과 일치)")
+            else:
+                warn(f"version.json 검증 실패: 파일={got!r} 기대={build_id!r}")
 
     manifest = build_manifest(BUILD_DIR)
     total = sum(f["size"] for f in manifest)
