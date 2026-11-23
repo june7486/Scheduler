@@ -23,6 +23,7 @@ import '../widgets/skin_lang_bar.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
 import 'report_screen.dart';
+import 'stats_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -36,6 +37,21 @@ class SettingsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
+            // ## 통계는 마스터 전용이 아닙니다
+            //
+            // 리포트 화면과 달리 통계는 **자기 자료를 자기가 보는** 화면입니다.
+            // 마스터 블록 안에 넣으면 일반 사용자는 자기가 몇 건 했는지 영원히
+            // 볼 수 없습니다. 그래서 계정 블록 위, 모두가 지나가는 자리에 둡니다.
+            _Group(context.tr('stats_group')),
+            _Tile(
+              icon: Icons.insights_outlined,
+              title: context.tr('stats_title'),
+              subtitle: context.tr('stats_hint'),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatsScreen()),
+              ),
+            ),
             if (store.isMaster) ...[
               _Group(context.tr('master_admin')),
               _Tile(

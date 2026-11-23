@@ -11,6 +11,8 @@ import '../models/models.dart';
 import 'cloud/cloud_backend.dart';
 import 'cloud/nas_backend.dart';
 import 'cloud/sync_engine.dart';
+import 'demo_seed.dart';
+import 'stats.dart';
 
 /// Central application state & persistence layer.
 ///
@@ -39,11 +41,84 @@ class Store extends ChangeNotifier {
   /// Getting here took a deliberate order: the account had to reach the server
   /// *before* the password could be deleted from the code, otherwise the first
   /// login on a new device would have had nothing to adopt.
-  static const masterId = 'june7486';
+  /// ## 2026-11-21: 새 아이디 체계 (2.0.0)
+  ///
+  /// 이전 마스터는 `june7486` 이었습니다. 그 계정은 서버 명부에서 비밀번호가
+  /// 무작위 값으로 덮여 잠긴 채 남아 있었고, 사용자는 "이미 있는 계정"과
+  /// "비밀번호가 틀렸다" 사이에서 원인을 알 수 없었습니다.
+  ///
+  /// 2.0.0 에서는 아이디 자체를 새로 시작합니다. 옛 워크스페이스는 지워지지
+  /// 않지만 이 빌드는 더 이상 그것을 읽지 않습니다.
+  static const masterId = 'rnk7558';
+
+  // 옛 마스터. 마이그레이션 안내와 진단에만 씁니다.
+  static const legacyMasterId = 'june7486';
+
+  /// ## 아이디 규칙 (2.0.0 부터)
+  ///
+  /// 예전에는 `^[A-Za-z0-9_.@-]{3,}$` 로 사실상 아무거나 통과했습니다.
+  /// 그래서 `June7486` 과 `june7486` 이 다른 계정이 되고, 로그인할 때
+  /// 대소문자를 틀리면 "없는 계정"이 되어 원인을 찾기 어려웠습니다.
+  ///
+  /// 새 규칙은 혼동의 여지를 없앱니다:
+  ///   · 4~20자
+  ///   · 영문 **소문자**, 숫자, 밑줄만
+  ///   · 첫 글자는 영문 소문자
+  ///
+  /// 대문자를 아예 막는 이유: 허용하면 `Kim` 과 `kim` 이 공존하고,
+  /// 사람은 둘을 같은 것으로 기억합니다. 계정 체계에서 이건 사고입니다.
+  static final RegExp idPattern = RegExp(r'^[a-z][a-z0-9_]{3,19}$');
+
+  /// 아이디가 규칙에 맞는지 검사합니다. 문제가 있으면 **이유**를 돌려줍니다.
+  ///
+  /// 단순히 true/false 를 돌려주면 화면에서 "잘못된 아이디"라는 무의미한
+  /// 문장밖에 못 보여줍니다. 사용자는 무엇을 고쳐야 하는지 알아야 합니다.
+  static String? validateId(String raw) {
+    final id = raw.trim();
+    if (id.isEmpty) return 'id_empty';
+    if (id.length < 4) return 'id_too_short';
+    if (id.length > 20) return 'id_too_long';
+    if (RegExp(r'[A-Z]').hasMatch(id)) return 'id_has_upper';
+    if (!RegExp(r'^[a-z0-9_]').hasMatch(id)) return 'id_bad_first';
+    if (!idPattern.hasMatch(id)) return 'id_bad_chars';
+    return null;
+  }
 
   // A ready-to-use demo account (id/pw = test/test).
   static const testId = 'test';
   static const testPw = 'test';
+
+  /// ## 계정 세대(era) 도장 — 2.0.0
+  ///
+  /// ## 왜 필요한가
+  ///
+  /// 앱 데이터는 브라우저(또는 기기)에 남습니다. 새 버전을 배포해도 **옛
+  /// 기기에는 옛 계정과 옛 일정이 그대로 있습니다.** 그 상태에서 사용자가
+  /// 새 마스터로 로그인하면:
+  ///
+  ///   1. 옛 `june7486` 행이 로컬에 남아 목록에 계속 보입니다
+  ///   2. 옛 워크스페이스 캐시(`__sync_rev__`)가 새 계정에 그대로 쓰입니다
+  ///   3. 동기화가 옛 서버 문서와 새 문서를 섞으려다 충돌합니다
+  ///
+  /// 그래서 "이 기기는 2.0.0 세대다"라는 도장을 찍고, 도장이 다르면
+  /// **로컬 계정·캐시만** 한 번 씻어냅니다.
+  ///
+  /// ## 무엇을 지우고 무엇을 남기는가
+  ///
+  /// 지웁니다: `users`(계정 행), `__sync_rev__`/`__sync_gen__`(동기화 커서),
+  ///          `__sync_code__`(워크스페이스 코드), 기억된 계정 목록
+  ///
+  /// 남깁니다: `prefs`(테마·언어·글꼴 설정), 그리고 **일정 데이터는
+  ///          사용자가 A(완전 초기화)를 골랐으므로 함께 지웁니다** —
+  ///          단, 이 결정은 [applyEraReset] 을 부르는 쪽이 명시합니다.
+  ///
+  /// ## 이게 없으면 생기는 일
+  ///
+  /// 옛 기기에서 새 마스터로 로그인했는데 옛 계정이 목록에 남아 있어
+  /// "또 이상하다"고 느낍니다. 사용자는 앱을 의심하지만 원인은 캐시입니다.
+  static const String eraStamp = '2.0.0';
+
+  static const String _kEra = '__era__';
 
   late Box _users;
   late Box _tasks;
@@ -186,11 +261,108 @@ class Store extends ChangeNotifier {
     _voices = await Hive.openBox(_voiceBox);
     _prefs = await Hive.openBox(_prefBox);
 
+    // ## 세대 도장 검사는 반드시 _ensureMaster 보다 먼저
+    //
+    // 순서를 바꾸면 옛 세대 기기에서 새 마스터 행을 만들었다가 곧바로
+    // 지우는 일이 생깁니다. 지우는 쪽이 나중이면 사용자는 "로그인했는데
+    // 계정이 사라졌다"를 겪습니다.
+    await _checkEra();
+
     await _ensureMaster();
     await _ensureTestUser();
     await _loadRemembered();
     await rememberAppVersion();
     _ready = true;
+    notifyListeners();
+  }
+
+  /// 세대 도장을 확인하고, 다르면 [applyEraReset] 을 부릅니다.
+  ///
+  /// ## 왜 조용히 하는가
+  ///
+  /// 사용자에게 "캐시를 지우겠습니다"라고 물으면 대부분 무슨 말인지
+  /// 모릅니다. 그리고 이건 **선택이 아니라 필수**입니다 — 옛 캐시를 두면
+  /// 새 계정 체계가 섞여서 로그인이 계속 이상해집니다. 그래서 묻지 않고
+  /// 한 번만 하고, 대신 **무엇을 했는지 기록**을 남깁니다([eraResetNote]).
+  Future<void> _checkEra() async {
+    final stamped = _users.get(_kEra) as String?;
+    if (stamped == eraStamp) return; // 이미 이 세대
+
+    // 처음 설치(도장 없음)와 세대 변경을 구분합니다.
+    // 처음 설치에는 지울 것이 없으므로 그냥 도장만 찍습니다.
+    final hadAccounts = _users.keys.any(
+      (k) => k is String && !_isReservedKey(k) && k != _kEra,
+    );
+
+    if (stamped != null && hadAccounts) {
+      // 이전 세대에서 올라온 기기 → 계정/커서를 씻습니다.
+      await _wipeLocalAccounts();
+      _eraResetNote = '이전 버전($stamped)의 계정 정보를 정리했습니다';
+    } else if (hadAccounts && stamped == null) {
+      // 도장이 없는데 계정이 있다 = 1.x 에서 올라온 기기.
+      await _wipeLocalAccounts();
+      _eraResetNote = '이전 버전의 계정 정보를 정리했습니다';
+    }
+
+    await _users.put(_kEra, eraStamp);
+  }
+
+  String? _eraResetNote;
+
+  /// 세대 변경으로 로컬 계정을 정리했으면 그 안내 문구를 돌려줍니다.
+  ///
+  /// 화면에서 "왜 계정이 사라졌나"를 설명하는 데 씁니다. 조용히 지우고
+  /// 아무 말도 안 하면 사용자는 앱을 의심합니다.
+  String? get eraResetNote => _eraResetNote;
+
+  /// 로컬 계정 행과 동기화 커서를 지웁니다. 일정 데이터는 **지우지 않습니다.**
+  ///
+  /// ## 왜 일정은 여기서 안 지우는가
+  ///
+  /// 이 함수는 "계정 체계가 바뀌었다"는 이유로 불립니다. 그런데 일정을
+  /// 지우는 것은 훨씬 무거운 결정이고, 사용자가 명시적으로 선택해야 합니다.
+  /// 여기서 같이 지우면 세대 변경만으로 자료가 사라집니다 — 되돌릴 수 없는
+  /// 사고입니다. 일정 초기화가 필요하면 [wipeAllData] 를 따로 부르십시오.
+  Future<void> _wipeLocalAccounts() async {
+    for (final k in _users.keys.toList()) {
+      if (k is! String) continue;
+      if (k == _kEra) continue;
+      // 설정은 남깁니다 (테마·언어·글꼴).
+      if (_isReservedKey(k) && k != '__sync_rev__' && k != '__sync_gen__' &&
+          k != '__sync_code__') {
+        continue;
+      }
+      await _users.delete(k);
+    }
+
+    // 기억된 계정 목록도 무효입니다 — 그 안의 아이디들은 더 이상 존재하지
+    // 않거나, 존재하더라도 비밀번호가 다릅니다.
+    try {
+      final prefs = await _device;
+      await prefs.remove(_kRemembered);
+      final stale = prefs.getKeys().where((k) => k.startsWith(_kSavedPwPrefix));
+      for (final k in stale.toList()) {
+        await prefs.remove(k);
+      }
+    } catch (_) {}
+    _remembered.clear();
+  }
+
+  /// **모든** 로컬 데이터를 지웁니다 (A: 완전 초기화).
+  ///
+  /// 계정·일정·분류·기록·음성까지. 설정(prefs)은 남깁니다.
+  ///
+  /// ## 되돌릴 수 없습니다
+  /// 호출하는 쪽이 사용자에게 반드시 확인을 받아야 합니다. 여기서는
+  /// 확인을 받지 않습니다 — UI 의 책임입니다.
+  Future<void> wipeAllData() async {
+    await _wipeLocalAccounts();
+    for (final box in [_tasks, _cats, _logs, _voices]) {
+      for (final k in box.keys.toList()) {
+        await box.delete(k);
+      }
+    }
+    _currentUserId = '';
     notifyListeners();
   }
 
@@ -219,40 +391,116 @@ class Store extends ChangeNotifier {
 
   /// Ensures the demo account (id/pw = test/test) exists with sample content,
   /// so reviewers can sign in immediately without the master credentials.
+  ///
+  /// ## 2026-11-21 — 견본을 1년치로 바꾸면서 달라진 것
+  ///
+  /// 예전에는 할일 4건을 넣었습니다. 그러면 통계 화면이 전부 "자료 없음"이라
+  /// 새로 만든 통계가 고장난 것처럼 보입니다. 그래서 1년치를 넣습니다.
+  ///
+  /// ## idempotency — 매번 1년치가 쌓이면 안 됩니다
+  ///
+  /// 이 함수는 앱을 열 때마다 불립니다. 그냥 "비어 있으면 넣는다"로 하면
+  /// 사용자가 견본을 전부 지운 순간 다시 1년치가 생겨서, 지워도 지워지지
+  /// 않는 계정이 됩니다. 그래서 판단 기준을 **안내 항목 하나**로 좁힙니다.
+  /// 안내는 지우지 않는 것이 정상이므로, 안내가 없을 때만 견본 전체를
+  /// 다시 깝니다.
+  ///
+  /// 결정론적 생성(demo_seed.dart)이라 두 기기가 같은 자료를 만들고,
+  /// 동기화에서 서로 덮어쓸 뿐 두 벌이 되지 않습니다.
   Future<void> _ensureTestUser() async {
     if (!_users.containsKey(testId)) {
-      final u = User(id: testId, password: testPw, displayName: 'Test');
+      final u = User(
+        id: testId,
+        password: testPw,
+        displayName: language == 'ko' ? '견본 (연습장)' : 'Sample (sandbox)',
+      );
       await _users.put(testId, u.toMap());
     }
     await _ensureUserSeed(testId);
-    if (tasksForOwner(testId).isEmpty) {
-      final ko = language == 'ko';
-      final samples = <Map<String, dynamic>>[
-        {
-          'cat': 'todo',
-          'title': ko ? '샘플 할일 — 시험용' : 'Sample to-do — for testing',
-          'note': ko ? '테스트 계정입니다' : 'This is the test account',
-        },
-        {
-          'cat': 'finance',
-          'title': ko ? '장보기 (예산 ₩50,000)' : 'Groceries (₩50,000 budget)',
-          'amount': 50000,
-        },
-        {'cat': 'bank', 'title': ko ? '은행 업무 확인' : 'Check bank work'},
-        {'cat': 'scout', 'title': ko ? '스카우트 대장 미팅' : 'Scout leader meeting'},
-      ];
-      for (final s in samples) {
-        final t = Task(
-          id: _uuid.v4(),
-          ownerId: testId,
-          title: s['title'] as String,
-          note: (s['note'] ?? '') as String,
-          categoryId: s['cat'] as String,
-          amount: (s['amount'] as num?)?.toDouble(),
-        );
-        await _tasks.put(t.id, t.toMap());
-      }
+
+    final has = _tasks.containsKey(demoGuideAnchorId);
+    if (has) return;
+
+    final items = buildDemoYear(
+      now: DateTime.now(),
+      ko: language == 'ko',
+    );
+    final now = DateTime.now();
+    for (final i in items) {
+      // 이미 있는 id 는 건드리지 않습니다. 사용자가 견본 일부를 고쳤을 수
+      // 있습니다. 안내 항목만 없으므로 실제로는 전부 새로 깔립니다.
+      if (_tasks.containsKey(i.id)) continue;
+      final t = i.toTask(testId);
+      t.updatedAt = now.millisecondsSinceEpoch;
+      await _tasks.put(t.id, t.toMap());
     }
+    addLog('Seeded demo year', '${items.length} items');
+  }
+
+  // ---------------- Statistics ----------------
+
+  /// 통계를 계산합니다. 화면은 결과만 받아 그립니다.
+  ///
+  /// ## 날짜 규칙
+  /// 리포트 화면(`report_screen.dart`)과 **같은** 규칙을 씁니다:
+  ///   `dueDate` → 없으면 반복으로 계산한 날짜 → 없으면 만든 날
+  ///
+  /// 두 화면이 서로 다른 날짜로 같은 일을 세면 사용자는 둘 중 하나를
+  /// 믿지 않게 됩니다. 그래서 규칙을 한 곳([statsFor])에 모았습니다.
+  ///
+  /// ## 누구의 자료인가
+  /// 지금 보고 있는 범위([_scopeId])의 자료입니다. 마스터가 "전체 보기"를
+  /// 켜면 모든 사용자의 자료가 합쳐집니다 — 마스터가 원하는 것이 보통
+  /// 그것이기 때문입니다.
+  StatsSnapshot statsFor(StatsRange range, {DateTime? now}) {
+    final at = now ?? DateTime.now();
+    final list = tasks;
+
+    final entries = <StatsEntry>[];
+    for (final t in list) {
+      entries.add(
+        StatsEntry(
+          date: statsDateOf(t, at),
+          completed: t.completed,
+          due: t.dueDate,
+          categoryId: t.categoryId,
+          amount: t.amount ?? 0,
+        ),
+      );
+    }
+
+    return computeStats(
+      entries: entries,
+      range: range,
+      now: at,
+      catalog: () => [
+        for (final c in categories)
+          StatsCategory(
+            id: c.id,
+            // `_label` 은 "사용자가 이름을 바꿨으면 그 이름, 아니면 언어별
+            // 기본 이름"을 돌려줍니다. 화면의 catName() 과 같은 규칙이라
+            // 통계표와 탭 이름이 어긋나지 않습니다. 여기서 l10n 을 import
+            // 하지 않는 이유는 store 가 표현 계층에 기대지 않게 하기 위함입니다.
+            label: _label(c.id, c.label),
+            emoji: c.emoji,
+            colorValue: c.colorValue,
+          ),
+      ],
+    );
+  }
+
+  /// 그 항목이 통계에서 어느 날짜로 세어지는지.
+  ///
+  /// 리포트 화면과 반드시 같아야 하는 규칙이라 public 으로 열어 두었습니다.
+  static DateTime statsDateOf(Task t, DateTime now) {
+    if (t.dueDate != null) return t.dueDate!;
+    final rec = recurrenceDate(
+      recurrence: t.recurrence,
+      recurrenceDay: t.recurrenceDay,
+      now: now,
+    );
+    if (rec != null) return rec;
+    return t.createdAt;
   }
 
   // ---------------- Users ----------------
@@ -934,9 +1182,8 @@ class Store extends ChangeNotifier {
   }) async {
     final trimmed = id.trim();
     if (trimmed.isEmpty) return 'ID cannot be empty.';
-    if (!RegExp(r'^[A-Za-z0-9_.@-]{3,}$').hasMatch(trimmed)) {
-      return 'ID must be at least 3 chars (letters, numbers, . _ - @).';
-    }
+    final idProblem = validateId(trimmed);
+    if (idProblem != null) return idProblem;
     if (pw.length < 4) return 'Password must be at least 4 characters.';
     if (_users.containsKey(trimmed)) return 'That ID already exists.';
 

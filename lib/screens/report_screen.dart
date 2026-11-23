@@ -336,9 +336,17 @@ class _ReportScreenState extends State<ReportScreen> {
     // Group all selected users' tasks by their scheduled date.
     final users = _users(store);
     final map = <String, List<Task>>{};
+    final now = DateTime.now();
     for (final u in users) {
       for (final t in store.tasksForOwner(u.id)) {
-        final d = t.dueDate ?? _taskDate(t);
+        // ## 날짜 규칙을 여기서 다시 쓰지 않습니다
+        //
+        // 예전에는 이 화면이 자체 `_taskDate` 를 들고 있었습니다. 통계
+        // 화면을 만들면서 같은 규칙이 두 곳에 생겼고, 그 둘이 갈라지면
+        // 같은 항목이 리포트에서는 3월 2일, 통계에서는 3월 5일로 세어집니다.
+        // 사용자는 둘 중 하나를 믿지 않게 되고, 어느 쪽이 맞는지 알 방법이
+        // 없습니다. 그래서 규칙은 `Store.statsDateOf` 한 곳에만 둡니다.
+        final d = Store.statsDateOf(t, now);
         final key = DateFormat('yyyy-MM-dd').format(d);
         map.putIfAbsent(key, () => []).add(t);
       }
@@ -362,14 +370,6 @@ class _ReportScreenState extends State<ReportScreen> {
         ],
       ],
     );
-  }
-
-  DateTime _taskDate(Task t) {
-    if (t.recurrence == 'monthly' && t.recurrenceDay != null) {
-      final now = DateTime.now();
-      return DateTime(now.year, now.month, t.recurrenceDay!);
-    }
-    return t.createdAt;
   }
 
   List<Widget> _taskLines(
@@ -562,11 +562,14 @@ class _ReportScreenState extends State<ReportScreen> {
           } else {
             final users = _users(store);
             final map = <String, List<Task>>{};
+            final pdfNow = DateTime.now();
             for (final u in users) {
               for (final t in store.tasksForOwner(u.id)) {
+                // 화면 미리보기와 **같은** 날짜 규칙. PDF 와 화면이 다른
+                // 날짜로 묶이면 인쇄본을 보고 화면을 확인했을 때 어긋납니다.
                 final key = DateFormat(
                   'yyyy-MM-dd',
-                ).format(t.dueDate ?? _taskDate(t));
+                ).format(Store.statsDateOf(t, pdfNow));
                 map.putIfAbsent(key, () => []).add(t);
               }
             }

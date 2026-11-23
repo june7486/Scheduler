@@ -528,6 +528,11 @@ class L10n {
     'col_created': '생성일',
     'no_tasks_dash': '— 할일 없음 —',
     'prevent_two_line': '2줄 방지',
+
+    // 통계 (마스터 전용이 아님 — 자기 자료를 자기가 봄)
+    'stats_group': '통계',
+    'stats_title': '기간별 통계',
+    'stats_hint': '일주일·한 달·1년·전체 — 완료율, 기한 초과, 분류별',
   };
 
   static const _en = <String, String>{
@@ -1000,6 +1005,10 @@ class L10n {
     'col_created': 'Created',
     'no_tasks_dash': '— no tasks —',
     'prevent_two_line': 'Prevent two-line wrapping',
+
+    'stats_group': 'Statistics',
+    'stats_title': 'Statistics by period',
+    'stats_hint': 'Week · month · year · all — completion, overdue, by category',
   };
 }
 

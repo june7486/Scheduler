@@ -2,7 +2,7 @@ name: june_scheduler
 description: "June's Scheduler - All-in-one personal & business task scheduler."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.9.2
