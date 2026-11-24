@@ -2,6 +2,26 @@
   "schema": "june.release/1",
   "app": "scheduler",
   "state": "release_ready_awaiting_autodeploy",
+  "commits": {
+    "app": {
+      "full": "40777e66f2e13b127d07b59f94644346298f8ccc",
+      "short": "40777e6",
+      "scope": "운영 ZIP 이 담고 있는 앱 소스 커밋",
+      "note": "이 커밋이 곧 배포되는 코드입니다. 인계 문서와 섞지 마십시오."
+    },
+    "handoff": {
+      "full": "1604bbf",
+      "scope": "ops/RELEASE.json, ops/OPS-HANDOFF.md, ops/verify-release.sh 를 추가한 커밋",
+      "note": "문서·검증기만 담습니다. 앱 코드는 포함하지 않으며 운영 ZIP 과 무관합니다."
+    }
+  },
+  "artifact_frozen": {
+    "frozen": true,
+    "mode": "444",
+    "rebuild_forbidden": true,
+    "reupload_forbidden": true,
+    "note": "확정본입니다. 재빌드·재업로드·수정하지 마십시오. 재빌드하면 version.json 이 기본값으로 덮여 해시가 달라집니다."
+  },
   "release": {
     "version": "2.0.0",
     "build_number": "2",
@@ -72,6 +92,10 @@
     "algorithm": "Ed25519",
     "key_id": "3057A14449EFC470",
     "public_key_base64": "MCowBQYDK2VwAyEA2YgKyW8re959hMwNj1mcahQvVauyeFJbFAF5diC8Xag=",
+    "key_lifetime": "sandbox-temporary",
+    "registration_held": true,
+    "registration_hold_reason": "임시 샌드박스 키는 재시작 후 유지되지 않습니다. 배포센터 공통 서명 러너가 준비되면 그 환경에서 영속 키를 새로 만들어 연결합니다.",
+    "do_not_register_this_key": true,
     "private_key_in_artifact": false,
     "private_key_in_repo": false,
     "durable_secret_store": false,
@@ -90,9 +114,31 @@
       "http": 401,
       "error": "NO_PINNED_KEY",
       "message": "scheduler 앱에 빌드 공개키가 등록되지 않았습니다.",
-      "resolved_by": "admin registers key_id 3057A14449EFC470 at the deploy center web UI",
+      "status": "보류 — 임시 샌드박스 키는 등록하지 않습니다",
+      "resolved_by": "배포센터 공통 서명 러너 환경에서 영속 키를 생성한 뒤 그 공개키를 등록",
       "key_registration_api_exists": false
+    },
+    "submission_pipeline": {
+      "note": "게시 성공은 접수 완료가 아닙니다. 아래 단계를 모두 통과해야 접수 완료입니다.",
+      "steps": [
+        "1. simulate 에서 같은 ZIP 으로 서명 게시 → release_id 확보",
+        "2. 가비아 러너가 해당 release_id 를 인출",
+        "3. 신규 receipt_no 발급",
+        "4. 서버 측 SHA-256 이 6bd5444c… 와 일치",
+        "5. 최종 검사 통과"
+      ],
+      "must_not_report_before": "5단계 완료",
+      "partial_success_is_not_completion": true
     }
+  },
+  "operational_invariants_during_verification": {
+    "note": "접수 검증 중에는 아래를 그대로 둡니다.",
+    "live_version_stays": "1.0.0",
+    "dns_unchanged": true,
+    "certificate_unchanged": true,
+    "schedule_data_unchanged": true,
+    "clean_reinstall_scope": "스케줄러 전용 운영 전환에서만 수행",
+    "clean_reinstall_performed": false
   },
   "data_safety": {
     "operational_data_in_artifact": false,
