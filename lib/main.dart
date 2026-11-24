@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/master_setup_screen.dart';
 import 'services/session_service.dart';
 import 'services/store.dart';
 import 'services/update_service.dart';
@@ -145,6 +146,13 @@ class _Gate extends StatefulWidget {
 class _GateState extends State<_Gate> {
   bool? _loggedIn;
 
+  /// 마스터 첫 비밀번호 설정 화면을 띄울지.
+  ///
+  /// 이 판단은 **네트워크를 타지 않습니다** ([Store.masterNeedsSetupLocally]).
+  /// 앱을 열자마자 12초 스피너를 보여주면 설치가 깨진 것처럼 보입니다.
+  /// 명부 확인은 설정 화면 안에서, 사용자가 버튼을 누를 수 있는 상태로 합니다.
+  bool _needsMasterSetup = false;
+
   /// 시작 시 한 번만 만드는 업데이트 확인기.
   ///
   /// `_check()` 안에서 매번 새로 만들면 http.Client 가 쌓입니다.
@@ -189,7 +197,17 @@ class _GateState extends State<_Gate> {
       }
     }
     if (!mounted) return;
-    setState(() => _loggedIn = logged);
+
+    // ## 첫 설치 안내는 "로그인 안 된 상태"에서만
+    // 이미 누군가로 로그인해 쓰고 있는 기기라면 대표 비밀번호가 없어도
+    // 앱을 막지 않습니다. 일정을 보러 온 사람을 관리자 설정 화면에
+    // 가두는 것은 이 기능의 목적이 아닙니다.
+    final needsSetup = !logged && store.masterNeedsSetupLocally;
+
+    setState(() {
+      _loggedIn = logged;
+      _needsMasterSetup = needsSetup;
+    });
 
     // ## 업데이트 확인은 "그린 다음"입니다
     // 화면을 먼저 띄우고(위 setState), 그 다음 프레임에서 조용히 확인합니다.
@@ -243,6 +261,18 @@ class _GateState extends State<_Gate> {
   Widget build(BuildContext context) {
     if (_loggedIn == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    // ## 왜 로그인 화면보다 앞인가
+    // 이 화면이 없으면 새로 설치한 사람은 첫 화면에서 **영원히** 막힙니다.
+    // 마스터 행의 비밀번호는 설치할 때 무작위로 태어나고 아무도 그 값을
+    // 모릅니다. 그래서 로그인 폼을 보여주기 전에 정하게 합니다.
+    if (_needsMasterSetup) {
+      return MasterSetupScreen(
+        onDone: () => setState(() {
+          _needsMasterSetup = false;
+          _loggedIn = false;
+        }),
+      );
     }
     return _loggedIn! ? const HomeScreen() : const LoginScreen();
   }

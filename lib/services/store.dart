@@ -338,7 +338,9 @@ class Store extends ChangeNotifier {
       if (k is! String) continue;
       if (k == _kEra) continue;
       // 설정은 남깁니다 (테마·언어·글꼴).
-      if (_isReservedKey(k) && k != '__sync_rev__' && k != '__sync_gen__' &&
+      if (_isReservedKey(k) &&
+          k != '__sync_rev__' &&
+          k != '__sync_gen__' &&
           k != '__sync_code__') {
         continue;
       }
@@ -399,6 +401,229 @@ class Store extends ChangeNotifier {
   String _randomPlaceholder() =>
       '${_uuid.v4()}-${_uuid.v4()}'.replaceAll('-', '');
 
+  // ---------------- 마스터 첫 비밀번호 ----------------
+  //
+  // ## 왜 이게 필요한가
+  //
+  // 마스터 행은 설치할 때 **무작위 64자** 비밀번호로 태어납니다. 아무도 그
+  // 값을 모르므로, 첫 실행에서 진짜 비밀번호를 정해 주지 않으면 마스터는
+  // **영원히 로그인할 수 없습니다.** 2.0.0 을 배포하면서 이 화면을 빼먹으면
+  // 새로 설치한 사람이 첫 화면에서 막힙니다.
+  //
+  // ## 왜 "이미 정했는지"를 서버에도 물어보는가
+  //
+  // 로컬만 보면 **두 번째 기기도 "정해 주세요" 화면을 띄웁니다.** 그러면
+  // 그 기기를 먼저 연 사람이 마스터 비밀번호를 빼앗을 수 있습니다.
+  // 실제로는 이미 정해져 있는데도요. 명부에 `pwPlain` 이 있으면 이미 주인이
+  // 있다는 뜻이므로 물러납니다.
+  //
+  // ## 남은 위험 (숨기지 않고 적습니다)
+  //
+  // 아무도 마스터 비밀번호를 정하지 않은 상태에서 **누구든 먼저 열면**
+  // 마스터가 됩니다. 이건 "완벽한 보안용이 아니다"라는 결정의 일부입니다.
+  // 대신 이 사실을 화면에 적고, 정하는 순간 로그를 남깁니다.
+
+  bool _masterNeedsSetup = false;
+
+  /// 마스터 비밀번호 상태를 서버까지 확인했는지.
+  ///
+  /// 화면이 "아직 확인 중"과 "확인했더니 필요 없음"을 구분해야 합니다.
+  /// 둘을 같게 보면 로그인 화면이 잠깐 잘못된 안내를 띄웁니다.
+  bool get masterSetupKnown => _masterSetupKnown;
+  bool _masterSetupKnown = false;
+
+  /// 명부가 **실제로 대답했는지.**
+  ///
+  /// `false` 는 "명부에 주인이 없다"가 아니라 **"물어보지 못했다"** 입니다.
+  /// 둘을 같게 보면 느린 네트워크에서 남의 마스터 계정을 가로챌 수 있습니다.
+  bool _registryAnswered = false;
+
+  /// 명부 기준으로 마스터가 이미 비밀번호를 가진 상태인지.
+  bool _registryMasterHasPassword = false;
+
+  /// 확정을 눌렀을 때 재확인에 쓸 값들. 화면이 잠금을 안내하는 데도 씁니다.
+  bool get masterRegistryAnswered => _registryAnswered;
+  bool get masterRegistryHasPassword => _registryMasterHasPassword;
+
+  /// 마스터 비밀번호를 아직 정하지 않았으면 true.
+  ///
+  /// [init] 이 끝난 뒤 [checkMasterSetup] 을 부르면 서버까지 확인한 값이
+  /// 들어옵니다. 확인 전에는 로컬만 보고 판단합니다 — 네트워크 때문에
+  /// 로그인 화면이 멈추면 안 됩니다.
+  bool get masterNeedsSetup => _masterNeedsSetup;
+
+  /// **네트워크를 타지 않는** 판단. 기동 직후 첫 화면을 정할 때 씁니다.
+  ///
+  /// ## 왜 [checkMasterSetup] 을 그냥 쓰면 안 되는가
+  /// [checkMasterSetup] 은 로컬이 자리표시자일 때 명부를 물어봅니다. 그건
+  /// 옳지만 **최대 12초** 걸릴 수 있습니다. 앱을 열자마자 스피너가 12초
+  /// 도는 것은 "설치가 깨졌다"로 읽힙니다. 그래서 첫 화면은 이 값으로
+  /// 즉시 정하고, 명부 확인은 그 화면에 들어온 뒤에 합니다.
+  ///
+  /// 여기서 `true` 가 나와도 **아직 정할 수 있다는 뜻은 아닙니다.** 명부에
+  /// 이미 주인이 있을 수 있으므로, 실제 확정은 [checkMasterSetup] 과
+  /// [setInitialMasterPassword] 의 재확인을 통과해야 합니다.
+  bool get masterNeedsSetupLocally {
+    final u = userById(masterId);
+    if (u == null) return true;
+    final pw = u.password;
+    return pw.isEmpty || _looksLikePlaceholder(pw);
+  }
+
+  /// 마스터 비밀번호 상태를 확인합니다 (로컬 → 서버 순).
+  ///
+  /// 서버 확인은 **실패해도 무해**합니다. 못 물어보면 로컬 판단을 그대로
+  /// 씁니다. 여기서 예외를 던지면 로그인 화면이 안 뜹니다.
+  Future<bool> checkMasterSetup() async {
+    final u = userById(masterId);
+
+    // 로컬에 진짜 비밀번호가 있으면 확인할 필요가 없습니다.
+    if (u != null &&
+        u.password.isNotEmpty &&
+        !_looksLikePlaceholder(u.password)) {
+      _masterSetupKnown = true;
+      _masterNeedsSetup = false;
+      _registryAnswered = true;
+      _registryMasterHasPassword = true;
+      return false;
+    }
+
+    // 로컬은 자리표시자. 서버가 이미 주인을 정했는지 봅니다.
+    if (!_backendIsUsable) {
+      // ## 물어볼 곳이 아예 없는 경우
+      // 동기화를 끈 설치(로컬 전용)는 명부가 존재하지 않으므로 "주인 없음"이
+      // 확정입니다. 이건 추측이 아니라 사실이라 그대로 진행해도 됩니다.
+      _registryAnswered = true;
+      _registryMasterHasPassword = false;
+      _masterSetupKnown = true;
+      _masterNeedsSetup = true;
+      return true;
+    }
+
+    // ## 여기서부터는 "못 물어봤다"를 "주인 없다"와 구분해야 합니다
+    // readAccountRegistry() 는 실패·시간초과에 빈 맵을 돌려줍니다. 그 빈 맵을
+    // "명부가 비었다"로 읽으면, 두 번째 기기가 응답이 느린 순간에 마스터
+    // 비밀번호를 새로 정해 버리고 진짜 주인을 밀어냅니다. 그래서 **명부는
+    // 한 번만, 성공했는지 여부와 함께** 읽습니다.
+    var remoteHasPassword = false;
+    try {
+      final doc = await _bounded(() => backend.read(registryWorkspaceId));
+      if (doc == null) {
+        // 시간 초과. 모르는 채로 사용자를 막지 않되, 확정도 하지 않습니다.
+        _registryAnswered = false;
+        _registryMasterHasPassword = false;
+        _masterSetupKnown = true;
+        _masterNeedsSetup = true;
+        return true;
+      }
+      for (final e in doc.entities.entries) {
+        if (e.key != 'accounts/$masterId') continue;
+        final raw = e.value;
+        if (raw is! Map) continue;
+        final plain = raw['pwPlain'];
+        if (plain is String &&
+            plain.isNotEmpty &&
+            !_looksLikePlaceholder(plain)) {
+          remoteHasPassword = true;
+        }
+      }
+      _registryAnswered = true;
+    } catch (_) {
+      // 명부를 대화 상대로 삼을 수 없습니다.
+      _registryAnswered = false;
+      _registryMasterHasPassword = false;
+      _masterSetupKnown = true;
+      _masterNeedsSetup = true;
+      return true;
+    }
+
+    if (remoteHasPassword) {
+      // 명부가 주인을 알고 있습니다. 로컬로 가져와 다음부터 묻지 않게 합니다.
+      final doc = await _bounded(() => backend.read(registryWorkspaceId));
+      final raw = doc?.entities['accounts/$masterId'];
+      final plain = raw is Map ? raw['pwPlain'] : null;
+      if (plain is String &&
+          plain.isNotEmpty &&
+          !_looksLikePlaceholder(plain)) {
+        final adopt = u ?? User(id: masterId, password: plain, isMaster: true);
+        adopt.password = plain;
+        adopt.isMaster = true;
+        await _users.put(masterId, adopt.toMap());
+        _registryMasterHasPassword = true;
+        _masterSetupKnown = true;
+        _masterNeedsSetup = false;
+        return false;
+      }
+    }
+
+    _registryMasterHasPassword = remoteHasPassword;
+    _masterSetupKnown = true;
+    _masterNeedsSetup = !remoteHasPassword;
+    return _masterNeedsSetup;
+  }
+
+  /// 마스터의 첫 비밀번호를 정합니다.
+  ///
+  /// 이전 비밀번호를 요구하지 않습니다 — 무작위 자리표시자라 아무도 모르고,
+  /// 물어보면 영원히 통과할 수 없습니다.
+  ///
+  /// 규칙 위반이면 **이유 코드**를 돌려주고, 성공하면 null.
+  ///
+  /// ## 왜 여기서 한 번 더 확인하는가
+  /// 화면을 연 뒤 확정을 누르기까지 몇 초가 걸립니다. 그 사이 다른 기기가
+  /// 먼저 정했을 수 있습니다. 확인 없이 쓰면 **먼저 정한 사람의 비밀번호를
+  /// 덮어씁니다.** 그래서 누르는 순간 명부를 다시 봅니다.
+  Future<String?> setInitialMasterPassword(String pw) async {
+    if (pw.length < 4) return 'pw_too_short';
+    if (pw.trim().isEmpty) return 'pw_empty';
+
+    // 마지막 확인. 네트워크가 없으면(로컬 전용 설치) 그냥 진행합니다.
+    if (_backendIsUsable) {
+      final doc = await _bounded(() => backend.read(registryWorkspaceId));
+      if (doc != null) {
+        final raw = doc.entities['accounts/$masterId'];
+        final plain = raw is Map ? raw['pwPlain'] : null;
+        if (plain is String &&
+            plain.isNotEmpty &&
+            !_looksLikePlaceholder(plain) &&
+            plain != pw) {
+          _registryAnswered = true;
+          _registryMasterHasPassword = true;
+          _masterNeedsSetup = false;
+          _masterSetupKnown = true;
+          addLog('MasterPasswordSetRefused', '이미 다른 기기가 정했습니다');
+          return 'master_taken';
+        }
+      }
+      // doc == null (시간 초과)이면 판단하지 않고 진행합니다. 여기서 막으면
+      // 응답이 느린 서버 하나 때문에 새 설치가 영원히 시작되지 않습니다.
+    }
+
+    final u =
+        userById(masterId) ??
+        User(id: masterId, password: pw, displayName: 'Master', isMaster: true);
+    u.password = pw;
+    u.isMaster = true;
+    u.enabled = true;
+    u.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    await _users.put(masterId, u.toMap());
+
+    // ## 명부에도 평문을 올립니다
+    // `withPassword: true` 가 중요합니다. 기본값(false)은 "다른 사람이 이미
+    // 정했으면 그 결정을 존중한다"는 뜻이라, 자리표시자 상태에서는 해시가
+    // 갱신되지 않습니다. 지금은 우리가 결정하는 순간이므로 명시합니다.
+    await publishAccountToRegistry(u, withPassword: true);
+    await _users.put('__master_pw_set__', true);
+
+    _masterNeedsSetup = false;
+    _masterSetupKnown = true;
+    _registryAnswered = true;
+    _registryMasterHasPassword = true;
+    addLog('MasterPasswordSet', masterId);
+    notifyListeners();
+    return null;
+  }
+
   /// Ensures the demo account (id/pw = test/test) exists with sample content,
   /// so reviewers can sign in immediately without the master credentials.
   ///
@@ -431,10 +656,7 @@ class Store extends ChangeNotifier {
     final has = _tasks.containsKey(demoGuideAnchorId);
     if (has) return;
 
-    final items = buildDemoYear(
-      now: DateTime.now(),
-      ko: language == 'ko',
-    );
+    final items = buildDemoYear(now: DateTime.now(), ko: language == 'ko');
     final now = DateTime.now();
     for (final i in items) {
       // 이미 있는 id 는 건드리지 않습니다. 사용자가 견본 일부를 고쳤을 수
