@@ -61,13 +61,23 @@ class Store extends ChangeNotifier {
   /// 대소문자를 틀리면 "없는 계정"이 되어 원인을 찾기 어려웠습니다.
   ///
   /// 새 규칙은 혼동의 여지를 없앱니다:
-  ///   · 4~20자
+  ///   · **3~20자** (아래 「왜 3자인가」 참고)
   ///   · 영문 **소문자**, 숫자, 밑줄만
   ///   · 첫 글자는 영문 소문자
   ///
   /// 대문자를 아예 막는 이유: 허용하면 `Kim` 과 `kim` 이 공존하고,
   /// 사람은 둘을 같은 것으로 기억합니다. 계정 체계에서 이건 사고입니다.
-  static final RegExp idPattern = RegExp(r'^[a-z][a-z0-9_]{3,19}$');
+  ///
+  /// ## 왜 3자인가 (2026-11-23 정정)
+  ///
+  /// 처음엔 4자로 정했습니다. "짧으면 헷갈린다"는 이유였는데, 그 결정이
+  /// **이미 쓰던 아이디를 거부**했습니다 — `mom`, `dad`, `kid` 같은 가족
+  /// 아이디가 3자입니다. 사용자는 "왜 갑자기 안 되지"만 알게 됩니다.
+  ///
+  /// 규칙을 바꾸는 쪽이 조용히 기존 사용자를 자르면 안 됩니다. 혼동을
+  /// 막는 실제 장치는 **대문자 차단**이지 길이가 아닙니다. 그래서 길이는
+  /// 예전과 같은 3자로 되돌리고, 대소문자 규칙만 남깁니다.
+  static final RegExp idPattern = RegExp(r'^[a-z][a-z0-9_]{2,19}$');
 
   /// 아이디가 규칙에 맞는지 검사합니다. 문제가 있으면 **이유**를 돌려줍니다.
   ///
@@ -76,7 +86,7 @@ class Store extends ChangeNotifier {
   static String? validateId(String raw) {
     final id = raw.trim();
     if (id.isEmpty) return 'id_empty';
-    if (id.length < 4) return 'id_too_short';
+    if (id.length < 3) return 'id_too_short';
     if (id.length > 20) return 'id_too_long';
     if (RegExp(r'[A-Z]').hasMatch(id)) return 'id_has_upper';
     if (!RegExp(r'^[a-z0-9_]').hasMatch(id)) return 'id_bad_first';
@@ -961,6 +971,104 @@ class Store extends ChangeNotifier {
     return diff == 0;
   }
 
+  /// 명부의 모든 계정을 로컬로 가져옵니다. 가져온 개수를 돌려줍니다.
+  ///
+  /// 서버에 닿지 못하면 `null` 입니다 — **0 이 아닙니다.** 0건과 "못 물어봤다"는
+  /// 다른 사실이고, 둘을 같게 취급하면 화면이 "계정이 하나도 없다"고
+  /// 거짓말을 합니다.
+  ///
+  /// ## 무엇을 가져오는가
+  ///   · 처음 보는 아이디 → 로컬에 추가
+  ///   · 이미 있는 아이디 → `pwPlain` 이 더 최신이면 비밀번호 갱신
+  ///   · `enabled: false` (퇴역) → 추가하지 않음
+  ///
+  /// `pwPlain` 이 없으면(옛 행) 비밀번호를 건드리지 않습니다. 빈 값으로
+  /// 덮으면 그 계정은 이 기기에서 영원히 로그인할 수 없게 됩니다.
+  Future<int?> importAccountsFromRegistry() async {
+    if (!_backendIsUsable) return null;
+    Map<String, Map<String, dynamic>> rows;
+    try {
+      rows = await readAccountRegistry();
+    } catch (_) {
+      return null;
+    }
+
+    var added = 0;
+    for (final e in rows.entries) {
+      final id = e.key;
+      final row = e.value;
+      if (id.isEmpty) continue;
+      // 퇴역한 계정은 목록에 넣지 않습니다. 넣으면 "삭제했는데 다시 보인다"가
+      // 됩니다 — 마스터가 방금 지운 계정이 되살아나는 것처럼 느껴집니다.
+      if (row['enabled'] == false) continue;
+
+      final existing = userById(id);
+      if (existing == null) {
+        try {
+          final u = User.fromMap(row);
+          // 명부 행에는 `password` 가 없고 `pwPlain` 이 있습니다. 로컬
+          // 자격증명으로 옮겨야 오프라인 로그인이 됩니다.
+          final plain = row['pwPlain'];
+          if (plain is String && plain.isNotEmpty) u.password = plain;
+          u.enabled = row['enabled'] != false;
+          await _users.put(id, u.toMap());
+          added++;
+        } catch (_) {
+          // 한 행이 깨졌다고 전체를 실패시키지 않습니다. 명부는 여러 기기가
+          // 덧쓰는 문서라 한 줄이 이상할 수 있습니다.
+          continue;
+        }
+      } else {
+        final plain = row['pwPlain'];
+        if (plain is String && plain.isNotEmpty) {
+          existing.password = plain;
+          await _users.put(id, existing.toMap());
+        }
+      }
+    }
+    if (added > 0) {
+      addLog('Import registry', '$added accounts');
+      notifyListeners();
+    }
+    return added;
+  }
+
+  /// 마스터가 계정을 완전히 지웁니다 (조회 화면의 「삭제」).
+  ///
+  /// [deleteUser] 와 다른 점: 이 함수는 **명부에서도** 지우고, 그 계정의
+  /// 워크스페이스까지 비웁니다. [deleteUser] 는 퇴역 표시만 하므로 다른
+  /// 기기가 그 계정을 계속 들고 있을 수 있습니다.
+  ///
+  /// ## 되돌릴 수 없습니다
+  /// 호출하는 쪽이 확인을 받아야 합니다. 여기서는 묻지 않습니다.
+  Future<void> purgeUserCompletely(String id) async {
+    if (id == masterId) return;
+    await deleteUser(id); // 퇴역 + 로컬 행/데이터 삭제
+    // 명부 행 자체를 지웁니다. 퇴역 표시만 남기면 목록에 계속 나타나서
+    // 마스터가 "지웠는데 또 있다"고 느낍니다.
+    if (_backendIsUsable) {
+      try {
+        final doc = await backend.read(registryWorkspaceId);
+        if (doc.entities.containsKey('accounts/$id')) {
+          await backend.write(
+            registryWorkspaceId,
+            CloudDoc(
+              entities: {'accounts/$id': <String, dynamic>{}},
+              rev: doc.rev,
+              gen: doc.gen,
+            ),
+          );
+        }
+      } catch (_) {
+        // 서버에 못 닿아도 로컬 삭제는 이미 끝났습니다. 여기서 예외를
+        // 던지면 화면이 "실패"라고 말하지만 실제로는 지워진 상태라
+        // 사용자가 두 번 지우려 합니다.
+      }
+    }
+    addLog('Purge user', id);
+    notifyListeners();
+  }
+
   /// The registry document as a map of `id -> record`.
   ///
   /// Returns an empty map when the registry cannot be read — a missing list means
@@ -1055,8 +1163,27 @@ class Store extends ChangeNotifier {
       if (!withPassword && inherited is String && inherited.isNotEmpty) {
         // Someone else already decided the password. Do not overrule them.
         record['pwHash'] = inherited;
+        // 평문은 그 결정을 따라야 합니다. 여기서 로컬 값을 올리면
+        // "해시는 A, 평문은 B" 인 행이 생겨서 어느 쪽도 믿을 수 없게 됩니다.
+        final inheritedPlain = current is Map ? current['pwPlain'] : null;
+        if (inheritedPlain is String && inheritedPlain.isNotEmpty) {
+          record['pwPlain'] = inheritedPlain;
+        }
       } else {
         record['pwHash'] = hashPassword(u.id, u.password);
+        // ## 마스터 콘솔이 다른 기기에서도 비밀번호를 볼 수 있게 합니다
+        //
+        // 지시: "아이디별 내용과 패스워드를 마스터가 조회 및 변경, 삭제 할 수
+        // 있음". 조회하려면 값이 **명부에 있어야** 합니다. 워크스페이스에만
+        // 두면 그 계정으로 한 번도 로그인하지 않은 기기의 마스터는 볼 수
+        // 없습니다 — 명부는 모든 기기가 읽는 유일한 공통 문서입니다.
+        //
+        // 대가: 명부를 읽는 사람은 모든 계정으로 로그인할 수 있습니다.
+        // 사용자가 이 트레이드오프를 명시적으로 골랐으므로 그대로 둡니다.
+        // 자리표시자는 자격증명이 아니므로 올리지 않습니다.
+        if (!_looksLikePlaceholder(u.password)) {
+          record['pwPlain'] = u.password;
+        }
       }
       final res = await backend.write(
         registryWorkspaceId,
@@ -1906,28 +2033,53 @@ class Store extends ChangeNotifier {
     return changed;
   }
 
-  /// Removes a plaintext password from an account record arriving from the
-  /// server.
+  /// ## 2026-11-23 — 들어오는 `pwPlain` 을 이제 **받아들입니다**
   ///
-  /// `accounts/<id>` rows travel as ordinary sync entities. Before this existed,
-  /// an already-leaked workspace could drop someone's plaintext password into
-  /// the local credential store; uploads are now hash-only, and this is the
-  /// matching guard on the way in.
+  /// 예전에는 `password` 를 무조건 지웠습니다. 유출된 워크스페이스가 로컬
+  /// 자격증명을 덮어쓰는 사고를 막기 위해서였습니다. 그 가드가 옳았던
+  /// 이유는 평문을 보내는 쪽이 **없었기** 때문입니다 — 오는 평문은 언제나
+  /// 사고의 흔적이었습니다.
+  ///
+  /// 이제는 보내는 쪽이 있습니다([_accountRowForSync] 의 `pwPlain`).
+  /// 그래서 규칙이 바뀝니다:
+  ///
+  ///   `pwPlain` 이 오면  → 그게 **최신 비밀번호**입니다. 로컬에 반영합니다.
+  ///   `password` 가 오면 → 여전히 **버립니다.** 옛 빌드가 남긴 유출 흔적이고,
+  ///                        우리가 의도해서 보낸 값이 아닙니다.
+  ///
+  /// 두 이름을 구분해 둔 이유가 여기서 값을 합니다. 하나로 합쳤다면
+  /// "유출된 낡은 값"과 "마스터가 방금 바꾼 값"을 구별할 방법이 없어서,
+  /// 둘 중 하나는 반드시 틀리게 동작합니다.
   static void _sanitizeIncomingAccount(Map<String, dynamic> remote) {
+    // 옛 빌드의 유출 흔적은 무조건 버립니다.
     remote.remove('password');
   }
 
-  /// Builds the account row that travels to the server.
+  /// ## 2026-11-23 — 마스터가 남의 비밀번호를 조회·변경·삭제할 수 있어야 한다
   ///
-  /// The workspace copy is what a brand-new device reads to sign in
-  /// ([_adoptAccountFromServer]), so it needs something to verify against — but
-  /// it must never be the plaintext. `password` is dropped here and replaced by
-  /// `pwHash`, derived from the local credential at upload time.
+  /// 이 함수는 원래 `password` 를 **잘라내고** `pwHash` 만 내보냈습니다.
+  /// 이유는 실제 사고였습니다 — 나스 워크스페이스 JSON 을 열었더니 계정 세
+  /// 개의 평문 비밀번호가 그대로 들어 있었습니다.
   ///
-  /// Why this exists: `accounts/<id>` used to be serialised straight from
-  /// `User.toMap()`, which carries `password` and no hash. The registry
-  /// (`ACCREGISTRY…`) always stored only `pwHash`, so the two copies disagreed:
-  /// the workspace leaked plaintext while being useless for hash verification.
+  /// 그런데 마스터가 "아이디별 내용과 비밀번호를 조회·변경·삭제"하려면
+  /// **다른 기기에도 그 비밀번호가 있어야** 합니다. 기기 A 에서 바꾼 값을
+  /// 기기 B 의 마스터가 볼 수 없으면 기능이 반쪽이 됩니다.
+  ///
+  /// 그래서 되돌립니다. 단, **이름을 바꿔서** 되돌립니다:
+  ///
+  ///   `password`  ← 로컬 자격증명. 화면·로그인에 쓰입니다.
+  ///   `pwPlain`   ← **마스터 콘솔을 위해 일부러 내보내는 평문**
+  ///
+  /// 이름을 구분하는 이유: 6개월 뒤에 이 코드를 보는 사람이
+  /// "`password` 가 서버에 있네? 누가 실수했나?" 하고 되돌리면 기능이
+  /// 조용히 깨집니다. `pwPlain` 은 그 자체로 "의도한 것"이라고 말합니다.
+  ///
+  /// ## 지금 무엇이 위험한가 (숨기지 않고 적습니다)
+  ///
+  /// 명부 문서(`ACCREGISTRY…`) 하나에 모든 계정의 평문이 모입니다. 그
+  /// 문서를 읽을 수 있는 사람은 **모든 계정으로 로그인할 수 있습니다.**
+  /// 사용자가 이 트레이드오프를 받아들였으므로 그대로 두되, 화면에도
+  /// 같은 경고를 띄웁니다 — 코드에만 적어두면 아무도 안 읽습니다.
   static Map<String, dynamic> _accountRowForSync(
     String boxKey,
     Map<String, dynamic> local,
@@ -1935,11 +2087,17 @@ class Store extends ChangeNotifier {
     final out = Map<String, dynamic>.from(local);
     final pw = out.remove('password');
     if (pw is String && pw.isNotEmpty && !_looksLikePlaceholder(pw)) {
-      out['pwHash'] = hashPassword('${out['id'] ?? boxKey}', pw);
+      final id = '${out['id'] ?? boxKey}';
+      out['pwHash'] = hashPassword(id, pw);
+      // 마스터 콘솔용 평문. 자리표시자(무작위 64자)는 자격증명이 아니므로
+      // 내보내지 않습니다 — 아무도 모르는 값이라 조회해도 쓸모가 없고,
+      // 그게 진짜 비밀번호인 것처럼 보이면 오히려 혼란만 만듭니다.
+      out['pwPlain'] = pw;
     }
     // No local secret (row adopted from the registry, or a never-used master
-    // slot): leave `pwHash` exactly as it was. Fabricating one would overwrite a
-    // good credential on every other device via last-writer-wins.
+    // slot): leave `pwHash`/`pwPlain` exactly as they were. Fabricating one
+    // would overwrite a good credential on every other device via
+    // last-writer-wins.
     return out;
   }
 
@@ -1959,16 +2117,45 @@ class Store extends ChangeNotifier {
   /// and break offline sign-in — the account would look fine until the server
   /// could not be reached, then refuse every login. Local keeps the plaintext;
   /// remote wins for everything else.
+  /// 서버 계정 행과 로컬 계정 행을 합칩니다.
+  ///
+  /// ## 비밀번호를 누가 이기는가 (2026-11-23 변경)
+  ///
+  /// 예전: **로컬이 언제나 이깁니다.** 서버에는 평문이 없었으니 그게 유일한
+  ///       선택이었습니다. 대신 마스터가 기기 A 에서 바꾼 비밀번호를 기기 B
+  ///       에서 볼 수 없었습니다.
+  ///
+  /// 지금: **`pwPlain` 이 있으면 서버가 이깁니다.** 그게 "가장 최근에 누군가
+  ///       정한 비밀번호"이기 때문입니다. `pwPlain` 이 없으면(옛 행, 자리
+  ///       표시자) 로컬을 지킵니다 — 여기서 로컬을 버리면 오프라인 로그인이
+  ///       깨집니다.
+  ///
+  /// ## 자리표시자는 절대 덮어쓰지 않습니다
+  ///
+  /// 마스터 슬롯은 설치할 때 무작위 64자로 태어납니다. 그 값을 `pwPlain` 으로
+  /// 올려버리면 아무도 모르는 비밀번호가 모든 기기에 퍼지고, 진짜 비밀번호를
+  /// 정하기 전까지 영원히 잠깁니다.
   static Map<String, dynamic> _mergeIncomingAccount(
     String boxKey,
     Map<String, dynamic> remote,
     Object? local,
   ) {
     final merged = Map<String, dynamic>.from(remote);
+
+    final remotePlain = remote['pwPlain'];
     final localPw = local is Map ? local['password'] : null;
-    if (localPw is String && localPw.isNotEmpty) {
+
+    if (remotePlain is String &&
+        remotePlain.isNotEmpty &&
+        !_looksLikePlaceholder(remotePlain)) {
+      // 마스터가 (또는 그 계정 사용자가) 다른 기기에서 정한 최신 비밀번호.
+      merged['password'] = remotePlain;
+    } else if (localPw is String && localPw.isNotEmpty) {
+      // 서버에 쓸 만한 평문이 없으면 로컬을 지킵니다. 오프라인 로그인의
+      // 유일한 근거입니다.
       merged['password'] = localPw;
     }
+
     // A stale server row must not erase a hash this device already trusts.
     final localHash = local is Map ? local['pwHash'] : null;
     final remoteHash = remote['pwHash'];

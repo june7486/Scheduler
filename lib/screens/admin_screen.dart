@@ -93,6 +93,62 @@ class AdminScreen extends StatelessWidget {
             style: TextStyle(fontSize: 11.5, color: p.inkSoft),
           ),
           const SizedBox(height: 8),
+          // ## 명부에서 불러오기
+          //
+          // 마스터가 "모든 아이디"를 관리하려면 그 목록이 **로컬에 있어야**
+          // 합니다. 그런데 계정은 각자의 기기에서 만들어집니다. 그래서
+          // 새 기기의 마스터는 자기 계정 하나만 보는 상태로 시작합니다.
+          //
+          // 명부(ACCREGISTRY…)는 모든 기기가 읽는 유일한 공통 문서이므로,
+          // 여기서 한 번 당겨오면 전체 목록이 채워집니다. 자동으로 하지 않는
+          // 이유: 이 화면을 열 때마다 서버를 치면 지하주차장에서 스피너만
+          // 보게 됩니다. 명시적 버튼이면 실패해도 사용자가 원인을 압니다.
+          OutlinedButton.icon(
+            onPressed: () => _pullRegistry(context, store),
+            icon: const Icon(Icons.cloud_download_outlined, size: 15),
+            label: Text(
+              context.tr('admin_pull_registry'),
+              style: const TextStyle(fontSize: 11.5),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: p.indigo,
+              side: BorderSide(color: p.line),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              minimumSize: const Size(double.infinity, 34),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // ## 보안 경고 — 숨기지 않고 화면에 적습니다
+          //
+          // 이 앱은 금고가 아닙니다. 마스터가 모든 비밀번호를 볼 수 있게
+          // 만들었으므로, 그 사실을 관리자 화면 맨 위에 둡니다. 코드 주석에만
+          // 적으면 정작 결정한 사람이 안 읽습니다.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: p.danger.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: p.danger.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, size: 14, color: p.danger),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    context.tr('admin_plaintext_warning'),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: p.danger,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           RadioGroup<bool>(
             groupValue: store.masterViewingAll,
             onChanged: (v) => store.setMasterViewingAll(v ?? false),
@@ -122,6 +178,47 @@ class AdminScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 명부(ACCREGISTRY…)에서 전체 계정 목록을 당겨옵니다.
+  ///
+  /// ## 왜 필요한가
+  /// 계정은 각자의 기기에서 만들어집니다. 새 기기의 마스터는 자기 계정
+  /// 하나만 들고 시작하므로, 이걸 하지 않으면 "아이디별 관리" 화면에
+  /// 자기 자신만 보입니다. 사용자는 그걸 보고 "다른 사람 계정이 사라졌다"고
+  /// 생각합니다.
+  ///
+  /// ## 실패를 숨기지 않습니다
+  /// 서버가 안 닿으면 "0건"이 아니라 **이유**를 보여줍니다. 0건과 실패는
+  /// 다른 사실이고, 둘을 같은 화면으로 보여주면 사용자는 계정이 지워졌다고
+  /// 믿게 됩니다.
+  Future<void> _pullRegistry(BuildContext context, Store store) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ko = store.language != 'en';
+    // 버튼을 누르자마자 "가져오는 중"을 보여줍니다. 서버 왕복이 2초를 넘으면
+    // 아무 반응 없는 버튼은 두 번 눌리게 됩니다.
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 30),
+        content: Text(ko ? '명부를 불러오는 중…' : 'Loading the registry…'),
+      ),
+    );
+    final added = await store.importAccountsFromRegistry();
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          added == null
+              ? (ko
+                    ? '명부에 연결하지 못했습니다. 설정에서 동기화 주소를 확인하세요.'
+                    : 'Could not reach the registry. Check the sync address in Settings.')
+              : (ko
+                    ? '$added개 계정을 명부에서 가져왔습니다'
+                    : 'Imported $added account(s) from the registry'),
+        ),
       ),
     );
   }
@@ -244,6 +341,14 @@ class AdminScreen extends StatelessWidget {
                   ),
                   if (!u.isMaster)
                     _miniBtn(
+                      // ## deleteUser → purgeUserCompletely
+                      //
+                      // 예전에는 퇴역 표시만 했습니다. 그래서 마스터가 지운
+                      // 계정이 다른 기기의 명부에서 다시 나타났습니다 —
+                      // "지웠는데 왜 또 있지?" 의 정체입니다.
+                      //
+                      // 지시가 "삭제"이므로 명부에서도 지웁니다. 대신 확인
+                      // 문구에 **무엇이 지워지는지** 적습니다.
                       context.tr('delete_id'),
                       Icons.delete_outline,
                       () => _deleteUser(context, store, u),
@@ -278,14 +383,83 @@ class AdminScreen extends StatelessWidget {
     );
   }
 
-  void _showPassword(BuildContext context, Store store, User u) {
+  /// 비밀번호 조회.
+  ///
+  /// ## 2026-11-23 — 한 곳이 아니라 두 곳을 봅니다
+  ///
+  /// 예전에는 로컬 `u.password` 만 보여줬습니다. 그런데 그 계정을 **한 번도
+  /// 이 기기에서 로그인하지 않았다면** 그 값은 무작위 자리표시자(64자)입니다.
+  /// 사용자는 그걸 보고 "비밀번호가 이상하게 바뀌었다"고 생각합니다.
+  ///
+  /// 진짜 값은 명부의 `pwPlain` 에 있습니다. 그래서 둘 다 보여주고, 어느
+  /// 쪽이 진짜인지 화면에서 구분합니다.
+  Future<void> _showPassword(
+    BuildContext context,
+    Store store,
+    User u,
+  ) async {
+    final ko = store.language != 'en';
+    final localIsPlaceholder = u.password.length == 64 &&
+        RegExp(r'^[0-9a-f]{64}$').hasMatch(u.password);
+
+    // 명부에서 최신 평문을 가져옵니다. 실패해도 로컬 값은 보여줍니다 —
+    // 서버가 죽었다고 마스터가 아무것도 못 보면 안 됩니다.
+    String? registryPlain;
+    try {
+      final rows = await store.readAccountRegistry();
+      final row = rows[u.id];
+      final p = row?['pwPlain'];
+      if (p is String && p.isNotEmpty) registryPlain = p;
+    } catch (_) {
+      registryPlain = null;
+    }
+
+    final shown = registryPlain ??
+        (localIsPlaceholder ? null : u.password);
+
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(context.tr('password_for', args: {'id': u.id})),
-        content: SelectableText(
-          u.password,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (shown == null) ...[
+              Text(
+                ko
+                    ? '이 기기에는 비밀번호가 없습니다.\n'
+                          '이 계정으로 이 기기에서 로그인한 적이 없고, 명부에도 값이 없습니다.'
+                    : 'No password on this device.\n'
+                          'This account never signed in here, and the registry has no value.',
+                style: TextStyle(fontSize: 12, color: p.ink, height: 1.6),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                ko
+                    ? '「변경」으로 새 비밀번호를 정해 주세요.'
+                    : 'Use “Change” to set a new password.',
+                style: TextStyle(fontSize: 11, color: p.inkSoft),
+              ),
+            ] else
+              SelectableText(
+                shown,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            if (shown != null && registryPlain == null) ...[
+              const SizedBox(height: 10),
+              Text(
+                ko
+                    ? '이 기기에 저장된 값입니다 (명부에 닿지 못했습니다)'
+                    : 'Stored on this device (registry not reachable)',
+                style: TextStyle(fontSize: 10.5, color: p.inkSoft),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -358,7 +532,8 @@ class AdminScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              store.deleteUser(u.id);
+              // 완전 삭제 — 명부에서도 지워 목록에 다시 나타나지 않게 합니다.
+              store.purgeUserCompletely(u.id);
               Navigator.pop(context);
             },
             child: Text(

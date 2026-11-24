@@ -533,6 +533,14 @@ class L10n {
     'stats_group': '통계',
     'stats_title': '기간별 통계',
     'stats_hint': '일주일·한 달·1년·전체 — 완료율, 기한 초과, 분류별',
+
+    // 관리자 — 평문 비밀번호 경고 (숨기지 않고 화면에 적습니다)
+    'admin_pull_registry': '명부에서 전체 아이디 불러오기',
+    'admin_plaintext_warning':
+        '이 프로그램은 금고가 아닙니다. 마스터는 모든 아이디의 비밀번호를 '
+            '조회·변경·삭제할 수 있고, 그 값은 동기화 서버에 평문으로 '
+            '저장됩니다. 서버를 읽을 수 있는 사람은 모든 계정으로 로그인할 수 '
+            '있습니다. 같은 비밀번호를 다른 곳에 쓰지 마세요.',
   };
 
   static const _en = <String, String>{
@@ -1009,6 +1017,13 @@ class L10n {
     'stats_group': 'Statistics',
     'stats_title': 'Statistics by period',
     'stats_hint': 'Week · month · year · all — completion, overdue, by category',
+
+    'admin_pull_registry': 'Load all ids from the registry',
+    'admin_plaintext_warning':
+        'This program is not a vault. The master can view, change and delete '
+            'every id\'s password, and those values are stored in plain text on '
+            'the sync server. Anyone who can read that server can sign in as any '
+            'account. Do not reuse a password from anywhere else here.',
   };
 }
 
