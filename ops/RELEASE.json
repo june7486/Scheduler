@@ -1,0 +1,103 @@
+{
+  "schema": "june.release/1",
+  "app": "scheduler",
+  "state": "release_ready_awaiting_autodeploy",
+  "release": {
+    "version": "2.0.0",
+    "build_number": "2",
+    "build_id": "2026.11.24.0137",
+    "built_at": "2026-11-24T01:38:28+00:00",
+    "commit_full": "40777e66f2e13b127d07b59f94644346298f8ccc",
+    "rebuilt_for_release": false,
+    "artifact": {
+      "filename": "scheduler-op-40777e6-20261124-023403.zip",
+      "bytes": 20327512,
+      "entries": 53,
+      "sha256": "6bd5444c3d7fbb48ec6a671f6f4f8862663e9d26b4aab431cd15f9b358452a43"
+    },
+    "excluded": [
+      "recover.html",
+      ".htaccess",
+      "CNAME",
+      "tests",
+      "scripts",
+      "data",
+      ".env"
+    ]
+  },
+  "target": {
+    "host": "gabia",
+    "hostname": "sch.june7486.com",
+    "backend": "synology-nas",
+    "backend_role": "backup-and-archive-only",
+    "forbidden_operational_dependencies": [
+      "cloudflare-pages",
+      "cloudflare-workers",
+      "cloudflare-d1",
+      "github-actions",
+      "github-pages"
+    ]
+  },
+  "layout": {
+    "live_root": "/srv/june7486/sites/scheduler",
+    "app_dir": "/srv/june7486/sites/scheduler/app",
+    "data_dir": "/srv/june7486/sites/scheduler/data",
+    "env_file": "/srv/june7486/sites/scheduler/.env",
+    "unit_file": "/etc/systemd/system/june-gateway.service",
+    "nginx_config": "/etc/nginx/sites-enabled/nginx-scheduler-sch.conf",
+    "service": "june-gateway.service",
+    "service_user": "june",
+    "listen": "127.0.0.1:8097"
+  },
+  "checks": {
+    "liveness": {
+      "url": "https://sch.june7486.com/health",
+      "ok_when": "HTTP 200 and body.ok == true and body.service == 'june-nas-gateway'",
+      "note": "body.nas is a storage bit. Under STORAGE=local it means the data directory is writable, not that a NAS is reachable."
+    },
+    "readiness": {
+      "url": "https://sch.june7486.com/readyz",
+      "ok_when": "HTTP 200 and body.ready == true",
+      "not_ready_when": "HTTP 503, body.reason in {config, auth, storage}"
+    },
+    "version": {
+      "url": "https://sch.june7486.com/version.json",
+      "ok_when": "version == '2.0.0' and build == '2026.11.24.0137'"
+    },
+    "not_completion_evidence": [
+      "HTTP 401 on /api/ (means the gateway is alive and demands a key, not that sync works)"
+    ]
+  },
+  "signing": {
+    "algorithm": "Ed25519",
+    "key_id": "3057A14449EFC470",
+    "public_key_base64": "MCowBQYDK2VwAyEA2YgKyW8re959hMwNj1mcahQvVauyeFJbFAF5diC8Xag=",
+    "private_key_in_artifact": false,
+    "private_key_in_repo": false,
+    "durable_secret_store": false,
+    "unattended_submission_possible": false
+  },
+  "deploy_center": {
+    "base": "https://deploy.june7486.com",
+    "submit_path": "/api/v1/releases?app=scheduler",
+    "method": "POST",
+    "required_headers": {
+      "X-Release-Manifest": "raw JSON manifest",
+      "X-Manifest-Signature": "base64 Ed25519 signature over the exact raw manifest bytes"
+    },
+    "manifest_must_match_query_app": true,
+    "current_blocker": {
+      "http": 401,
+      "error": "NO_PINNED_KEY",
+      "message": "scheduler 앱에 빌드 공개키가 등록되지 않았습니다.",
+      "resolved_by": "admin registers key_id 3057A14449EFC470 at the deploy center web UI",
+      "key_registration_api_exists": false
+    }
+  },
+  "data_safety": {
+    "operational_data_in_artifact": false,
+    "credentials_in_artifact": false,
+    "private_key_in_artifact": false,
+    "migration_policy": "clean local store on cutover; previous data moved aside, never deleted"
+  }
+}
