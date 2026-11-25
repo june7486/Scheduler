@@ -45,8 +45,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _railScroll.addListener(_syncRailArrows);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final store = context.read<Store>();
-      await store.seedRecurringBillsIfEmpty();
-      await store.seedDailyRoutinesIfEmpty();
+      // ## 시딩 시점 (2026-11-25)
+      // 이전에는 화면이 뜨자마자 무조건 시딩했습니다. 그런데 화면은 서버보다
+      // 먼저 뜹니다. 두 기기가 거의 동시에 로그인하면 둘 다 "기본 일정이
+      // 없네" 하고 각자 만들고, 서로 다른 id 라서 병합되지 않고 쌓였습니다.
+      // 이제는 store 가 "서버를 봤거나 동기화를 쓰지 않는다"고 확인해 준
+      // 경우에만 시딩합니다. 서버를 아직 못 봤으면 동기화가 끝날 때 store 가
+      // onSeededRetry 로 다시 불러 줍니다. 기존 일정은 건드리지 않습니다.
+      await store.seedDefaultsOnceAfterSync();
       _syncTabArrows();
       _syncRailArrows();
     });

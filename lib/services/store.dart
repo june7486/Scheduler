@@ -235,6 +235,18 @@ class Store extends ChangeNotifier {
   /// Wraps a batch of remote writes so they do not bounce back to the server.
   void beginRemoteApply() => _remoteDepth++;
 
+  /// 이 세션에서 기본 일정 시딩을 이미 시도했는가.
+  ///
+  /// 화면이 다시 그려질 때마다 시딩을 재시도하면, 서버 반영이 늦은 틈에
+  /// 같은 기본 일정을 여러 번 만들 수 있습니다. 한 번만 시도합니다.
+  bool _seededThisSession = false;
+
+  /// 동기화가 서버를 처음 확인했을 때 부를 콜백.
+  ///
+  /// 서버보다 화면이 먼저 뜨기 때문에, 첫 시딩이 "아직 서버를 못 봤다"로
+  /// 보류되면 이 콜백으로 다시 시도합니다. 한 번 쓰고 지웁니다.
+  VoidCallback? onSeededRetry;
+
   /// Ends a remote-apply batch and rebuilds the UI exactly once, only when
   /// something actually changed.
   void endRemoteApply(bool changed) {
@@ -2005,6 +2017,23 @@ class Store extends ChangeNotifier {
   /// True when [entity] scopes its records by `ownerId`.
   static bool _isOwned(String entity) => !_ownerlessEntities.contains(entity);
 
+  /// 이 기기가 [ownerId] 의 실제 내용(카테고리·일정)을 하나라도 갖고 있는가.
+  ///
+  /// 예약 키(`__sync_rev__` 같은 기기별 설정)는 내용이 아닙니다. "이 기기가
+  /// 백지인가"를 판단할 때 그것들을 세면, 한 번 동기화한 기기는 언제나
+  /// "내용이 있다"고 나와서 반대로 틀립니다. 그래서 사용자 데이터만 봅니다.
+  bool _hasAnyContent(String ownerId) {
+    for (final k in _cats.keys) {
+      final m = _cats.get(k);
+      if (m is Map && (m['ownerId'] ?? '') == ownerId) return true;
+    }
+    for (final k in _tasks.keys) {
+      final m = _tasks.get(k);
+      if (m is Map && (m['ownerId'] ?? '') == ownerId) return true;
+    }
+    return false;
+  }
+
   /// Re-stamps every record of [ownerId] as modified now.
   ///
   /// Used when a second device adopts an existing workspace: without this its
@@ -2449,12 +2478,41 @@ class Store extends ChangeNotifier {
     // neither on the server nor pending, so the very next snapshot prunes it as
     // "the server no longer has this" and a new account ends up with zero tabs.
     // Returning null lets the caller continue with its push.
+    //
+    // ## 2026-11-25 — 이 분기가 두 번째 기기의 카테고리를 지웠습니다
+    //
+    // 이전에는 서버가 비어 있으면 무조건 `ensureWorkspaceBaseline` 을 불렀고,
+    // 그 안의 `_ensureUserSeed` 가 **로컬에 카테고리가 없다**는 이유로 기본
+    // 카테고리 14개를 새로 만들어 큐에 넣었습니다. 그런데 이 자리에 오는
+    // 기기는 대개 "새 계정"이 아니라 **첫 기기가 이미 만든 워크스페이스를
+    // 처음 내려받는 두 번째 기기**입니다. 그 기기의 로컬 박스는 방금 로그인
+    // 해서 비어 있을 뿐이고, 기본값을 넣어 올리면 첫 기기의 진짜 카테고리를
+    // 덮어씁니다. 사용자가 보기에는 "두 번째 기기에서 카테고리가 사라진"
+    // 것으로 보입니다.
+    //
+    // 이제는 **서버가 실제로 빈 상태인지**와 **이 기기가 실제로 새 계정인지**를
+    // 구분합니다. 문서가 없고 이 기기가 그 워크스페이스를 한 번도 본 적이
+    // 없다면(`cachedRev == 0 && cachedGen == 0`) 새 계정이므로 기준선을
+    // 만듭니다. 한 번이라도 본 적이 있다면(rev/gen 이 남아 있다면) 서버에서
+    // 문서가 사라진 것이므로 **기본값을 새로 만들지 않습니다** — 그건 서버가
+    // 비었다는 뜻이지 이 기기가 백지라는 뜻이 아닙니다.
+    //
+    // 기존 사용자의 일정은 어느 쪽에서도 건드리지 않습니다. 여기서 하는 일은
+    // "비어 있는 서버에 기본값을 **새로 만들 것인가**" 뿐입니다.
     if (!doc.exists && doc.gen <= cachedGen) {
-      // A device that already holds unsent work is not a fresh account; that is
-      // business data and it only needs its own push. But an account with no
-      // queued *data* still needs its baseline made durable.
-      if (pendingDataCount == 0) await ensureWorkspaceBaseline(owner);
+      // 이 기기가 이 워크스페이스를 처음 보는가 — 예약 키가 아니라
+      // 카테고리/일정 같은 실제 내용이 있는지로 판단합니다.
+      final localHasContent = _hasAnyContent(owner);
+      final neverMirrored = cachedRev == 0 && cachedGen == 0;
+      if (neverMirrored && !localHasContent && pendingDataCount == 0) {
+        await ensureWorkspaceBaseline(owner);
+      } else if (pendingDataCount == 0) {
+        // 이미 내용이 있거나 이전에 동기화한 적이 있습니다. 기준선을 새로
+        // 만들지 않고, 이 기기가 가진 것만 올립니다(push 경로로 진행).
+        await queueAllForUpload(owner);
+      }
       await setCachedRev(doc.rev, doc.gen);
+      _fireSeededRetry();
       return null;
     }
 
@@ -2722,16 +2780,51 @@ class Store extends ChangeNotifier {
     await _users.put('__sync_stamp__', ms);
   }
 
+  /// 기본 일정의 **결정적** id.
+  ///
+  /// ## 2026-11-25 — 왜 uuid 가 아니라 고정 id 인가
+  ///
+  /// 이전에는 `_uuid.v4()` 로 만들었습니다. 기기마다 다른 값이 나오고,
+  /// 서버 병합은 **키가 다르면 다른 기록**으로 받아들입니다. 그래서 기기 A 와
+  /// 기기 B 가 각각 "기본 일정이 없네" 하고 판단하는 순간 4건이 생기고,
+  /// 둘 다 올라가면 서버에는 4건이 남습니다. 사용자가 보기에는 "여러 기기에서
+  /// 기본 일정이 중복 생성"된 것으로 보입니다.
+  ///
+  /// id 를 `(ownerId, 종류)` 로부터 결정적으로 만들면 두 기기가 **같은 키**를
+  /// 만들고, 병합에서 하나로 합쳐집니다. 몇 번을 실행해도 결과가 같습니다.
+  String _seedTaskId(String ownerId, String slot) {
+    final digest = sha256.convert(utf8.encode('june-seed-task-v1|$ownerId|$slot'));
+    final hex = digest.toString();
+    // uuid 형태로 만들어 두면 기존 화면·정렬 코드가 그대로 동작합니다.
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20, 32)}';
+  }
+
+  /// 이 기기가 서버의 진실을 아직 모르는 상태인가.
+  ///
+  /// 동기화를 한 번도 완료하지 못했다면(`__sync_rev__` 가 없음) 기본 일정을
+  /// 만들면 안 됩니다. 그 상태에서 만든 기록은 다른 기기가 이미 지운 기록을
+  /// 되살릴 수 있습니다. 서버를 먼저 보고 나서 판단합니다.
+  bool get _canSeedDefaults {
+    if (!syncEnabled) return true; // 동기화를 쓰지 않으면 이 기기가 유일한 진실
+    return cachedRev > 0 || cachedGen > 0;
+  }
+
   /// Seed the recurring bills (rent & warehouse) for the current user.
   Future<void> seedRecurringBillsIfEmpty() async {
     final ownerId = _scopeId;
+    // ## 두 기기에서 중복 생성되던 자리 (2026-11-25)
+    // 판단 근거를 "이 기기의 로컬 목록"에서 "서버가 아는 상태"로 옮겼습니다.
+    // 서버를 아직 못 봤으면 아무것도 만들지 않고, 만들 때는 고정 id 를 씁니다.
+    if (!_canSeedDefaults) return;
     final mine = tasksForOwner(ownerId);
     final ko = language == 'ko';
     if (mine.any((t) => t.recurrence == 'monthly' && t.recurrenceDay == 12)) {
       return;
     }
     final rent = Task(
-      id: _uuid.v4(),
+      id: _seedTaskId(ownerId, 'bill-rent'),
       ownerId: ownerId,
       title: ko ? '월세 — ₩2,500,000' : 'Rent — ₩2,500,000',
       categoryId: 'repeat',
@@ -2741,7 +2834,7 @@ class Store extends ChangeNotifier {
       amount: 2500000,
     );
     final warehouse = Task(
-      id: _uuid.v4(),
+      id: _seedTaskId(ownerId, 'bill-warehouse'),
       ownerId: ownerId,
       title: ko ? '창고비 — ₩30,000' : 'Warehouse fee — ₩30,000',
       categoryId: 'repeat',
@@ -2758,23 +2851,53 @@ class Store extends ChangeNotifier {
   /// Seed daily routine tasks (medicine, laundry, cleaning, make bed).
   Future<void> seedDailyRoutinesIfEmpty() async {
     final ownerId = _scopeId;
+    // 같은 이유로 서버를 아직 못 봤으면 만들지 않습니다 (2026-11-25).
+    if (!_canSeedDefaults) return;
     final mine = tasksForOwner(ownerId);
     if (mine.any((t) => t.categoryId == 'daily')) return;
     final ko = language == 'ko';
     final items = ko
         ? ['약 먹기', '빨래', '청소', '이불 개기']
         : ['Take medicine', 'Laundry', 'Cleaning', 'Make the bed'];
-    for (final item in items) {
+    final slots = ko
+        ? ['daily-medicine', 'daily-laundry', 'daily-clean', 'daily-bed']
+        : ['daily-medicine', 'daily-laundry', 'daily-clean', 'daily-bed'];
+    for (var i = 0; i < items.length; i++) {
       final t = Task(
-        id: _uuid.v4(),
+        // 고정 id — 기기가 달라도 같은 키가 나와 병합에서 합쳐집니다.
+        id: _seedTaskId(ownerId, slots[i]),
         ownerId: ownerId,
-        title: item,
+        title: items[i],
         categoryId: 'daily',
         recurrence: 'daily',
       );
       await _putTask(t);
     }
     notifyListeners();
+  }
+
+  /// 동기화가 끝난 뒤 한 번만 기본 일정을 채웁니다.
+  ///
+  /// 반환값이 false 면 "아직 서버를 못 봤다"는 뜻이고, 호출자는
+  /// [onSeededRetry] 를 걸어 두었다가 동기화가 끝나면 다시 부르면 됩니다.
+  ///
+  /// 기존 사용자의 일정은 건드리지 않습니다. 이미 그 카테고리에 일정이 있으면
+  /// 두 함수 모두 스스로 빠져나갑니다.
+  Future<bool> seedDefaultsOnceAfterSync() async {
+    if (!_canSeedDefaults) return false;
+    if (_seededThisSession) return true;
+    _seededThisSession = true;
+    await seedRecurringBillsIfEmpty();
+    await seedDailyRoutinesIfEmpty();
+    return true;
+  }
+
+  /// 동기화가 서버를 처음 확인했을 때 호출됩니다.
+  void _fireSeededRetry() {
+    final cb = onSeededRetry;
+    if (cb == null) return;
+    onSeededRetry = null;
+    cb();
   }
 
   // ---------------- Logs ----------------
