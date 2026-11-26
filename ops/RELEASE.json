@@ -271,5 +271,48 @@
     "e2e_harness": "ops/verify-harness (독립 브라우저 세션 2개, 실제 게이트웨이, 빈 서버)",
     "leak_check": "check_bundle_secrets.py --strict → 차단 대상 0건",
     "no_sync_url_in_bundle": true
+  },
+  "deployment_attempt": {
+    "attempted_at": "2026-11-26T00:55:00Z",
+    "target_commit": "9dd94517d32eb1f9811a9ac921c6e7ba2c46196c",
+    "target_sha256": "592091b9aab4cabc1c808b2310e12d318c49d98b9612c514fcdd90f64ff482e3",
+    "result": "BLOCKED — 가비아 제출 0건. 접수번호 없음.",
+    "blockers": [
+      {
+        "id": "GABIA_FTP_CREDENTIALS_ABSENT",
+        "detail": ".env.gabia 의 GABIA_USER / GABIA_PASS 가 모두 비어 있음 (GABIA_HOST=ftp.aqdesign.co.kr, PATH=/www 는 설정됨)",
+        "owner": "이승준"
+      },
+      {
+        "id": "GABIA_FTP_PORT_BLOCKED",
+        "detail": "1.201.109.77 / ftp.aqdesign.co.kr 의 21, 990, 2121, 2021 전부 차단·무응답. 22(SSH)도 차단. 80/443 만 열림.",
+        "owner": "가비아 운영 담당자"
+      },
+      {
+        "id": "DEPLOY_CENTER_NO_PINNED_KEY",
+        "detail": "POST /api/v1/releases → 401 NO_PINNED_KEY (서명은 정상 생성됨). 키 등록 엔드포인트 /keys, /api/v1/keys, /api/v1/pin 등 전부 404. 자체 등록 창구 없음.",
+        "owner": "배포센터(검증 주체)"
+      },
+      {
+        "id": "VERIFIER_KEYS_EMPTY",
+        "detail": "ops/verifier-keys.json 의 verifiers 가 빈 배열 → deploy-gate.py 가 fail-closed 로 모든 전환 거부 (의도된 상태)",
+        "owner": "검증 주체"
+      }
+    ],
+    "live_state_untouched": {
+      "host": "sch.june7486.com",
+      "version": "1.0.0",
+      "build": "2026.11.20.1400",
+      "verified_via": "GET /version.json",
+      "dns_changed": false,
+      "cert_changed": false,
+      "firewall_changed": false,
+      "data_deleted": false
+    },
+    "old_artifact_40777e6": {
+      "still_blocked": true,
+      "enforced_at": "ops/deploy-gate.py:70 BLOCKED dict",
+      "note": "차단 목록에서 빠졌더라도 배포 금지 유지"
+    }
   }
 }
